@@ -1,9 +1,9 @@
-# Telegram Bot Configuration
+import os
 
-BOT_TOKEN ="8599628389:AAGzyT_aa28tLBShJpTM7Xqfuo-pQLMo5Xs"
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Telegram Admin ID
-ADMIN_IDS =[8287979050]
+# Always build DB path relative to this file (works locally + Railway)
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "database", "bot.db")
 
-#(OPtional) Future Settings
-DB_PATH = "database/bot.db"
+ADMIN_IDS = [123456789]  # keep yours
