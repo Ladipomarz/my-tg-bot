@@ -5,6 +5,8 @@ from config import DB_PATH
 
 
 def get_connection():
+    # Ensure folder exists (Railway container may not have it created)
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     return sqlite3.connect(DB_PATH)
 
 
@@ -169,4 +171,5 @@ def get_orders_for_user(user_id: int, limit: int = 20):
     rows = cursor.fetchall()
     conn.close()
     return rows
+
 
