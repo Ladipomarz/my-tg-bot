@@ -1,9 +1,6 @@
 import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")  # from Railway
 
-# Always build DB path relative to this file (works locally + Railway)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, "database", "bot.db")
-
-ADMIN_IDS = [123456789]  # keep yours
+ADMIN_IDS = [123456789]  # keep your real admin IDs
