@@ -195,22 +195,26 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ✅ Proceed (global confirm)
     if data == "orders_proceed":
-        desc = context.user_data.get("order_pending_description", "Service")
+      desc = context.user_data.get("order_pending_description", "Service")
 
-        # Create order with random 9-digit code#
-        order_id, order_code = create_order(user_id, description=desc)
-        context.user_data["orders_order_id"] = order_id
-        context.user_data["orders_order_code"] = order_code
+    # Create order ONLY now (as designed)
+    order_id, order_code = create_order(user_id, description=desc)
+    context.user_data["orders_order_id"] = order_id
+    context.user_data["orders_order_code"] = order_code
 
-        await safe_send(
-            query,
-            context,
-            f"✅ New order created: {order_code}\nDescription: {desc}",
-        )
+    # 🔗 SHOW MAKE PAYMENT BUTTON (NEW)
+    from handlers.payments import show_make_payment
 
-        # No need to keep the pending_description after creation
-        context.user_data.pop("order_pending_description", None)
-        return
+    await show_make_payment(
+        update,
+        context,
+        order_code,
+    )
+
+    # cleanup
+    context.user_data.pop("order_pending_description", None)
+    return
+
 
     # ❌ Cancel (global confirm)
     if data == "orders_cancel":

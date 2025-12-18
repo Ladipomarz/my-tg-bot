@@ -1,4 +1,11 @@
 from telegram import Update
+from handlers.payments import payments_callback
+from config import BOT_TOKEN
+from utils.db import create_tables
+from handlers.start import start, handle_main_menu
+from handlers.tools import tools_callback, handle_user_input  # SSN
+from handlers.orders import orders_callback
+from menus.main_menu import get_main_menu
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -8,12 +15,6 @@ from telegram.ext import (
     filters,
 )
 
-from config import BOT_TOKEN
-from utils.db import create_tables
-from handlers.start import start, handle_main_menu
-from handlers.tools import tools_callback, handle_user_input  # SSN
-from handlers.orders import orders_callback
-from menus.main_menu import get_main_menu
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -35,6 +36,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # orders menu callbacks
     if data.startswith("orders_"):
         return await orders_callback(update, context)
+    
+    if data.startswith("pay_"):
+        return await payments_callback(update, context)
+
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
