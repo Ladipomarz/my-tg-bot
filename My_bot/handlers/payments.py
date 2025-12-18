@@ -1,8 +1,4 @@
 import os
-print("DEBUG payments dir exists:", os.path.exists(os.path.join(os.path.dirname(os.path.dirname(__file__)), "payments")))
-print("DEBUG nowpayments exists:", os.path.exists(os.path.join(os.path.dirname(os.path.dirname(__file__)), "payments", "nowpayments.py")))
-
-
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 import os, sys
