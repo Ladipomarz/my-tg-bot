@@ -20,7 +20,6 @@ logging.basicConfig(level=logging.INFO)
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import BOT_TOKEN
-print("BOT_TOKEN fingerprint:", BOT_TOKEN[:6], "...", BOT_TOKEN[-6:])
 
 from utils.db import create_tables
 from menus.main_menu import get_main_menu
