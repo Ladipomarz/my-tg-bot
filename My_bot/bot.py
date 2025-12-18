@@ -1,16 +1,9 @@
+import os
+import sys
 import logging
-logging.basicConfig(level=logging.INFO)
 
 from telegram import Update
-import os, sys
-sys.path.insert(0, os.path.dirname(__file__))
-from handlers.payments import payments_callback
-from config import BOT_TOKEN
-from utils.db import create_tables
-from handlers.start import start, handle_main_menu
-from handlers.tools import tools_callback, handle_user_input  # SSN
-from handlers.orders import orders_callback
-from menus.main_menu import get_main_menu
+from telegram.error import Conflict
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -20,12 +13,28 @@ from telegram.ext import (
     filters,
 )
 
+# Logging first
+logging.basicConfig(level=logging.INFO)
+
+# Ensure My_bot folder is on import path (script-style project)
+sys.path.insert(0, os.path.dirname(__file__))
+
+from config import BOT_TOKEN
+from utils.db import create_tables
+from menus.main_menu import get_main_menu
+
+from handlers.start import start, handle_main_menu
+from handlers.tools import tools_callback, handle_user_input  # SSN
+from handlers.orders import orders_callback
+from handlers.payments import payments_callback
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    data = query.data
+    if not query or not query.data:
+        return
 
+    data = query.data
     await query.answer()
 
     # back to main menu
@@ -41,10 +50,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # orders menu callbacks
     if data.startswith("orders_"):
         return await orders_callback(update, context)
-    
+
+    # payments callbacks
     if data.startswith("pay_"):
         return await payments_callback(update, context)
-
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -52,19 +61,18 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Route all plain text messages based on active flow.
     Priority:
     - SSN flow
-    - (Future) Orders flow
     - Otherwise: main menu
     """
     if context.user_data.get("ssn_step"):
-        await handle_user_input(update, context)   # SSN flow
+        await handle_user_input(update, context)  # SSN flow
         return
 
-    # No orders_step yet (no text-based order form), so we go straight to main menu
     await handle_main_menu(update, context)
 
 
 def main():
     create_tables()
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     # /start command
@@ -77,7 +85,14 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     print("Bot running…")
-    app.run_polling()
+
+    # Important for Railway deploys: drop old updates + handle polling conflicts cleanly
+    try:
+        app.run_polling(drop_pending_updates=True)
+    except Conflict:
+        # Another instance was polling (common during overlapping deploys).
+        # Exit cleanly so the platform restarts the service.
+        raise SystemExit(0)
 
 
 if __name__ == "__main__":
