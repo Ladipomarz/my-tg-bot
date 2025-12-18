@@ -2,15 +2,7 @@ import os
 import sys
 import logging
 
-# Configure logging first
-logging.basicConfig(level=logging.INFO)
-
-# Reduce noisy poll logs
-logging.getLogger("httpx").setLevel(logging.WARNING)
-logging.getLogger("telegram").setLevel(logging.INFO)  # set to WARNING if you want quieter
-
 from telegram import Update
-from telegram.error import Conflict
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -20,18 +12,22 @@ from telegram.ext import (
     filters,
 )
 
-# Ensure My_bot folder is on import path (script-style project)
+# Logging
+logging.basicConfig(level=logging.INFO)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Ensure My_bot folder is on import path
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import BOT_TOKEN
 from utils.db import create_tables
 from menus.main_menu import get_main_menu
 from handlers.start import start, handle_main_menu
-from handlers.tools import tools_callback, handle_user_input  # SSN
+from handlers.tools import tools_callback, handle_user_input
 from handlers.orders import orders_callback
 from handlers.payments import payments_callback
-
-logger = logging.getLogger(__name__)
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -66,29 +62,40 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # This removes the "No error handlers are registered" message and logs real exceptions
     logger.exception("Unhandled exception", exc_info=context.error)
 
 
 def main():
     create_tables()
 
+    public_base_url = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    webhook_secret = os.getenv("WEBHOOK_SECRET", "").strip()
+    port = int(os.getenv("PORT", "8080"))
+
+    if not public_base_url:
+        raise RuntimeError("PUBLIC_BASE_URL is missing (must be your Railway public https URL)")
+    if not webhook_secret:
+        raise RuntimeError("WEBHOOK_SECRET is missing (set a random string in Railway Variables)")
+
+    # We'll use a secret path so random people can't spam your endpoint
+    url_path = f"webhook/{webhook_secret}"
+    webhook_url = f"{public_base_url}/{url_path}"
+
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
-
-    # Register error handler
     app.add_error_handler(on_error)
 
-    print("Bot running…")
-
-    try:
-        app.run_polling(drop_pending_updates=True)
-    except Conflict:
-        # If another instance is polling (deploy overlap), exit cleanly.
-        raise SystemExit(0)
+    print("Bot running (webhook)…")
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        url_path=url_path,
+        webhook_url=webhook_url,
+        drop_pending_updates=True,
+    )
 
 
 if __name__ == "__main__":
