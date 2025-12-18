@@ -33,10 +33,8 @@ async def ask_order_confirmation(
     Shows display_text + Proceed/Cancel keyboard.
     On Proceed -> we create an order in this file.
     """
-    # store the "order name" for when user presses Proceed
     context.user_data["order_pending_description"] = order_description
 
-    # show message with Proceed / Cancel
     text = f"{display_text}\n\nCreate an order for: {order_description}?"
     await safe_send(
         update_or_query,
@@ -69,7 +67,6 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending = get_pending_order(user_id)
 
         if pending:
-            # pending order exists
             order_id, _user_id, order_code, status, desc, created_at = pending
             context.user_data["orders_order_id"] = order_id
             context.user_data["orders_order_code"] = order_code
@@ -86,9 +83,6 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-        # No pending order:
-        # -> DO NOT create order here
-        # -> Just open Tools menu so user can run a flow (e.g. SSN)
         await safe_send(
             query,
             context,
@@ -98,15 +92,11 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 📂 Order History
-    if data == "orders_history":
+    elif data == "orders_history":
         orders = get_orders_for_user(user_id)
 
         if not orders:
-            await safe_send(
-                query,
-                context,
-                "You have no orders yet.",
-            )
+            await safe_send(query, context, "You have no orders yet.")
             return
 
         lines = ["Your last orders:"]
@@ -120,45 +110,28 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if not desc:
                 desc = "No name set"
 
-            # Show order code + status + "order name" (description)
-            line = f"{status_emoji} {code} [{status}] — {desc}"
-            lines.append(line)
+            lines.append(f"{status_emoji} {code} [{status}] — {desc}")
 
-        text = "\n".join(lines)
-        await safe_send(
-            query,
-            context,
-            text,
-        )
+        await safe_send(query, context, "\n".join(lines))
         return
 
     # ✅ Continue pending order
-    if data == "orders_continue":
+    elif data == "orders_continue":
         pending = get_pending_order(user_id)
         if not pending:
-            await safe_send(
-                query,
-                context,
-                "No pending order found.",
-            )
+            await safe_send(query, context, "No pending order found.")
             return
 
         order_id, _uid, order_code, status, desc, created_at = pending
         context.user_data["orders_order_id"] = order_id
         context.user_data["orders_order_code"] = order_code
 
-        # 1) tell them we're continuing
-        text = (
-            f"Continuing pending order {order_code}\n"
-            "Opening Tools menu..."
-        )
         await safe_send(
             query,
             context,
-            text,
+            f"Continuing pending order {order_code}\nOpening Tools menu...",
         )
 
-        # 2) open Tools
         await safe_send(
             query,
             context,
@@ -168,71 +141,46 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ❌ Cancel pending order
-    if data == "orders_cancel_pending":
+    elif data == "orders_cancel_pending":
         pending = get_pending_order(user_id)
         if not pending:
-            await safe_send(
-                query,
-                context,
-                "No pending order found.",
-            )
+            await safe_send(query, context, "No pending order found.")
             return
 
         order_id, _uid, order_code, status, desc, created_at = pending
         update_order_status(order_id, "cancelled")
 
-        await safe_send(
-            query,
-            context,
-            f"❌ Order {order_code} cancelled.",
-        )
+        await safe_send(query, context, f"❌ Order {order_code} cancelled.")
 
-        # clear only orders-related keys
         context.user_data.pop("orders_order_id", None)
         context.user_data.pop("orders_order_code", None)
         context.user_data.pop("orders_step", None)
         return
 
-    # ✅ Proceed (global confirm)
-    if data == "orders_proceed":
-      desc = context.user_data.get("order_pending_description", "Service")
+    # ✅ Proceed (global confirm) -> create order -> show Make Payment
+    elif data == "orders_proceed":
+        desc = context.user_data.get("order_pending_description", "Service")
 
-    # Create order ONLY now (as designed)
-    order_id, order_code = create_order(user_id, description=desc)
-    context.user_data["orders_order_id"] = order_id
-    context.user_data["orders_order_code"] = order_code
+        # Create order ONLY now
+        order_id, order_code = create_order(user_id, description=desc)
+        context.user_data["orders_order_id"] = order_id
+        context.user_data["orders_order_code"] = order_code
 
-    # 🔗 SHOW MAKE PAYMENT BUTTON (NEW)
-    from handlers.payments import show_make_payment
+        # Show Make Payment button next
+        from handlers.payments import show_make_payment
+        await show_make_payment(update, context, order_code)
 
-    await show_make_payment(
-        update,
-        context,
-        order_code,
-    )
-
-    # cleanup
-    context.user_data.pop("order_pending_description", None)
-    return
-
+        # cleanup
+        context.user_data.pop("order_pending_description", None)
+        return
 
     # ❌ Cancel (global confirm)
-    if data == "orders_cancel":
-        await safe_send(
-            query,
-            context,
-            "Order not created.",
-        )
+    elif data == "orders_cancel":
+        await safe_send(query, context, "Order not created.")
         context.user_data.pop("order_pending_description", None)
         return
 
     # ⬅ Back inside orders
-    if data == "orders_back":
-        # Back to orders main menu
-        await safe_send(
-            query,
-            context,
-            "Orders:",
-            reply_markup=get_orders_menu(),
-        )
+    elif data == "orders_back":
+        await safe_send(query, context, "Orders:", reply_markup=get_orders_menu())
         return
