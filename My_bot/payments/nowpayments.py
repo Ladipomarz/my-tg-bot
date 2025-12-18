@@ -36,6 +36,9 @@ async def create_invoice(*, order_code: str, description: str, amount_usd: float
 
         data = r.json()
 
+    print("NOWPAYMENTS payload:", payload)
+    print("NOWPAYMENTS response:", r.status_code, r.text)
+
     # defensive checks
     if "invoice_url" not in data or "id" not in data:
         raise RuntimeError(f"NOWPayments response missing fields: {data}")
