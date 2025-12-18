@@ -1,4 +1,6 @@
 from telegram import Update
+import os, sys
+sys.path.insert(0, os.path.dirname(__file__))
 from handlers.payments import payments_callback
 from config import BOT_TOKEN
 from utils.db import create_tables

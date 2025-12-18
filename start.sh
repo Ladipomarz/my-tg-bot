@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -e
 
-export PYTHONPATH="$PWD/My_bot"
-python My_bot/bot.py
+DIR="$(cd "$(dirname "$0")" && pwd)"
+export PYTHONPATH="$DIR/My_bot"
+python "$DIR/My_bot/bot.py"
