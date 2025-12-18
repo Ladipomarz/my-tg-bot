@@ -1,23 +1,21 @@
-import os
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-import os, sys
-
-BASE_DIR = os.path.dirname(os.path.dirname(__file__))  # .../My_bot
-sys.path.insert(0, BASE_DIR)
-
 from payments.nowpayments import create_invoice
 
 
-
-def make_payment_kb(order_code: str):
+def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([[
         InlineKeyboardButton("💳 Make Payment", callback_data=f"pay_make:{order_code}")
     ]])
 
 
+def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[
+        InlineKeyboardButton("🔗 Open payment page", url=invoice_url)
+    ]])
+
+
 async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE, order_code: str):
-    # Works for either a Message or a CallbackQuery
     if getattr(update_or_query, "callback_query", None):
         q = update_or_query.callback_query
         await q.edit_message_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
@@ -28,7 +26,7 @@ async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE,
 async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    data = q.data
+    data = q.data or ""
 
     if not data.startswith("pay_make:"):
         return
@@ -37,14 +35,19 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await q.edit_message_text("Creating payment link…")
 
-    invoice_id, invoice_url = await create_invoice(
-        order_code=order_code,
-        description=f"Digital service order {order_code}",
-        amount_usd=10.0,  # change later
-    )
+    try:
+        invoice_id, invoice_url = await create_invoice(
+            order_code=order_code,
+            description=f"Digital service order {order_code}",
+            amount_usd=10.0,  # change later
+        )
+    except Exception:
+        await q.edit_message_text("❌ Failed to create payment link. Please try again.")
+        return
 
     await q.edit_message_text(
         f"✅ Payment link created for {order_code}\n"
         f"Invoice: {invoice_id}\n\n"
-        f"Open and pay:\n{invoice_url}"
+        f"Tap the button below to open and pay:",
+        reply_markup=open_invoice_kb(invoice_url),
     )
