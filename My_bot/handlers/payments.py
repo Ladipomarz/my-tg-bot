@@ -1,6 +1,9 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from payments.nowpayments import create_invoice
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
@@ -42,6 +45,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             amount_usd=10.0,  # change later
         )
     except Exception:
+        logger.exception("Create invoice failed")
         await q.edit_message_text("❌ Failed to create payment link. Please try again.")
         return
 

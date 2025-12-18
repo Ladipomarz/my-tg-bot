@@ -28,16 +28,16 @@ async def create_invoice(*, order_code: str, description: str, amount_usd: float
     headers = {"x-api-key": NOWPAYMENTS_API_KEY, "Content-Type": "application/json"}
 
     async with httpx.AsyncClient(timeout=25) as client:
-        r = await client.post(f"{API_BASE}/invoice", json=payload, headers=headers)
-
-        # LOG the real error from NOWPayments
-        if r.status_code >= 400:
-            raise RuntimeError(f"NOWPayments {r.status_code}: {r.text}")
-
-        data = r.json()
+     r = await client.post(f"{API_BASE}/invoice", json=payload, headers=headers)
 
     print("NOWPAYMENTS payload:", payload)
     print("NOWPAYMENTS response:", r.status_code, r.text)
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"NOWPayments {r.status_code}: {r.text}")
+
+    data = r.json()
+
 
     # defensive checks
     if "invoice_url" not in data or "id" not in data:

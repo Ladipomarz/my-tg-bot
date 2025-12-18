@@ -1,6 +1,9 @@
 import os
 import sys
 import logging
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.INFO)  # or WARNING if you want quieter
+
 
 from telegram import Update
 from telegram.error import Conflict
