@@ -44,3 +44,12 @@ async def create_invoice(*, order_code: str, description: str, amount_usd: float
         raise RuntimeError(f"NOWPayments response missing fields: {data}")
 
     return str(data["id"]), data["invoice_url"]
+
+
+async def get_min_amount(*, pay_currency: str, price_currency: str = "usd") -> dict:
+    headers = {"x-api-key": NOWPAYMENTS_API_KEY}
+    params = {"pay_currency": pay_currency, "price_currency": price_currency}
+    async with httpx.AsyncClient(timeout=25) as client:
+        r = await client.get(f"{API_BASE}/min-amount", params=params, headers=headers)
+        r.raise_for_status()
+        return r.json()
