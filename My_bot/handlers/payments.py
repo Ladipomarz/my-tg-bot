@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from payments.nowpayments import create_invoice
+from payments.nowpayments import create_invoice, get_min_amount
 import logging
 
 logger = logging.getLogger(__name__)
@@ -37,6 +37,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order_code = data.split(":", 1)[1]
 
     await q.edit_message_text("Creating payment link…")
+
+    # TEMP DEBUG: print BTC minimum to Railway logs
+    try:
+        min_btc = await get_min_amount(pay_currency="btc", price_currency="usd")
+        print("MIN BTC:", min_btc)
+    except Exception:
+        logger.exception("Failed to fetch BTC min-amount (continuing anyway)")
 
     try:
         invoice_id, invoice_url = await create_invoice(
