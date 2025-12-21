@@ -42,7 +42,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         invoice_id, invoice_url = await create_invoice(
             order_code=order_code,
             description=f"Digital service order {order_code}",
-            amount_usd=6.00,  # change later
+            amount_usd=11.00,  # change later
         )
     except Exception:
         logger.exception("Create invoice failed")
