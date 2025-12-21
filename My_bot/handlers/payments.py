@@ -1,64 +1,71 @@
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.ext import ContextTypes
-from payments.nowpayments import create_invoice, get_min_amount
-import logging
+# My_bot/payments/nowpayments.py
+import os
+import httpx
 
-logger = logging.getLogger(__name__)
+NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY", "").strip()
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
 
-
-def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("💳 Make Payment", callback_data=f"pay_make:{order_code}")
-    ]])
+API_BASE = "https://api.nowpayments.io/v1"
 
 
-def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("🔗 Open payment page", url=invoice_url)
-    ]])
+async def create_invoice(*, order_code: str, description: str, amount_usd: float) -> tuple[str, str]:
+    if not NOWPAYMENTS_API_KEY:
+        raise RuntimeError("NOWPAYMENTS_API_KEY not set")
+    if not PUBLIC_BASE_URL:
+        raise RuntimeError("PUBLIC_BASE_URL not set (must be your public https URL)")
+
+    base = PUBLIC_BASE_URL.rstrip("/")
+
+    payload = {
+        "price_amount": float(f"{amount_usd:.2f}"),
+        "price_currency": "usd",
+        "order_id": order_code,
+        "order_description": description,
+        "ipn_callback_url": f"{base}/webhooks/nowpayments",
+        "success_url": base,
+        "cancel_url": base,
+
+        # ✅ make checkout behave like "user pays fee"
+        "is_fee_paid_by_user": True,
+    }
+
+    headers = {"x-api-key": NOWPAYMENTS_API_KEY, "Content-Type": "application/json"}
+
+    async with httpx.AsyncClient(timeout=25) as client:
+        r = await client.post(f"{API_BASE}/invoice", json=payload, headers=headers)
+
+    # Helpful logs (Railway logs)
+    print("NOWPAYMENTS payload:", payload)
+    print("NOWPAYMENTS response:", r.status_code, r.text)
+
+    if r.status_code >= 400:
+        raise RuntimeError(f"NOWPayments {r.status_code}: {r.text}")
+
+    data = r.json()
+
+    if "invoice_url" not in data or "id" not in data:
+        raise RuntimeError(f"NOWPayments response missing fields: {data}")
+
+    return str(data["id"]), data["invoice_url"]
 
 
-async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE, order_code: str):
-    if getattr(update_or_query, "callback_query", None):
-        q = update_or_query.callback_query
-        await q.edit_message_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
-    else:
-        await update_or_query.message.reply_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
+async def get_min_amount(*, pay_currency: str, price_currency: str = "usd") -> dict:
+    """
+    Returns NOWPayments minimum in the selected price_currency (usd).
+    We'll use this to decide when BTC should be shown.
+    """
+    if not NOWPAYMENTS_API_KEY:
+        raise RuntimeError("NOWPAYMENTS_API_KEY not set")
 
+    headers = {"x-api-key": NOWPAYMENTS_API_KEY}
+    params = {"pay_currency": pay_currency.lower(), "price_currency": price_currency.lower()}
 
-async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    await q.answer()
-    data = q.data or ""
+    async with httpx.AsyncClient(timeout=25) as client:
+        r = await client.get(f"{API_BASE}/min-amount", params=params, headers=headers)
 
-    if not data.startswith("pay_make:"):
-        return
+    print("NOWPAYMENTS min-amount:", pay_currency, r.status_code, r.text)
 
-    order_code = data.split(":", 1)[1]
+    if r.status_code >= 400:
+        raise RuntimeError(f"NOWPayments min-amount {r.status_code}: {r.text}")
 
-    await q.edit_message_text("Creating payment link…")
-
-    # TEMP DEBUG: print BTC minimum to Railway logs
-    try:
-        min_btc = await get_min_amount(pay_currency="btc", price_currency="usd")
-        print("MIN BTC:", min_btc)
-    except Exception:
-        logger.exception("Failed to fetch BTC min-amount (continuing anyway)")
-
-    try:
-        invoice_id, invoice_url = await create_invoice(
-            order_code=order_code,
-            description=f"Digital service order {order_code}",
-            amount_usd=13.00,  # change later
-        )
-    except Exception:
-        logger.exception("Create invoice failed")
-        await q.edit_message_text("❌ Failed to create payment link. Please try again.")
-        return
-
-    await q.edit_message_text(
-        f"✅ Payment link created for {order_code}\n"
-        f"Invoice: {invoice_id}\n\n"
-        f"Tap the button below to open and pay:",
-        reply_markup=open_invoice_kb(invoice_url),
-    )
+    return r.json()
