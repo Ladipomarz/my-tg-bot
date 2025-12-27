@@ -23,24 +23,28 @@ def create_tables():
             );
             """)
 
-            # ✅ Orders now store payment info + expiry
+            # Base table (older schema)
             cur.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT,
                 order_code TEXT UNIQUE,
-                status TEXT,                 -- pending, paid, completed, cancelled, expired
+                status TEXT,
                 description TEXT,
-                created_at TIMESTAMP,
-                expires_at TIMESTAMP,        -- ✅ 1 hour expiry
-                invoice_url TEXT,            -- ✅ store NOWPayments invoice url
-                pay_currency TEXT            -- ✅ btc/usdttrc20/etc
+                created_at TIMESTAMP
             );
             """)
 
-            # useful indexes
+            # ✅ MIGRATIONS (add new columns if missing)
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
+
+            # ✅ indexes
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
+
+        conn.commit()
 
 
 # ---------- Users helpers ----------
@@ -53,6 +57,7 @@ def add_user(user_id, first_name, username, is_admin=0):
                 VALUES (%s, %s, %s, %s)
                 ON CONFLICT (user_id) DO NOTHING;
             """, (user_id, first_name, username, is_admin))
+        conn.commit()
 
 
 def get_user(user_id):
@@ -81,6 +86,7 @@ def create_order(user_id: int, description: str = "", ttl_seconds: int = 3600) -
         with conn.cursor() as cur:
             order_code = _generate_order_code(cur)
 
+            # ✅ FIXED: correct number of placeholders (expires_at included)
             cur.execute("""
                 INSERT INTO orders (user_id, order_code, status, description, created_at, expires_at)
                 VALUES (%s, %s, 'pending', %s, %s, %s)
@@ -88,13 +94,11 @@ def create_order(user_id: int, description: str = "", ttl_seconds: int = 3600) -
             """, (user_id, order_code, description, now, expires_at))
 
             order_id = cur.fetchone()[0]
-            return order_id, order_code
+        conn.commit()
+        return order_id, order_code
 
 
 def get_pending_order(user_id: int):
-    """
-    Returns most recent pending order (may be expired; check with expire_pending_order_if_needed)
-    """
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
@@ -108,10 +112,6 @@ def get_pending_order(user_id: int):
 
 
 def expire_pending_order_if_needed(user_id: int):
-    """
-    If user has a pending order but it's past expires_at, mark it expired.
-    Returns updated order row or None.
-    """
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
@@ -136,7 +136,6 @@ def expire_pending_order_if_needed(user_id: int):
                 """, (order["id"],))
                 conn.commit()
 
-                # re-fetch
                 cur.execute("SELECT * FROM orders WHERE id = %s;", (order["id"],))
                 return cur.fetchone()
 
@@ -151,6 +150,7 @@ def update_order_status(order_id: int, status: str):
                 SET status = %s
                 WHERE id = %s;
             """, (status, order_id))
+        conn.commit()
 
 
 def set_order_description(order_id: int, description: str):
@@ -161,6 +161,7 @@ def set_order_description(order_id: int, description: str):
                 SET description = %s
                 WHERE id = %s;
             """, (description, order_id))
+        conn.commit()
 
 
 def set_order_payment(order_id: int, *, invoice_url: str, pay_currency: str):
@@ -172,6 +173,7 @@ def set_order_payment(order_id: int, *, invoice_url: str, pay_currency: str):
                     pay_currency = %s
                 WHERE id = %s;
             """, (invoice_url, pay_currency, order_id))
+        conn.commit()
 
 
 def get_orders_for_user(user_id: int, limit: int = 20):
@@ -188,10 +190,6 @@ def get_orders_for_user(user_id: int, limit: int = 20):
 
 
 def cleanup_old_orders(hours: int = 24):
-    """
-    Optional: deletes old cancelled/expired orders older than `hours`.
-    You can call this on startup or daily later.
-    """
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=int(hours))
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -200,3 +198,4 @@ def cleanup_old_orders(hours: int = 24):
                 WHERE status IN ('cancelled', 'expired')
                   AND created_at < %s;
             """, (cutoff,))
+        conn.commit()
