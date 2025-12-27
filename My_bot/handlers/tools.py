@@ -9,10 +9,16 @@ from handlers.orders import ask_order_confirmation
 
 # ---------- UI HELPERS ----------
 
-def get_cancel_button():
+def get_cancel_button() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("❌ Cancel", callback_data="cancel_ssn")]]
     )
+
+
+def _clear_ssn_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear only SSN-related keys."""
+    for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+        context.user_data.pop(key, None)
 
 
 # ---------- TOOLS MENU + SSN CALLBACKS ----------
@@ -28,7 +34,7 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    data = query.data
+    data = (query.data or "").strip()
 
     # SSN Services menu
     if data == "tool_ssn_services":
@@ -42,7 +48,7 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Back to Tools Menu
     if data == "tool_back_tools":
-        context.user_data.pop("ssn_step", None)
+        _clear_ssn_state(context)
         await safe_send(
             query,
             context,
@@ -53,22 +59,13 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Cancel SSN flow
     if data == "cancel_ssn":
-        # clear only ssn-related keys
-        for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info"]:
-            context.user_data.pop(key, None)
-
-        await safe_send(
-            query,
-            context,
-            "SSN flow cancelled.",
-        )
+        _clear_ssn_state(context)
+        await safe_send(query, context, "SSN flow cancelled.")
         return
 
     # Start SSN lookup flow
     if data == "tool_ssn_lookup":
-        # reset only ssn-related keys
-        for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info"]:
-            context.user_data.pop(key, None)
+        _clear_ssn_state(context)
 
         context.user_data["ssn_step"] = "first_name"
 
@@ -97,16 +94,12 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Handles text input when in SSN flow.
     """
-    print("user inputted - ssn_step:", context.user_data.get("ssn_step"))
     step = context.user_data.get("ssn_step")
-
-    # Only handle if in SSN flow
     if not step:
-        print("not in ssn")
         return
 
-    text = update.message.text.strip()
-    context.user_data["from_ssn"] = True  # so other handlers know
+    text = (update.message.text or "").strip()
+    context.user_data["from_ssn"] = True
 
     # STEP 1: First Name
     if step == "first_name":
@@ -121,12 +114,7 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data["first_name"] = text
         context.user_data["ssn_step"] = "last_name"
-        await safe_send(
-            update,
-            context,
-            "Enter Last Name:",
-            reply_markup=get_cancel_button(),
-        )
+        await safe_send(update, context, "Enter Last Name:", reply_markup=get_cancel_button())
         return
 
     # STEP 2: Last Name
@@ -153,32 +141,17 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # STEP 3: Select Lookup Type
     if step == "type":
         if text not in ["1", "2", "3", "4"]:
-            await safe_send(
-                update,
-                context,
-                "Enter 1, 2, 3 or 4:",
-                reply_markup=get_cancel_button(),
-            )
+            await safe_send(update, context, "Enter 1, 2, 3 or 4:", reply_markup=get_cancel_button())
             return
 
         context.user_data["type"] = text
 
         if text == "2":
             context.user_data["ssn_step"] = "dob"
-            await safe_send(
-                update,
-                context,
-                "Enter DOB (YYYY/MM/DD):",
-                reply_markup=get_cancel_button(),
-            )
+            await safe_send(update, context, "Enter DOB (YYYY/MM/DD):", reply_markup=get_cancel_button())
         else:
             context.user_data["ssn_step"] = "info"
-            await safe_send(
-                update,
-                context,
-                "Enter information:",
-                reply_markup=get_cancel_button(),
-            )
+            await safe_send(update, context, "Enter information:", reply_markup=get_cancel_button())
         return
 
     # STEP 4: DOB
@@ -194,34 +167,29 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data["dob"] = text
 
-        # End SSN flow, show global Proceed/Cancel confirmation
-        context.user_data["ssn_step"] = None
+        # ✅ End SSN flow safely (remove step key, don't set None)
+        context.user_data.pop("ssn_step", None)
 
         display_text = "Order Almost Done!. 🔍"
         order_description = "SSN Services"
 
-        await ask_order_confirmation(
-            update,
-            context,
-            display_text,
-            order_description,
-        )
+        await ask_order_confirmation(update, context, display_text, order_description)
         return
 
     # STEP 5: Info (for types 1, 3, 4)
     if step == "info":
+        # basic non-empty guard
+        if not text:
+            await safe_send(update, context, "Enter information:", reply_markup=get_cancel_button())
+            return
+
         context.user_data["info"] = text
 
-        # End SSN flow, show global Proceed/Cancel confirmation
-        context.user_data["ssn_step"] = None
+        # ✅ End SSN flow safely
+        context.user_data.pop("ssn_step", None)
 
         display_text = "Order Almost Done!. 🔍"
         order_description = "SSN Services"
 
-        await ask_order_confirmation(
-            update,
-            context,
-            display_text,
-            order_description,
-        )
+        await ask_order_confirmation(update, context, display_text, order_description)
         return

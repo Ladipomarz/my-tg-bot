@@ -11,6 +11,16 @@ def get_connection():
     return psycopg.connect(DATABASE_URL)
 
 
+# ✅ Always keep migrations OUTSIDE create_tables (clean + reusable)
+def migrate_orders_schema():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
+        conn.commit()
+
+
 def create_tables():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -23,7 +33,7 @@ def create_tables():
             );
             """)
 
-            # Base table (older schema)
+            # Base table
             cur.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
@@ -35,16 +45,14 @@ def create_tables():
             );
             """)
 
-            # ✅ MIGRATIONS (add new columns if missing)
-            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;")
-            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
-            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
-
-            # ✅ indexes
+            # indexes
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
 
         conn.commit()
+
+    # ✅ Run migrations after base table exists
+    migrate_orders_schema()
 
 
 # ---------- Users helpers ----------
@@ -79,6 +87,9 @@ def _generate_order_code(cur) -> str:
 
 
 def create_order(user_id: int, description: str = "", ttl_seconds: int = 3600) -> tuple:
+    # ✅ GUARANTEE migrations even if create_tables didn't run (or old DB)
+    migrate_orders_schema()
+
     now = datetime.datetime.utcnow()
     expires_at = now + datetime.timedelta(seconds=int(ttl_seconds))
 
@@ -86,7 +97,6 @@ def create_order(user_id: int, description: str = "", ttl_seconds: int = 3600) -
         with conn.cursor() as cur:
             order_code = _generate_order_code(cur)
 
-            # ✅ FIXED: correct number of placeholders (expires_at included)
             cur.execute("""
                 INSERT INTO orders (user_id, order_code, status, description, created_at, expires_at)
                 VALUES (%s, %s, 'pending', %s, %s, %s)
@@ -99,6 +109,7 @@ def create_order(user_id: int, description: str = "", ttl_seconds: int = 3600) -
 
 
 def get_pending_order(user_id: int):
+    migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
@@ -112,6 +123,7 @@ def get_pending_order(user_id: int):
 
 
 def expire_pending_order_if_needed(user_id: int):
+    migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
@@ -165,6 +177,7 @@ def set_order_description(order_id: int, description: str):
 
 
 def set_order_payment(order_id: int, *, invoice_url: str, pay_currency: str):
+    migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -177,6 +190,7 @@ def set_order_payment(order_id: int, *, invoice_url: str, pay_currency: str):
 
 
 def get_orders_for_user(user_id: int, limit: int = 20):
+    migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("""
@@ -199,3 +213,4 @@ def cleanup_old_orders(hours: int = 24):
                   AND created_at < %s;
             """, (cutoff,))
         conn.commit()
+

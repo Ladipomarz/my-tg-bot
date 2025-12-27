@@ -22,8 +22,9 @@ logger = logging.getLogger(__name__)
 sys.path.insert(0, os.path.dirname(__file__))
 
 from config import BOT_TOKEN
-from utils.db import create_tables
+from utils.db import create_tables, expire_pending_order_if_needed
 from menus.main_menu import get_main_menu
+from menus.orders_menu import get_pending_order_menu
 from handlers.start import start, handle_main_menu
 from handlers.tools import tools_callback, handle_user_input
 from handlers.orders import orders_callback
@@ -38,24 +39,44 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     await query.answer()
 
+    # back to main menu
     if data == "back_main":
         await query.edit_message_text("Back to main menu...")
         await query.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
+    # ✅ Tools / SSN actions (block tools if pending order exists)
     if data.startswith("tool_") or data == "cancel_ssn":
+        pending = expire_pending_order_if_needed(query.from_user.id)
+        if pending and pending.get("status") == "pending":
+            await query.edit_message_text(
+                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                reply_markup=get_pending_order_menu(),
+            )
+            return
+
         return await tools_callback(update, context)
 
+    # orders menu callbacks
     if data.startswith("orders_"):
         return await orders_callback(update, context)
 
+    # payments callbacks
     if data.startswith("pay_"):
         return await payments_callback(update, context)
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ Protect SSN flow from crashes + reset if broken
     if context.user_data.get("ssn_step"):
-        await handle_user_input(update, context)
+        try:
+            await handle_user_input(update, context)
+        except Exception:
+            logger.exception("SSN flow error")
+            # reset so user doesn't get stuck forever
+            for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+                context.user_data.pop(key, None)
+            await update.message.reply_text("❌ Something went wrong. Please start the SSN tool again.")
         return
 
     await handle_main_menu(update, context)
@@ -77,7 +98,6 @@ def main():
     if not webhook_secret:
         raise RuntimeError("WEBHOOK_SECRET is missing (set a random string in Railway Variables)")
 
-    # We'll use a secret path so random people can't spam your endpoint
     url_path = f"webhook/{webhook_secret}"
     webhook_url = f"{public_base_url}/{url_path}"
 
