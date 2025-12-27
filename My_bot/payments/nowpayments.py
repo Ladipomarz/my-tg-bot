@@ -7,7 +7,13 @@ PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
 API_BASE = "https://api.nowpayments.io/v1"
 
 
-async def create_invoice(*, order_code: str, description: str, amount_usd: float) -> tuple[str, str]:
+async def create_invoice(
+    *,
+    order_code: str,
+    description: str,
+    amount_usd: float,
+    pay_currency: str | None = None,   # ✅ NEW
+) -> tuple[str, str]:
     if not NOWPAYMENTS_API_KEY:
         raise RuntimeError("NOWPAYMENTS_API_KEY not set")
     if not PUBLIC_BASE_URL:
@@ -23,12 +29,19 @@ async def create_invoice(*, order_code: str, description: str, amount_usd: float
         "ipn_callback_url": f"{base}/webhooks/nowpayments",
         "success_url": base,
         "cancel_url": base,
+
+        # ✅ user pays fees (helps small payments)
+        "is_fee_paid_by_user": True,
     }
+
+    # ✅ Lock currency so invoice opens directly on wallet page
+    if pay_currency:
+        payload["pay_currency"] = pay_currency.lower()
 
     headers = {"x-api-key": NOWPAYMENTS_API_KEY, "Content-Type": "application/json"}
 
     async with httpx.AsyncClient(timeout=25) as client:
-     r = await client.post(f"{API_BASE}/invoice", json=payload, headers=headers)
+        r = await client.post(f"{API_BASE}/invoice", json=payload, headers=headers)
 
     print("NOWPAYMENTS payload:", payload)
     print("NOWPAYMENTS response:", r.status_code, r.text)
@@ -38,18 +51,7 @@ async def create_invoice(*, order_code: str, description: str, amount_usd: float
 
     data = r.json()
 
-
-    # defensive checks
     if "invoice_url" not in data or "id" not in data:
         raise RuntimeError(f"NOWPayments response missing fields: {data}")
 
     return str(data["id"]), data["invoice_url"]
-
-
-async def get_min_amount(*, pay_currency: str, price_currency: str = "usd") -> dict:
-    headers = {"x-api-key": NOWPAYMENTS_API_KEY}
-    params = {"pay_currency": pay_currency, "price_currency": price_currency}
-    async with httpx.AsyncClient(timeout=25) as client:
-        r = await client.get(f"{API_BASE}/min-amount", params=params, headers=headers)
-        r.raise_for_status()
-        return r.json()
