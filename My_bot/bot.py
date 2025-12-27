@@ -1,3 +1,4 @@
+# My_bot/bot.py
 import os
 import sys
 import logging
@@ -36,7 +37,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not query or not query.data:
         return
 
-    data = query.data
+    data = (query.data or "").strip()
+    user_id = query.from_user.id
+
     await query.answer()
 
     # back to main menu
@@ -45,16 +48,22 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
-    # ✅ Tools / SSN actions (block tools if pending order exists)
-    if data.startswith("tool_") or data == "cancel_ssn":
-        pending = expire_pending_order_if_needed(query.from_user.id)
+    # ✅ GLOBAL PENDING ORDER GATE FOR TOOLS
+    # If user has a pending order, clicking Tools (or any tool_ button) will show Continue/Cancel
+    if data.startswith("tool_"):
+        pending = expire_pending_order_if_needed(user_id)
         if pending and pending.get("status") == "pending":
             await query.edit_message_text(
-                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                f"🕒 You have a pending order {pending['order_code']}.\n"
+                "What do you want to do?",
                 reply_markup=get_pending_order_menu(),
             )
             return
+        return await tools_callback(update, context)
 
+    # ✅ cancel_ssn should ALWAYS work (even if order is pending)
+    # so user can exit the SSN flow cleanly
+    if data == "cancel_ssn":
         return await tools_callback(update, context)
 
     # orders menu callbacks
@@ -67,7 +76,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ✅ Protect SSN flow from crashes + reset if broken
+    """
+    Text messages:
+    - If in SSN flow, handle it safely (no crashes/stuck states)
+    - Otherwise go to main menu handler
+    """
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
@@ -98,6 +111,7 @@ def main():
     if not webhook_secret:
         raise RuntimeError("WEBHOOK_SECRET is missing (set a random string in Railway Variables)")
 
+    # secret path so random people can't spam your webhook endpoint
     url_path = f"webhook/{webhook_secret}"
     webhook_url = f"{public_base_url}/{url_path}"
 
@@ -120,3 +134,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
