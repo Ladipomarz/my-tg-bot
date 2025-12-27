@@ -3,21 +3,14 @@ import httpx
 
 NOWPAYMENTS_API_KEY = os.getenv("NOWPAYMENTS_API_KEY", "").strip()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip()
-
 API_BASE = "https://api.nowpayments.io/v1"
 
 
-async def create_invoice(
-    *,
-    order_code: str,
-    description: str,
-    amount_usd: float,
-    pay_currency: str | None = None,   # ✅ NEW
-) -> tuple[str, str]:
+async def create_invoice(*, order_code: str, description: str, amount_usd: float, pay_currency: str | None = None) -> tuple[str, str]:
     if not NOWPAYMENTS_API_KEY:
         raise RuntimeError("NOWPAYMENTS_API_KEY not set")
     if not PUBLIC_BASE_URL:
-        raise RuntimeError("PUBLIC_BASE_URL not set (must be your public https URL)")
+        raise RuntimeError("PUBLIC_BASE_URL not set")
 
     base = PUBLIC_BASE_URL.rstrip("/")
 
@@ -29,12 +22,9 @@ async def create_invoice(
         "ipn_callback_url": f"{base}/webhooks/nowpayments",
         "success_url": base,
         "cancel_url": base,
-
-        # ✅ user pays fees (helps small payments)
         "is_fee_paid_by_user": True,
     }
 
-    # ✅ Lock currency so invoice opens directly on wallet page
     if pay_currency:
         payload["pay_currency"] = pay_currency.lower()
 
@@ -50,8 +40,4 @@ async def create_invoice(
         raise RuntimeError(f"NOWPayments {r.status_code}: {r.text}")
 
     data = r.json()
-
-    if "invoice_url" not in data or "id" not in data:
-        raise RuntimeError(f"NOWPayments response missing fields: {data}")
-
     return str(data["id"]), data["invoice_url"]

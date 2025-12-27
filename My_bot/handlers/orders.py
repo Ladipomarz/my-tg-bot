@@ -1,4 +1,4 @@
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from menus.orders_menu import (
@@ -8,12 +8,18 @@ from menus.orders_menu import (
 )
 from menus.tools_menu import get_tools_inline
 from utils.auto_delete import safe_send
+
 from utils.db import (
     create_order,
     get_pending_order,
+    expire_pending_order_if_needed,   # ✅ NEW
     update_order_status,
     get_orders_for_user,
 )
+
+
+def open_invoice_kb(url: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Open payment page", url=url)]])
 
 
 # ---------- GLOBAL CONFIRM HELPER ----------
@@ -27,11 +33,8 @@ async def ask_order_confirmation(
     """
     Global function any tool can call at the END of its flow.
 
-    - display_text: what the user sees in the bubble (e.g. "SSN submitted! ...")
-    - order_description: short name to store in DB (e.g. "SSN Services")
-
     Shows display_text + Proceed/Cancel keyboard.
-    On Proceed -> we create an order in this file.
+    On Proceed -> we create an order here.
     """
     context.user_data["order_pending_description"] = order_description
 
@@ -64,10 +67,18 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🆕 New Order
     if data == "orders_new":
-        pending = get_pending_order(user_id)
+        # ✅ expire pending order if needed
+        pending = expire_pending_order_if_needed(user_id)
+
+        # if it was expired, treat as no pending
+        if pending and pending.get("status") == "expired":
+            pending = None
 
         if pending:
-            order_id, _user_id, order_code, status, desc, created_at = pending
+            # dict row (psycopg dict_row)
+            order_id = pending["id"]
+            order_code = pending["order_code"]
+
             context.user_data["orders_order_id"] = order_id
             context.user_data["orders_order_code"] = order_code
 
@@ -100,15 +111,18 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         lines = ["Your last orders:"]
-        for (oid, uid, code, status, desc, created_at) in orders:
+        for o in orders:
+            status = o.get("status")
+            code = o.get("order_code")
+            desc = o.get("description") or "No name set"
+
             status_emoji = {
                 "pending": "🕒",
+                "paid": "💰",
                 "completed": "✅",
                 "cancelled": "❌",
+                "expired": "⌛",
             }.get(status, "❔")
-
-            if not desc:
-                desc = "No name set"
 
             lines.append(f"{status_emoji} {code} [{status}] — {desc}")
 
@@ -117,27 +131,33 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ✅ Continue pending order
     elif data == "orders_continue":
-        pending = get_pending_order(user_id)
-        if not pending:
+        # ✅ expire check again (safety)
+        pending = expire_pending_order_if_needed(user_id)
+
+        if not pending or pending.get("status") != "pending":
             await safe_send(query, context, "No pending order found.")
             return
 
-        order_id, _uid, order_code, status, desc, created_at = pending
+        order_id = pending["id"]
+        order_code = pending["order_code"]
+        invoice_url = pending.get("invoice_url")
+        pay_currency = (pending.get("pay_currency") or "").upper()
+
         context.user_data["orders_order_id"] = order_id
         context.user_data["orders_order_code"] = order_code
 
-        await safe_send(
-            query,
-            context,
-            f"Continuing pending order {order_code}\nOpening Tools menu...",
-        )
+        # ✅ If we already generated an invoice, resend the link (best UX)
+        if invoice_url:
+            msg = f"🕒 Pending order {order_code}"
+            if pay_currency:
+                msg += f"\nCurrency: {pay_currency}"
+            msg += "\n\nTap below to continue payment:"
+            await safe_send(query, context, msg, reply_markup=open_invoice_kb(invoice_url))
+            return
 
-        await safe_send(
-            query,
-            context,
-            "Tools:",
-            reply_markup=get_tools_inline(),
-        )
+        # otherwise: open tools as before
+        await safe_send(query, context, f"Continuing pending order {order_code}\nOpening Tools menu...")
+        await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
         return
 
     # ❌ Cancel pending order
@@ -147,7 +167,9 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_send(query, context, "No pending order found.")
             return
 
-        order_id, _uid, order_code, status, desc, created_at = pending
+        order_id = pending["id"]
+        order_code = pending["order_code"]
+
         update_order_status(order_id, "cancelled")
 
         await safe_send(query, context, f"❌ Order {order_code} cancelled.")
@@ -161,16 +183,13 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "orders_proceed":
         desc = context.user_data.get("order_pending_description", "Service")
 
-        # Create order ONLY now
-        order_id, order_code = create_order(user_id, description=desc)
+        order_id, order_code = create_order(user_id, description=desc, ttl_seconds=3600)  # ✅ 1 hour TTL
         context.user_data["orders_order_id"] = order_id
         context.user_data["orders_order_code"] = order_code
 
-        # Show Make Payment button next
         from handlers.payments import show_make_payment
         await show_make_payment(update, context, order_code)
 
-        # cleanup
         context.user_data.pop("order_pending_description", None)
         return
 
