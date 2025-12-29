@@ -2,7 +2,7 @@
 import os
 import sys
 import logging
-from handlers.maxelpay_test import test_maxelpay
+from My_bot.handlers.plisio_test import test_maxelpay
 
 
 from telegram import Update

@@ -2,3 +2,5 @@ python-telegram-bot[webhooks]==20.6
 httpx>=0.25
 psycopg[binary]==3.2.3
 pycryptodome
+fastapi
+uvicorn
