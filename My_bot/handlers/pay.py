@@ -54,7 +54,7 @@ async def pay_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (q.data or "").strip()
 
     user = update.effective_user
-    amount_usd = 1.00  # change later to selector
+    amount_usd = 6.00  # change later to selector
 
     # Step 1: user selected a coin
     if data.startswith(CB_COIN):
