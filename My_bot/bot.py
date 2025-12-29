@@ -2,7 +2,7 @@
 import os
 import sys
 import logging
-from My_bot.handlers.plisio_test import test_maxelpay
+from handlers.plisio_test import test_plisio
 
 
 from telegram import Update
@@ -122,7 +122,8 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
-    app.add_handler(CommandHandler("testpay", test_maxelpay))
+    app.add_handler(CommandHandler("test_plisio", test_plisio))
+
     app.add_error_handler(on_error)
 
     print("Bot running (webhook)…")
