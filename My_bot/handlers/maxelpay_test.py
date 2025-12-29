@@ -7,14 +7,13 @@ from payments.maxelpay import create_maxelpay_checkout
 
 async def test_maxelpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-
     await update.message.reply_text("Creating MaxelPay test checkout…")
 
     try:
         url = await create_maxelpay_checkout(
             order_id=f"TEST-{user.id}-{int(time.time())}",
             amount_usd=5.00,
-            user_id=user.id,  # ✅ NOW VALID
+            user_id=user.id,
             user_name=user.first_name or "Telegram User",
             user_email=(
                 f"{user.username}@telegram.local"
@@ -30,7 +29,4 @@ async def test_maxelpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("🔗 Open MaxelPay Checkout", url=url)]
     ])
 
-    await update.message.reply_text(
-        "✅ MaxelPay checkout created:",
-        reply_markup=kb,
-    )
+    await update.message.reply_text("✅ MaxelPay checkout created:", reply_markup=kb)
