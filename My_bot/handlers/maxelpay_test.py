@@ -5,6 +5,7 @@ from telegram.ext import ContextTypes
 from payments.maxelpay import create_maxelpay_checkout
 
 
+
 async def test_maxelpay(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
