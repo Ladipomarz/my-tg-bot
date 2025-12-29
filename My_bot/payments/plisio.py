@@ -11,18 +11,21 @@ if not PLISIO_API_KEY:
 async def create_plisio_invoice(
     *,
     order_number: str,
+    order_name: str,          # ✅ REQUIRED BY PLISIO
     amount_usd: float,
-    crypto_currency: str,  # e.g. "BTC", "SOL", "XMR", "USDT"
+    crypto_currency: str,     # BTC, SOL, XMR, USDT
     callback_url: str,
     success_url: str,
     fail_url: str,
 ) -> str:
     """
-    Returns invoice_url for Plisio hosted invoice page.
+    Creates a Plisio invoice and returns invoice_url
     """
+
     params = {
         "api_key": PLISIO_API_KEY,
         "order_number": order_number,
+        "order_name": order_name,        # ✅ ADD THIS
         "amount": f"{amount_usd:.2f}",
         "currency": crypto_currency,
         "callback_url": callback_url,
@@ -31,7 +34,10 @@ async def create_plisio_invoice(
     }
 
     async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(f"{PLISIO_BASE_URL}/invoices/new", params=params)
+        r = await client.get(
+            f"{PLISIO_BASE_URL}/invoices/new",
+            params=params,
+        )
 
     if r.status_code != 200:
         raise RuntimeError(f"Plisio {r.status_code}: {r.text}")
@@ -41,9 +47,8 @@ async def create_plisio_invoice(
     if data.get("status") != "success":
         raise RuntimeError(f"Plisio error: {data}")
 
-    invoice_url = (data.get("data") or {}).get("invoice_url")
+    invoice_url = data.get("data", {}).get("invoice_url")
     if not invoice_url:
         raise RuntimeError(f"No invoice_url in response: {data}")
 
     return invoice_url
-

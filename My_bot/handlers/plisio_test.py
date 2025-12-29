@@ -15,13 +15,15 @@ async def test_plisio(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         invoice_url = await create_plisio_invoice(
-            order_number=f"PLISIO-{user.id}-{int(time.time())}",
-            amount_usd=1.00,
-            crypto_currency="BTC",
-            callback_url=f"{PUBLIC_BASE}/webhooks/plisio",
-            success_url=SUCCESS_URL,
-            fail_url=FAIL_URL,
-        )
+    order_number=f"PLISIO-{user.id}-{int(time.time())}",
+    order_name=f"Telegram payment for user {user.id}",  # ✅ REQUIRED
+    amount_usd=1.00,
+    crypto_currency="BTC",
+    callback_url="https://my-tg-bot-production-9a75.up.railway.app/webhooks/plisio",
+    success_url="https://t.me/thejuicybox_bot",
+    fail_url="https://t.me/thejuicybox_bot",
+)
+
     except Exception as e:
         await update.message.reply_text(f"❌ Error:\n{e}")
         return
