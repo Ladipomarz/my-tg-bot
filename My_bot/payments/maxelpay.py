@@ -6,7 +6,7 @@ import httpx
 
 MAXELPAY_API_KEY = os.getenv("MAXELPAY_API_KEY", "").strip()
 MAXELPAY_API_SECRET = os.getenv("MAXELPAY_API_SECRET", "").strip()
-MAXELPAY_BASE_URL = "https://api.maxelpay.com"  # change only if docs say sandbox URL
+MAXELPAY_BASE_URL = "https://api.maxelpay.com/v1/stg/merchant/order/checkout"  # change only if docs say sandbox URL
 
 if not MAXELPAY_API_KEY or not MAXELPAY_API_SECRET:
     raise RuntimeError("MaxelPay API credentials not set")
