@@ -21,6 +21,7 @@ async def create_maxelpay_checkout(
     *,
     order_id: str,
     amount_usd: float,
+    user_id: int,           # ✅ NOW ACCEPTED
     user_name: str,
     user_email: str,
 ) -> str:
@@ -40,6 +41,12 @@ async def create_maxelpay_checkout(
         "redirectUrl": f"{PUBLIC_BASE_URL}/success",
         "cancelUrl": f"{PUBLIC_BASE_URL}/cancel",
         "webhookUrl": f"{PUBLIC_BASE_URL}/webhooks/maxelpay",
+
+        # ✅ SAFE PLACE TO STORE USER ID
+        # MaxelPay ignores unknown fields but keeps them for webhooks
+        "metadata": {
+            "telegram_user_id": str(user_id)
+        }
     }
 
     headers = {
