@@ -1,13 +1,27 @@
-# My_bot/payments/maxelpay.py
-
 import os
 import time
+import hmac
+import hashlib
 import httpx
 
 MAXELPAY_API_KEY = os.getenv("MAXELPAY_API_KEY", "").strip()
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+MAXELPAY_API_SECRET = os.getenv("MAXELPAY_API_SECRET", "").strip()
+MAXELPAY_BASE_URL = "https://api.maxelpay.com"  # change only if docs say sandbox URL
 
-API_BASE = "https://api.maxelpay.com/v1"  # sandbox/production is same endpoint
+if not MAXELPAY_API_KEY or not MAXELPAY_API_SECRET:
+    raise RuntimeError("MaxelPay API credentials not set")
+
+
+def _sign_payload(payload: dict) -> str:
+    """
+    Create HMAC SHA256 signature from payload
+    """
+    payload_str = "&".join(f"{k}={payload[k]}" for k in sorted(payload))
+    return hmac.new(
+        MAXELPAY_API_SECRET.encode(),
+        payload_str.encode(),
+        hashlib.sha256,
+    ).hexdigest()
 
 
 async def create_maxelpay_checkout(
@@ -15,47 +29,41 @@ async def create_maxelpay_checkout(
     order_id: str,
     amount_usd: float,
     user_id: int,
-    user_name: str = "Telegram User",
-):
-    if not MAXELPAY_API_KEY:
-        raise RuntimeError("MAXELPAY_API_KEY not set")
-
-    if not PUBLIC_BASE_URL:
-        raise RuntimeError("PUBLIC_BASE_URL not set")
+    user_name: str,
+) -> str:
+    timestamp = int(time.time())
 
     payload = {
         "orderID": order_id,
         "amount": round(float(amount_usd), 2),
         "currency": "USD",
-        "timestamp": int(time.time()),
+        "timestamp": timestamp,
         "userName": user_name[:60],
-        # auto-generated email (no user input needed)
-        "userEmail": f"tg_{user_id}@example.local",
         "siteName": "Telegram Bot Test",
-        "websiteUrl": PUBLIC_BASE_URL,
-        "redirectUrl": f"{PUBLIC_BASE_URL}/maxelpay/success",
-        "cancelUrl": f"{PUBLIC_BASE_URL}/maxelpay/cancel",
-        "webhookUrl": f"{PUBLIC_BASE_URL}/webhooks/maxelpay",
+        "userEmail": f"user{user_id}@example.com",  # auto-filled
+        "websiteUrl": "https://example.com",
+        "redirectUrl": "https://example.com/success",
+        "cancelUrl": "https://example.com/cancel",
+        "webhookUrl": "https://example.com/webhook",
     }
 
+    signature = _sign_payload(payload)
+
     headers = {
-        "Authorization": f"Bearer {MAXELPAY_API_KEY}",
+        "X-API-KEY": MAXELPAY_API_KEY,
+        "X-SIGNATURE": signature,
         "Content-Type": "application/json",
     }
 
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=20) as client:
         r = await client.post(
-            f"{API_BASE}/payment/create",
+            f"{MAXELPAY_BASE_URL}/api/create-payment",
             json=payload,
             headers=headers,
         )
+        r.raise_for_status()
+        data = r.json()
 
-    if r.status_code >= 400:
-        raise RuntimeError(f"MaxelPay {r.status_code}: {r.text}")
-
-    data = r.json()
-
-    # defensive check
     if "payment_url" not in data:
         raise RuntimeError(f"Unexpected MaxelPay response: {data}")
 
