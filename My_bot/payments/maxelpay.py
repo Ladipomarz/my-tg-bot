@@ -2,10 +2,15 @@ import os
 import time
 import httpx
 
+
 # ===== ENVIRONMENT VARIABLES =====
 MAXELPAY_API_KEY = os.getenv("MAXELPAY_API_KEY", "").strip()
 MAXELPAY_API_SECRET = os.getenv("MAXELPAY_API_SECRET", "").strip()
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+
+print("MAXELPAY_API_KEY =", repr(MAXELPAY_API_KEY))
+print("MAXELPAY_API_SECRET =", repr(MAXELPAY_API_SECRET))
+
 
 if not MAXELPAY_API_KEY or not MAXELPAY_API_SECRET:
     raise RuntimeError("MAXELPAY_API_KEY or MAXELPAY_API_SECRET not set")
