@@ -17,7 +17,7 @@ async def test_plisio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         invoice_url = await create_plisio_invoice(
     order_number=f"PLISIO-{user.id}-{int(time.time())}",
     order_name=f"Telegram payment for user {user.id}",  # ✅ REQUIRED
-    amount_usd=1.00,
+    amount_usd=6.00,
     crypto_currency="BTC",
     callback_url=f"{PUBLIC_BASE}/webhook/9f3fgswr3e8d4a0f",
     success_url="https://t.me/thejuicybox_bot",
