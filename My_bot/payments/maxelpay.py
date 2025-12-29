@@ -28,43 +28,47 @@ async def create_maxelpay_checkout(
     *,
     order_id: str,
     amount_usd: float,
-    user_id: int,
     user_name: str,
+    user_email: str,
 ) -> str:
-    timestamp = int(time.time())
+
+    url = f"https://api.maxelpay.com/v1/{MAXELPAY_ENV}/merchant/order/checkout"
 
     payload = {
         "orderID": order_id,
-        "amount": round(float(amount_usd), 2),
+        "amount": float(f"{amount_usd:.2f}"),
         "currency": "USD",
-        "timestamp": timestamp,
+        "timestamp": int(time.time()),
         "userName": user_name[:60],
-        "siteName": "Telegram Bot Test",
-        "userEmail": f"user{user_id}@example.com",  # auto-filled
-        "websiteUrl": "https://example.com",
-        "redirectUrl": "https://example.com/success",
-        "cancelUrl": "https://example.com/cancel",
-        "webhookUrl": "https://example.com/webhook",
+        "userEmail": user_email,
+        "siteName": "My TG Bot",
+        "websiteUrl": PUBLIC_BASE_URL,
+        "redirectUrl": f"{PUBLIC_BASE_URL}/success",
+        "cancelUrl": f"{PUBLIC_BASE_URL}/cancel",
+        "webhookUrl": f"{PUBLIC_BASE_URL}/webhooks/maxelpay",
     }
-
-    signature = _sign_payload(payload)
 
     headers = {
-        "X-API-KEY": MAXELPAY_API_KEY,
-        "X-SIGNATURE": signature,
         "Content-Type": "application/json",
+        "x-api-key": MAXELPAY_API_KEY,
+        "x-api-secret": MAXELPAY_API_SECRET,
     }
 
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.post(
-            f"{MAXELPAY_BASE_URL}/api/create-payment",
-            json=payload,
-            headers=headers,
-        )
-        r.raise_for_status()
-        data = r.json()
+    async with httpx.AsyncClient(timeout=30) as client:
+        r = await client.post(url, json=payload, headers=headers)
 
-    if "payment_url" not in data:
-        raise RuntimeError(f"Unexpected MaxelPay response: {data}")
+    if r.status_code >= 400:
+        raise RuntimeError(f"MaxelPay {r.status_code}: {r.text}")
 
-    return data["payment_url"]
+    data = r.json()
+
+    checkout_url = (
+        data.get("checkoutUrl")
+        or data.get("url")
+        or (data.get("data") or {}).get("checkoutUrl")
+    )
+
+    if not checkout_url:
+        raise RuntimeError(f"No checkout URL in response: {data}")
+
+    return checkout_url
