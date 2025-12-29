@@ -1,27 +1,20 @@
 import os
 import time
-import hmac
-import hashlib
 import httpx
 
+# ===== ENVIRONMENT VARIABLES =====
 MAXELPAY_API_KEY = os.getenv("MAXELPAY_API_KEY", "").strip()
 MAXELPAY_API_SECRET = os.getenv("MAXELPAY_API_SECRET", "").strip()
-MAXELPAY_BASE_URL = "https://api.maxelpay.com/v1/stg/merchant/order/checkout"  # change only if docs say sandbox URL
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 
 if not MAXELPAY_API_KEY or not MAXELPAY_API_SECRET:
-    raise RuntimeError("MaxelPay API credentials not set")
+    raise RuntimeError("MAXELPAY_API_KEY or MAXELPAY_API_SECRET not set")
 
+if not PUBLIC_BASE_URL:
+    raise RuntimeError("PUBLIC_BASE_URL not set")
 
-def _sign_payload(payload: dict) -> str:
-    """
-    Create HMAC SHA256 signature from payload
-    """
-    payload_str = "&".join(f"{k}={payload[k]}" for k in sorted(payload))
-    return hmac.new(
-        MAXELPAY_API_SECRET.encode(),
-        payload_str.encode(),
-        hashlib.sha256,
-    ).hexdigest()
+# ===== SANDBOX ENDPOINT =====
+MAXELPAY_CHECKOUT_URL = "https://api.maxelpay.com/v1/stg/merchant/order/checkout"
 
 
 async def create_maxelpay_checkout(
@@ -31,8 +24,9 @@ async def create_maxelpay_checkout(
     user_name: str,
     user_email: str,
 ) -> str:
-
-    url = f"https://api.maxelpay.com/v1/{MAXELPAY_ENV}/merchant/order/checkout"
+    """
+    Creates a MaxelPay checkout session and returns the checkout URL
+    """
 
     payload = {
         "orderID": order_id,
@@ -41,7 +35,7 @@ async def create_maxelpay_checkout(
         "timestamp": int(time.time()),
         "userName": user_name[:60],
         "userEmail": user_email,
-        "siteName": "My TG Bot",
+        "siteName": "My Telegram Bot",
         "websiteUrl": PUBLIC_BASE_URL,
         "redirectUrl": f"{PUBLIC_BASE_URL}/success",
         "cancelUrl": f"{PUBLIC_BASE_URL}/cancel",
@@ -55,7 +49,11 @@ async def create_maxelpay_checkout(
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
-        r = await client.post(url, json=payload, headers=headers)
+        r = await client.post(
+            MAXELPAY_CHECKOUT_URL,
+            json=payload,
+            headers=headers,
+        )
 
     if r.status_code >= 400:
         raise RuntimeError(f"MaxelPay {r.status_code}: {r.text}")
