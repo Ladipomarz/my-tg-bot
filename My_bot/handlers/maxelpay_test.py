@@ -2,7 +2,7 @@ import time
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from payments.maxelpay import create_maxelpay_checkout
+from My_bot.payments.maxelpay import create_maxelpay_checkout
 
 
 
