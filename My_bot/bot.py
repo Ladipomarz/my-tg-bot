@@ -2,11 +2,6 @@
 import os
 import sys
 import logging
-from handlers.plisio_test import test_plisio
-from handlers.pay import pay_command, pay_callback
-
-
-
 
 from telegram import Update
 from telegram.ext import (
@@ -17,6 +12,9 @@ from telegram.ext import (
     ContextTypes,
     filters,
 )
+
+from handlers.plisio_test import test_plisio
+from handlers.pay import pay_command, pay_callback
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -47,6 +45,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await query.answer()
 
+    # ✅ IMPORTANT: route Plisio selector callbacks here so they don't get swallowed
+    if data.startswith("plisio_"):
+        return await pay_callback(update, context)
+
     # back to main menu
     if data == "back_main":
         await query.edit_message_text("Back to main menu...")
@@ -54,7 +56,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ✅ GLOBAL PENDING ORDER GATE FOR TOOLS
-    # If user has a pending order, clicking Tools (or any tool_ button) will show Continue/Cancel
     if data.startswith("tool_"):
         pending = expire_pending_order_if_needed(user_id)
         if pending and pending.get("status") == "pending":
@@ -67,7 +68,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await tools_callback(update, context)
 
     # ✅ cancel_ssn should ALWAYS work (even if order is pending)
-    # so user can exit the SSN flow cleanly
     if data == "cancel_ssn":
         return await tools_callback(update, context)
 
@@ -75,7 +75,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("orders_"):
         return await orders_callback(update, context)
 
-    # payments callbacks
+    # payments callbacks (your existing internal payments menu)
     if data.startswith("pay_"):
         return await payments_callback(update, context)
 
@@ -122,13 +122,14 @@ def main():
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
+    # Commands
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CallbackQueryHandler(callback_router))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
     app.add_handler(CommandHandler("pay", pay_command))
-    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^plisio_"))
     app.add_handler(CommandHandler("test_plisio", test_plisio))
 
+    # Callbacks + text
+    app.add_handler(CallbackQueryHandler(callback_router))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
     app.add_error_handler(on_error)
 
