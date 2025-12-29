@@ -29,7 +29,7 @@ async def test_plisio(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("💸 Pay BTC ($1)", url=invoice_url)]
+        [InlineKeyboardButton("💸 Pay BTC ($6)", url=invoice_url)]
     ])
 
     await update.message.reply_text("✅ Invoice created:", reply_markup=kb)
