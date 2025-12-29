@@ -2,6 +2,7 @@
 import os
 import sys
 import logging
+from handlers.maxelpay_test import test_maxelpay
 
 from telegram import Update
 from telegram.ext import (
@@ -120,6 +121,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+    app.add_handler(CommandHandler("testpay", test_maxelpay))
     app.add_error_handler(on_error)
 
     print("Bot running (webhook)…")
