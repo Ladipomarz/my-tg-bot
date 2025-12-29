@@ -126,8 +126,7 @@ def main():
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
     app.add_handler(CommandHandler("pay", pay_command))
-    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^plisio_pay:"))
-
+    app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^plisio_"))
     app.add_handler(CommandHandler("test_plisio", test_plisio))
 
 
