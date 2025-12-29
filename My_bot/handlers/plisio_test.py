@@ -19,7 +19,7 @@ async def test_plisio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     order_name=f"Telegram payment for user {user.id}",  # ✅ REQUIRED
     amount_usd=1.00,
     crypto_currency="BTC",
-    callback_url="https://my-tg-bot-production-9a75.up.railway.app/webhooks/plisio",
+    callback_url=f"{PUBLIC_BASE}/webhook/9f3fgswr3e8d4a0f",
     success_url="https://t.me/thejuicybox_bot",
     fail_url="https://t.me/thejuicybox_bot",
 )

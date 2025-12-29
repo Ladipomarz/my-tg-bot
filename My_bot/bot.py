@@ -6,6 +6,8 @@ from handlers.plisio_test import test_plisio
 from handlers.pay import pay_command, pay_callback
 
 
+
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -127,6 +129,7 @@ def main():
     app.add_handler(CallbackQueryHandler(pay_callback, pattern=r"^plisio_pay:"))
 
     app.add_handler(CommandHandler("test_plisio", test_plisio))
+
 
     app.add_error_handler(on_error)
 
