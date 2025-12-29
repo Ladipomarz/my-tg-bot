@@ -11,9 +11,9 @@ if not PLISIO_API_KEY:
 async def create_plisio_invoice(
     *,
     order_number: str,
-    order_name: str,          # ✅ REQUIRED BY PLISIO
+    order_name: str,
     amount_usd: float,
-    crypto_currency: str,     # BTC, SOL, XMR, USDT
+    crypto_currency: str,      # BTC, SOL, XMR, USDT
     callback_url: str,
     success_url: str,
     fail_url: str,
@@ -25,12 +25,20 @@ async def create_plisio_invoice(
     params = {
         "api_key": PLISIO_API_KEY,
         "order_number": order_number,
-        "order_name": order_name,        # ✅ ADD THIS
+        "order_name": order_name,
+
+        # 🔥 IMPORTANT: amount is USD, not crypto
         "amount": f"{amount_usd:.2f}",
+        "source_currency": "USD",          # ✅ THIS FIXES 1.00 BTC BUG
         "currency": crypto_currency,
+
+        # URLs
         "callback_url": callback_url,
         "success_url": success_url,
         "fail_url": fail_url,
+
+        # 🔕 Disable email collection
+        "email_required": 0,
     }
 
     async with httpx.AsyncClient(timeout=20) as client:

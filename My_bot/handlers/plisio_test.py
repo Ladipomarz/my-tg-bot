@@ -1,62 +1,35 @@
-import os
-import httpx
+import time
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram.ext import ContextTypes
 
-PLISIO_API_KEY = os.getenv("PLISIO_API_KEY", "").strip()
-PLISIO_BASE_URL = "https://api.plisio.net/api/v1"
+from payments.plisio import create_plisio_invoice
 
-if not PLISIO_API_KEY:
-    raise RuntimeError("PLISIO_API_KEY not set")
+PUBLIC_BASE = "https://my-tg-bot-production-9a75.up.railway.app"
+SUCCESS_URL = "https://t.me/thejuicybox_bot"
+FAIL_URL = "https://t.me/thejuicybox_bot"
 
 
-async def create_plisio_invoice(
-    *,
-    order_number: str,
-    order_name: str,
-    amount_usd: float,
-    crypto_currency: str,      # BTC, SOL, XMR, USDT
-    callback_url: str,
-    success_url: str,
-    fail_url: str,
-) -> str:
-    """
-    Creates a Plisio invoice and returns invoice_url
-    """
+async def test_plisio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    await update.message.reply_text("Creating Plisio BTC $1 invoice…")
 
-    params = {
-        "api_key": PLISIO_API_KEY,
-        "order_number": order_number,
-        "order_name": order_name,
+    try:
+        invoice_url = await create_plisio_invoice(
+    order_number=f"PLISIO-{user.id}-{int(time.time())}",
+    order_name=f"Telegram payment for user {user.id}",  # ✅ REQUIRED
+    amount_usd=1.00,
+    crypto_currency="BTC",
+    callback_url="https://my-tg-bot-production-9a75.up.railway.app/webhooks/plisio",
+    success_url="https://t.me/thejuicybox_bot",
+    fail_url="https://t.me/thejuicybox_bot",
+)
 
-        # 🔥 IMPORTANT: amount is USD, not crypto
-        "amount": f"{amount_usd:.2f}",
-        "source_currency": "USD",          # ✅ THIS FIXES 1.00 BTC BUG
-        "currency": crypto_currency,
+    except Exception as e:
+        await update.message.reply_text(f"❌ Error:\n{e}")
+        return
 
-        # URLs
-        "callback_url": callback_url,
-        "success_url": success_url,
-        "fail_url": fail_url,
+    kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("💸 Pay BTC ($1)", url=invoice_url)]
+    ])
 
-        # 🔕 Disable email collection
-        "email_required": 0,
-    }
-
-    async with httpx.AsyncClient(timeout=20) as client:
-        r = await client.get(
-            f"{PLISIO_BASE_URL}/invoices/new",
-            params=params,
-        )
-
-    if r.status_code != 200:
-        raise RuntimeError(f"Plisio {r.status_code}: {r.text}")
-
-    data = r.json()
-
-    if data.get("status") != "success":
-        raise RuntimeError(f"Plisio error: {data}")
-
-    invoice_url = data.get("data", {}).get("invoice_url")
-    if not invoice_url:
-        raise RuntimeError(f"No invoice_url in response: {data}")
-
-    return invoice_url
+    await update.message.reply_text("✅ Invoice created:", reply_markup=kb)
