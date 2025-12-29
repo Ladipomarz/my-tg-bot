@@ -77,20 +77,19 @@ async def create_maxelpay_checkout(
 ) -> str:
     # Build the payload (this gets encrypted)
     payload = {
-        "orderID": order_id,
-        "amount": float(f"{amount_usd:.2f}"),
-        "currency": "USD",
-        "timestamp": int(time.time()),
-        "userName": (user_name or "User")[:60],
-        "siteName": "My Telegram Bot",
-        "userEmail": user_email,
-        "redirectUrl": f"{PUBLIC_BASE_URL}/success",
-        "websiteUrl": PUBLIC_BASE_URL,
-        "cancelUrl": f"{PUBLIC_BASE_URL}/cancel",
-        "webhookUrl": f"{PUBLIC_BASE_URL}/webhooks/maxelpay",
-        # keep your telegram user id inside payload so it survives encryption
-        "metadata": {"telegram_user_id": str(user_id)},
-    }
+    "orderID": order_id,  # include user_id here if needed
+    "amount": float(f"{amount_usd:.2f}"),
+    "currency": "USD",
+    "timestamp": int(time.time()),
+    "userName": (user_name or "User")[:60],
+    "siteName": "My Telegram Bot",
+    "userEmail": user_email,
+    "redirectUrl": f"{PUBLIC_BASE_URL}/success",
+    "websiteUrl": PUBLIC_BASE_URL,
+    "cancelUrl": f"{PUBLIC_BASE_URL}/cancel",
+    "webhookUrl": f"{PUBLIC_BASE_URL}/webhooks/maxelpay",
+}
+
 
     payload_str = json.dumps(payload, separators=(",", ":"), ensure_ascii=False)
     encrypted_payload = _aes256cbc_encrypt_to_base64(MAXELPAY_API_SECRET, payload_str)
@@ -111,10 +110,12 @@ async def create_maxelpay_checkout(
 
     data = r.json()
     checkout_url = (
-        data.get("checkoutUrl")
-        or data.get("url")
-        or (data.get("data") or {}).get("checkoutUrl")
-    )
+    data.get("checkoutUrl")
+    or data.get("url")
+    or data.get("result")   # ✅ ADD THIS
+    or (data.get("data") or {}).get("checkoutUrl")
+)
+
     if not checkout_url:
         raise RuntimeError(f"No checkout URL in response: {data}")
 
