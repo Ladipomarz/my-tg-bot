@@ -1,6 +1,7 @@
 import os
 import logging
 from fastapi import FastAPI, Request, Response
+
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -12,7 +13,7 @@ from telegram.ext import (
 )
 
 from config import BOT_TOKEN
-from utils.db import create_tables, update_payment_status_by_order_code
+from utils.db import create_tables, update_payment_status_by_order_code, get_order_by_code
 from handlers.start import start, handle_main_menu
 from handlers.tools import tools_callback, handle_user_input
 from handlers.orders import orders_callback
@@ -107,7 +108,6 @@ async def plisio_webhook(req: Request):
     payload = await req.json()
     logger.info("PLISIO WEBHOOK: %s", payload)
 
-    # Best-effort parse (Plisio payload varies by account/version)
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
 
     order_number = (
@@ -124,6 +124,15 @@ async def plisio_webhook(req: Request):
 
     if status in paid:
         update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
+
+        # Optional: notify user in TG
+        order = get_order_by_code(order_number)
+        if order and order.get("user_id"):
+            await tg_app.bot.send_message(
+                chat_id=order["user_id"],
+                text=f"✅ Payment confirmed for order {order_number}.",
+            )
+
     elif status in expired:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
     else:
@@ -135,3 +144,4 @@ async def plisio_webhook(req: Request):
 @app.get("/health")
 async def health():
     return {"ok": True}
+

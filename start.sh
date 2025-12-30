@@ -11,3 +11,5 @@ echo "Testing import server..."
 python -c "import server; print('✅ server imported'); print('Has app:', hasattr(server, 'app'))"
 
 exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+
+

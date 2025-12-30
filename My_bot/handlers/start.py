@@ -1,5 +1,6 @@
 from telegram import Update
 from telegram.ext import ContextTypes
+
 from utils.db import add_user
 from menus.main_menu import get_main_menu
 from handlers.tools import open_tools_menu
@@ -12,7 +13,14 @@ from config import ADMIN_IDS
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
 
-    add_user(user.id, user.first_name, user.username)
+    # ✅ store user safely
+    add_user(
+        user_id=user.id,
+        first_name=user.first_name,
+        username=user.username,
+        last_name=user.last_name,
+    )
+
     admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""
 
     await update.message.reply_text(
@@ -22,15 +30,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (update.message.text or "").strip()
+    print("user tapped:", repr(text))
 
-    print("user tapped:", repr(update.message.text))
-
-    # If SSN flow active, DO NOT open menus
     if context.user_data.get("ssn_step"):
         return
-
-    # If orders flow had text steps later, you might also guard here.
-    text = update.message.text.strip()
 
     if text == "🧰 Tools":
         return await open_tools_menu(update, context)
