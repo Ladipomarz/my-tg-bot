@@ -1,50 +1,58 @@
 import asyncio
 from telegram import Update
-from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 
-# How long after a NEW action before the PREVIOUS bot message disappears
+# ⏱ how long before old messages disappear
 PREVIOUS_MESSAGE_DELAY_SECONDS = 2
 
 
 async def _delete_after_delay(context, chat_id: int, message_id: int, delay: int):
     await asyncio.sleep(delay)
     try:
-        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+        await context.bot.delete_message(
+            chat_id=chat_id,
+            message_id=message_id,
+        )
+    except BadRequest:
+        # message already deleted / too old
+        pass
     except Exception:
-        # Ignore if already deleted / can't delete
         pass
 
 
-async def safe_send(
-    update_or_query,
-    context: ContextTypes.DEFAULT_TYPE,
-    text: str,
-    reply_markup=None,
-):
+async def safe_send(update_or_query, context, text: str, reply_markup=None):
     """
-    GLOBAL SENDER:
-    - Sends a bot message (like reply_text)
-    - Remembers its message_id as "last bot message"
-    - Deletes the previous bot message after PREVIOUS_MESSAGE_DELAY_SECONDS
-
-    Works for both:
-    - Update (normal messages)
-    - CallbackQuery (button presses)
+    Sends a bot message and automatically deletes:
+    1) the previously sent bot message
+    2) the inline keyboard message the user just clicked (if any)
     """
 
-    # Detect source (Update or CallbackQuery)
+    # ── Determine call source ─────────────────────────────
     if isinstance(update_or_query, Update):
         chat_id = update_or_query.effective_chat.id
-        base_msg = update_or_query.message
+        base_msg = update_or_query.effective_message
+        clicked_message_id = None
     else:
         # CallbackQuery
         query = update_or_query
         chat_id = query.message.chat_id
         base_msg = query.message
+        clicked_message_id = query.message.message_id
 
-    # Delete previous bot message after a short delay
+    # ── Delete clicked inline keyboard ────────────────────
+    if clicked_message_id:
+        asyncio.create_task(
+            _delete_after_delay(
+                context,
+                chat_id,
+                clicked_message_id,
+                PREVIOUS_MESSAGE_DELAY_SECONDS,
+            )
+        )
+
+    # ── Delete previous bot message ───────────────────────
     last_id = context.user_data.get("last_bot_message_id")
-    if last_id:
+    if last_id and last_id != clicked_message_id:
         asyncio.create_task(
             _delete_after_delay(
                 context,
@@ -54,10 +62,11 @@ async def safe_send(
             )
         )
 
-    # Send new message
-    msg = await base_msg.reply_text(text, reply_markup=reply_markup)
+    # ── Send new message ──────────────────────────────────
+    msg = await base_msg.reply_text(
+        text=text,
+        reply_markup=reply_markup,
+    )
 
-    # Remember this as the new "last" bot message
     context.user_data["last_bot_message_id"] = msg.message_id
-
     return msg
