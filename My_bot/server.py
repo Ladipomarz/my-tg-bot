@@ -28,7 +28,7 @@ from handlers.orders import orders_callback
 from handlers.payments import payments_callback
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("server")
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
@@ -61,33 +61,35 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await q.answer()
 
-    # back to main menu
+    # back to main menu (inline)
     if data == "back_main":
-        await q.edit_message_text("Back to main menu...")
+        try:
+            await q.edit_message_text("Back to main menu...")
+        except Exception:
+            pass
         await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
-    # ✅ Gate as soon as user clicks Tools in main menu
-    if data == "tools_open":
-     pending = expire_pending_order_if_needed(user_id)
-    if pending and pending.get("status") == "pending":
-        await q.edit_message_text(
-            f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-            reply_markup=get_pending_order_menu(),
-        )
-        return
-    # no pending -> open tools menu
-    return await tools_callback(update, context)
+    # ✅ Gate tool_ inline buttons (this is where your pending check belongs)
+    if data.startswith("tool_"):
+        pending = expire_pending_order_if_needed(user_id)
+        if pending and pending.get("status") == "pending":
+            await q.edit_message_text(
+                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                reply_markup=get_pending_order_menu(),
+            )
+            return
+        return await tools_callback(update, context)
 
-    # cancel_ssn should ALWAYS work even if pending
+    # allow cancel_ssn always
     if data == "cancel_ssn":
         return await tools_callback(update, context)
 
-    # orders menu callbacks
+    # orders menu inline callbacks
     if data.startswith("orders_"):
         return await orders_callback(update, context)
 
-    # payments callbacks
+    # payments menu inline callbacks
     if data.startswith("pay_"):
         return await payments_callback(update, context)
 
@@ -95,7 +97,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # SSN flow
+    # If in SSN flow, handle it safely
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
@@ -106,9 +108,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Something went wrong. Please start again.")
         return
 
+    # static ReplyKeyboard main menu routing lives here
     await handle_main_menu(update, context)
 
 
+# Telegram handlers
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
@@ -117,6 +121,7 @@ tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 @app.on_event("startup")
 async def on_startup():
     create_tables()
+
     await tg_app.initialize()
     await tg_app.start()
 
@@ -145,10 +150,15 @@ async def plisio_webhook(req: Request):
     payload = await req.json()
     logger.info("PLISIO WEBHOOK: %s", payload)
 
+    # Some accounts send payload in {data:{...}} others send flat JSON
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
 
     order_number = (
-        p.get("order_number") or p.get("orderID") or p.get("order_id") or p.get("order") or p.get("orderNumber")
+        p.get("order_number")
+        or p.get("orderID")
+        or p.get("order_id")
+        or p.get("order")
+        or p.get("orderNumber")
     )
     txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
@@ -162,12 +172,16 @@ async def plisio_webhook(req: Request):
     if status in paid:
         update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
 
+        # Notify user (best effort)
         order = get_order_by_code(order_number)
         if order and order.get("user_id"):
-            await tg_app.bot.send_message(
-                chat_id=order["user_id"],
-                text=f"✅ Payment confirmed for order {order_number}.",
-            )
+            try:
+                await tg_app.bot.send_message(
+                    chat_id=order["user_id"],
+                    text=f"✅ Payment confirmed for order {order_number}.",
+                )
+            except Exception:
+                logger.exception("Failed to notify user for paid order")
 
     elif status in expired:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
