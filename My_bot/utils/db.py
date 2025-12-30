@@ -125,6 +125,11 @@ def set_order_status(order_id: int, status: str):
             cur.execute("UPDATE orders SET status = %s WHERE id = %s;", (status, order_id))
         conn.commit()
 
+        # Backwards-compatible alias (old code expects update_order_status)
+def update_order_status(order_id: int, status: str):
+    return set_order_status(order_id, status)
+
+
 
 def get_pending_order(user_id: int):
     migrate_orders_schema()
