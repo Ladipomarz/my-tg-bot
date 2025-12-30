@@ -145,3 +145,7 @@ async def plisio_webhook(req: Request):
 async def health():
     return {"ok": True}
 
+async def on_error(update, context):
+    logger.exception("Unhandled error", exc_info=context.error)
+
+tg_app.add_error_handler(on_error)

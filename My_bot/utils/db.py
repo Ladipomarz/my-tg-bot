@@ -11,6 +11,15 @@ def get_connection():
         raise RuntimeError("DATABASE_URL not set")
     return psycopg.connect(DATABASE_URL)
 
+def migrate_users_schema():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;")
+        conn.commit()
+
+
 
 def migrate_orders_schema():
     """Add new columns without breaking existing DB."""
@@ -35,11 +44,7 @@ def create_tables():
             cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                user_id BIGINT UNIQUE,
-                username TEXT,
-                first_name TEXT,
-                last_name TEXT,
-                created_at TIMESTAMP
+                user_id BIGINT UNIQUE
             );
             """)
 
@@ -56,10 +61,10 @@ def create_tables():
 
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_code ON orders(order_code);")
 
         conn.commit()
 
+    migrate_users_schema()
     migrate_orders_schema()
 
 
@@ -69,19 +74,29 @@ def upsert_user(
     user_id: int,
     username: str | None = None,
     first_name: str | None = None,
-    last_name: str | None = None,
 ):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-                INSERT INTO users (user_id, username, first_name, last_name, created_at)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO users (user_id, username, first_name, created_at)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (user_id) DO UPDATE SET
                     username = EXCLUDED.username,
-                    first_name = EXCLUDED.first_name,
-                    last_name = EXCLUDED.last_name;
-            """, (user_id, username, first_name, last_name, datetime.datetime.utcnow()))
+                    first_name = EXCLUDED.first_name;
+            """, (user_id, username, first_name, datetime.datetime.utcnow()))
         conn.commit()
+
+
+def add_user(user_id: int, first_name: str | None = None, username: str | None = None):
+    """
+    Backwards compatible wrapper.
+    Old code: add_user(user.id, user.first_name, user.username)
+    """
+    return upsert_user(
+        user_id,
+        username=username,
+        first_name=first_name,
+    )
 
 
 def add_user(user_id: int, first_name: str | None = None, username: str | None = None, last_name: str | None = None):

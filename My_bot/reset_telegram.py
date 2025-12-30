@@ -8,3 +8,4 @@ async def main():
     print("Webhook deleted + pending updates dropped")
 
 asyncio.run(main())
+
