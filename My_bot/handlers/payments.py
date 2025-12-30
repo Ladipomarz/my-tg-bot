@@ -1,9 +1,10 @@
 import os
 import logging
+import urllib.parse
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from payments.plisio import create_plisio_invoice
+from payments.plisio import create_plisio_invoice, get_plisio_invoice_details
 from utils.db import get_pending_order, set_order_payment
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 
@@ -17,38 +18,22 @@ def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
 
 
 def coin_picker_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
-    # show mins in label if the chosen amount is below the minimum
     def label_for(plisio_code: str, text: str) -> str:
         min_req = get_plisio_min_usd(plisio_code)
         return f"{text} (min ${min_req:g})" if amount_usd < min_req else text
 
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton(
-                label_for("BTC", "₿ BTC"),
-                callback_data=f"pay_coin:{order_code}:btc"
-            ),
+            InlineKeyboardButton(label_for("BTC", "₿ BTC"), callback_data=f"pay_coin:{order_code}:btc"),
             InlineKeyboardButton("💵 USDT", callback_data=f"pay_usdt:{order_code}"),
         ],
         [
-            InlineKeyboardButton(
-                label_for("ETH", "Ξ ETH"),
-                callback_data=f"pay_coin:{order_code}:eth"
-            ),
-            InlineKeyboardButton(
-                label_for("LTC", "🪙 LTC"),
-                callback_data=f"pay_coin:{order_code}:ltc"
-            ),
+            InlineKeyboardButton(label_for("ETH", "Ξ ETH"), callback_data=f"pay_coin:{order_code}:eth"),
+            InlineKeyboardButton(label_for("LTC", "🪙 LTC"), callback_data=f"pay_coin:{order_code}:ltc"),
         ],
         [
-            InlineKeyboardButton(
-                label_for("SOL", "◎ SOL"),
-                callback_data=f"pay_coin:{order_code}:sol"
-            ),
-            InlineKeyboardButton(
-                label_for("XMR", "🕵️ XMR"),
-                callback_data=f"pay_coin:{order_code}:xmr"
-            ),
+            InlineKeyboardButton(label_for("SOL", "◎ SOL"), callback_data=f"pay_coin:{order_code}:sol"),
+            InlineKeyboardButton(label_for("XMR", "🕵️ XMR"), callback_data=f"pay_coin:{order_code}:xmr"),
         ],
         [InlineKeyboardButton("⬅ Back", callback_data=f"pay_back:{order_code}")],
     ])
@@ -74,8 +59,44 @@ def usdt_network_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
     ])
 
 
-def open_invoice_kb(url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Open payment page", url=url)]])
+def open_invoice_kb(invoice_url: str, wallet_url: str | None = None) -> InlineKeyboardMarkup:
+    rows = []
+    if wallet_url:
+        rows.append([InlineKeyboardButton("📲 Open in wallet (auto-fill)", url=wallet_url)])
+    rows.append([InlineKeyboardButton("🔗 Open payment page", url=invoice_url)])
+    return InlineKeyboardMarkup(rows)
+
+
+def _extract_address_from_details(details: dict) -> str | None:
+    """
+    Plisio field names vary by coin/account settings.
+    Try common keys without crashing.
+    """
+    for k in ("wallet_hash", "address", "to_address", "pay_address", "recipient", "wallet"):
+        v = details.get(k)
+        if isinstance(v, str) and v.strip():
+            return v.strip()
+
+    # Some APIs nest stuff
+    if isinstance(details.get("psys"), dict):
+        for k in ("address", "wallet_hash", "to_address"):
+            v = details["psys"].get(k)
+            if isinstance(v, str) and v.strip():
+                return v.strip()
+
+    return None
+
+
+def _bip21_uri(address: str, amount: str | None, order_code: str) -> str:
+    # amount should be a string like "0.00002264"
+    q = {}
+    if amount:
+        q["amount"] = str(amount)
+    # optional label/message (wallet support varies)
+    q["label"] = "Payment"
+    q["message"] = f"Order {order_code}"
+
+    return "bitcoin:" + address + ("?" + urllib.parse.urlencode(q) if q else "")
 
 
 async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE, order_code: str):
@@ -131,7 +152,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         min_required = get_plisio_min_usd(plisio_currency)
         if amount_usd < min_required:
-            # return to same UX and show mins on buttons
             if coin_key.startswith("usdt"):
                 await q.edit_message_text(
                     f"❌ Minimum for {plisio_currency} is ${min_required:.2f}.\nChoose another option.",
@@ -152,8 +172,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             await q.edit_message_text("Creating payment link…")
 
-            invoice_url = await create_plisio_invoice(
-                order_number=order_code,  # IMPORTANT: webhook uses this to find the order
+            inv = await create_plisio_invoice(
+                order_number=order_code,
                 order_name=f"SSN Service {order_code}",
                 amount_usd=amount_usd,
                 crypto_currency=plisio_currency,
@@ -162,7 +182,21 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 fail_url=f"https://t.me/{context.bot.username}",
             )
 
-            # Store payment data (provider/status fields supported by updated db.py)
+            invoice_url = inv["invoice_url"]
+            txn_id = inv["txn_id"]
+            crypto_amount = inv.get("invoice_total_sum")  # string usually
+
+            # Try to fetch address from invoice details (may be unavailable depending on Plisio/account)
+            wallet_url = None
+            try:
+                details = await get_plisio_invoice_details(txn_id)
+                address = _extract_address_from_details(details)
+                if address and plisio_currency == "BTC":
+                    wallet_url = _bip21_uri(address, crypto_amount, order_code)
+            except Exception:
+                logger.exception("Failed to load invoice details (continuing without wallet autofill)")
+
+            # Store payment data
             set_order_payment(
                 pending["id"],
                 invoice_url=invoice_url,
@@ -171,13 +205,17 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pay_status="pending",
             )
 
+            extra = ""
+            if wallet_url:
+                extra = "\n📲 You can also open your wallet with amount pre-filled."
+
             await q.edit_message_text(
                 f"✅ Payment link created\n"
                 f"Order: {order_code}\n"
                 f"Amount: ${amount_usd:.2f}\n"
                 f"Currency: {plisio_currency}\n\n"
-                f"Tap below to open payment page:",
-                reply_markup=open_invoice_kb(invoice_url),
+                f"Tap below to pay:{extra}",
+                reply_markup=open_invoice_kb(invoice_url, wallet_url),
             )
 
         except Exception as e:
