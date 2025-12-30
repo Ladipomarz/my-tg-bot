@@ -12,11 +12,11 @@ from telegram.ext import (
 )
 
 from My_bot.config import BOT_TOKEN
-from utils.db import create_tables, update_payment_status_by_order_code
-from handlers.start import start, handle_main_menu
-from handlers.tools import tools_callback, handle_user_input
-from handlers.orders import orders_callback
-from handlers.payments import payments_callback
+from My_bot.utils.db import create_tables, update_payment_status_by_order_code
+from My_bot.handlers.start import start, handle_main_menu
+from My_bot.handlers.tools import tools_callback, handle_user_input
+from My_bot.handlers.orders import orders_callback
+from My_bot.handlers.payments import payments_callback
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
