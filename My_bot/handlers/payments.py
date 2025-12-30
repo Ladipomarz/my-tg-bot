@@ -67,35 +67,35 @@ def open_invoice_kb(invoice_url: str, wallet_url: str | None = None) -> InlineKe
     return InlineKeyboardMarkup(rows)
 
 
-def _extract_address_from_details(details: dict) -> str | None:
+def _extract_btc_address(details: dict) -> str | None:
     """
-    Plisio field names vary by coin/account settings.
-    Try common keys without crashing.
+    Your actual Plisio response structure is:
+      details["invoice"]["wallet_hash"]
     """
-    for k in ("wallet_hash", "address", "to_address", "pay_address", "recipient", "wallet"):
-        v = details.get(k)
-        if isinstance(v, str) and v.strip():
-            return v.strip()
+    inv = details.get("invoice") or {}
+    addr = inv.get("wallet_hash") or inv.get("address")
+    if isinstance(addr, str) and addr.strip():
+        return addr.strip()
+    return None
 
-    # Some APIs nest stuff
-    if isinstance(details.get("psys"), dict):
-        for k in ("address", "wallet_hash", "to_address"):
-            v = details["psys"].get(k)
-            if isinstance(v, str) and v.strip():
-                return v.strip()
 
+def _extract_crypto_amount(details: dict) -> str | None:
+    inv = details.get("invoice") or {}
+    amt = inv.get("invoice_total_sum") or inv.get("amount")
+    if isinstance(amt, str) and amt.strip():
+        return amt.strip()
+    if isinstance(amt, (int, float)):
+        return str(amt)
     return None
 
 
 def _bip21_uri(address: str, amount: str | None, order_code: str) -> str:
-    # amount should be a string like "0.00002264"
     q = {}
     if amount:
         q["amount"] = str(amount)
-    # optional label/message (wallet support varies)
+    # label/message are optional, wallets vary
     q["label"] = "Payment"
     q["message"] = f"Order {order_code}"
-
     return "bitcoin:" + address + ("?" + urllib.parse.urlencode(q) if q else "")
 
 
@@ -184,17 +184,22 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             invoice_url = inv["invoice_url"]
             txn_id = inv["txn_id"]
-            crypto_amount = inv.get("invoice_total_sum")  # string usually
 
-            # Try to fetch address from invoice details (may be unavailable depending on Plisio/account)
             wallet_url = None
-            try:
-                details = await get_plisio_invoice_details(txn_id)
-                address = _extract_address_from_details(details)
-                if address and plisio_currency == "BTC":
-                    wallet_url = _bip21_uri(address, crypto_amount, order_code)
-            except Exception:
-                logger.exception("Failed to load invoice details (continuing without wallet autofill)")
+            extra = ""
+
+            # ✅ Wallet autofill (BTC only for now)
+            if plisio_currency == "BTC":
+                try:
+                    details = await get_plisio_invoice_details(txn_id)
+                    address = _extract_btc_address(details)
+                    btc_amount = _extract_crypto_amount(details)
+
+                    if address and btc_amount:
+                        wallet_url = _bip21_uri(address, btc_amount, order_code)
+                        extra = "\n📲 You can also open your wallet with amount pre-filled."
+                except Exception:
+                    logger.exception("Failed to load invoice details (continuing without wallet autofill)")
 
             # Store payment data
             set_order_payment(
@@ -204,10 +209,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pay_provider="plisio",
                 pay_status="pending",
             )
-
-            extra = ""
-            if wallet_url:
-                extra = "\n📲 You can also open your wallet with amount pre-filled."
 
             await q.edit_message_text(
                 f"✅ Payment link created\n"

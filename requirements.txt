@@ -4,3 +4,4 @@ psycopg[binary]==3.2.3
 pycryptodome
 fastapi
 uvicorn
+python-multipart
