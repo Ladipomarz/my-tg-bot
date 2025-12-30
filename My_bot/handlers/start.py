@@ -9,6 +9,8 @@ from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
 from config import ADMIN_IDS
 
+from utils.auto_delete import safe_send
+
 
 def _norm_menu_text(t: str) -> str:
     t = (t or "").strip().lower()
@@ -27,9 +29,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username=user.username,
     )
 
-    admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""
-
-    await update.message.reply_text(
+    admin_badge = " 🔧" if user.id in ADMIN_IDS else ""
+    await safe_send(
+        update,
+        context,
         f"Hello {user.first_name}{admin_badge}! Welcome to your underground bot.",
         reply_markup=get_main_menu(),
     )
@@ -48,7 +51,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key == "tools":
         pending = expire_pending_order_if_needed(update.effective_user.id)
         if pending and pending.get("status") == "pending":
-            await update.message.reply_text(
+            await safe_send(
+                update,
+                context,
                 f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                 reply_markup=get_pending_order_menu(),
             )
@@ -59,4 +64,4 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key == "orders":
         return await open_orders_menu(update, context)
 
-    await update.message.reply_text("Unknown command, please use menu buttons.")
+    await safe_send(update, context, "Unknown command, please use menu buttons.")
