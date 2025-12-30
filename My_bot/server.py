@@ -206,7 +206,7 @@ async def plisio_webhook(req: Request):
 
     paid = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired = {"expired", "cancelled", "canceled", "failed", "error"}
-    detected = {"pending", "new"}
+    detected = {"pending"}
 
     if status in detected:
         if current_pay_status not in {"detected", "paid"}:
