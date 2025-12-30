@@ -145,20 +145,51 @@ async def telegram_webhook(req: Request):
     return Response(status_code=200)
 
 
+
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
-    payload = await req.json()
-    logger.info("PLISIO WEBHOOK: %s", payload)
+    body = await req.body()
+    ctype = (req.headers.get("content-type") or "").lower()
+
+    # 1) Empty body (some providers "ping" endpoints)
+    if not body or body.strip() == b"":
+        logger.warning("PLISIO WEBHOOK: empty body, headers=%s", dict(req.headers))
+        return {"ok": True}
+
+    payload = None
+
+    # 2) JSON
+    if "application/json" in ctype or "application/" in ctype and "json" in ctype:
+        try:
+            payload = json.loads(body)
+        except json.JSONDecodeError:
+            logger.exception("PLISIO WEBHOOK: invalid JSON body=%r", body[:500])
+            return {"ok": True}
+
+    # 3) Form-encoded (common for webhooks)
+    if payload is None and ("application/x-www-form-urlencoded" in ctype or "multipart/form-data" in ctype):
+        form = await req.form()
+        payload = dict(form)
+
+    # 4) Fallback: try to parse as querystring-like
+    if payload is None:
+        try:
+            decoded = body.decode("utf-8", errors="replace")
+            payload = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(decoded).items()}
+        except Exception:
+            logger.exception("PLISIO WEBHOOK: unknown body format body=%r", body[:500])
+            return {"ok": True}
+
+    logger.info("PLISIO WEBHOOK parsed: %s", payload)
 
     # Some accounts send payload in {data:{...}} others send flat JSON
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
 
     order_number = (
         p.get("order_number")
-        or p.get("orderID")
-        or p.get("order_id")
-        or p.get("order")
         or p.get("orderNumber")
+        or p.get("order_id")
+        or p.get("orderId")
     )
     txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
@@ -172,7 +203,6 @@ async def plisio_webhook(req: Request):
     if status in paid:
         update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
 
-        # Notify user (best effort)
         order = get_order_by_code(order_number)
         if order and order.get("user_id"):
             try:
@@ -191,6 +221,11 @@ async def plisio_webhook(req: Request):
     return {"ok": True}
 
 
+
 @app.get("/health")
 async def health():
+    return {"ok": True}
+
+@app.get("/webhooks/plisio")
+async def plisio_webhook_get():
     return {"ok": True}
