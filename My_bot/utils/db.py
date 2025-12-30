@@ -16,7 +16,7 @@ def migrate_orders_schema():
     """Add new columns without breaking existing DB."""
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # existing / older fields
+            # base additions used by your handlers
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
@@ -56,6 +56,7 @@ def create_tables():
 
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_code ON orders(order_code);")
 
         conn.commit()
 
@@ -64,7 +65,12 @@ def create_tables():
 
 # ---------------- USERS ----------------
 
-def upsert_user(user_id: int, username: str | None = None, first_name: str | None = None, last_name: str | None = None):
+def upsert_user(
+    user_id: int,
+    username: str | None = None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+):
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
@@ -104,19 +110,40 @@ def _generate_order_code(cur) -> str:
             return code
 
 
-def create_order(user_id: int, description: str, status: str = "pending"):
+def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
+    """
+    Your handlers expect:
+      order_id, order_code = create_order(..., ttl_seconds=3600)
+
+    So we return (id, order_code).
+    """
     migrate_orders_schema()
+
+    now = datetime.datetime.utcnow()
+    expires_at = now + datetime.timedelta(seconds=int(ttl_seconds))
+
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             code = _generate_order_code(cur)
             cur.execute("""
-                INSERT INTO orders (user_id, order_code, status, description, created_at)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING *;
-            """, (user_id, code, status, description, datetime.datetime.utcnow()))
-            order = cur.fetchone()
+                INSERT INTO orders (user_id, order_code, status, description, created_at, expires_at, pay_status, pay_provider, pay_updated_at)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, order_code;
+            """, (
+                user_id,
+                code,
+                "pending",
+                description,
+                now,
+                expires_at,
+                "pending",
+                None,
+                now,
+            ))
+            row = cur.fetchone()
         conn.commit()
-    return order
+
+    return row["id"], row["order_code"]
 
 
 def set_order_status(order_id: int, status: str):
@@ -125,10 +152,10 @@ def set_order_status(order_id: int, status: str):
             cur.execute("UPDATE orders SET status = %s WHERE id = %s;", (status, order_id))
         conn.commit()
 
-        # Backwards-compatible alias (old code expects update_order_status)
+
+# ✅ Backwards-compatible alias (your handlers import update_order_status)
 def update_order_status(order_id: int, status: str):
     return set_order_status(order_id, status)
-
 
 
 def get_pending_order(user_id: int):
@@ -160,13 +187,18 @@ def expire_pending_order_if_needed(user_id: int):
     return pending
 
 
-def set_order_expiry(order_id: int, minutes: int = 15):
+def get_orders_for_user(user_id: int, limit: int = 20):
     migrate_orders_schema()
-    expires_at = datetime.datetime.utcnow() + datetime.timedelta(minutes=int(minutes))
     with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("UPDATE orders SET expires_at = %s WHERE id = %s;", (expires_at, order_id))
-        conn.commit()
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT *
+                FROM orders
+                WHERE user_id = %s
+                ORDER BY id DESC
+                LIMIT %s;
+            """, (user_id, limit))
+            return cur.fetchall()
 
 
 def set_order_payment(
