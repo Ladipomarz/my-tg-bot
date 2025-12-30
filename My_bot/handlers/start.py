@@ -18,7 +18,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id=user.id,
         first_name=user.first_name,
         username=user.username,
-        last_name=user.last_name,
     )
 
     admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""

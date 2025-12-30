@@ -99,12 +99,6 @@ def add_user(user_id: int, first_name: str | None = None, username: str | None =
     )
 
 
-def add_user(user_id: int, first_name: str | None = None, username: str | None = None, last_name: str | None = None):
-    """
-    Backwards compatible wrapper.
-    Your old code calls: add_user(user.id, user.first_name, user.username)
-    """
-    return upsert_user(user_id, username=username, first_name=first_name, last_name=last_name)
 
 
 def get_user(user_id: int):
