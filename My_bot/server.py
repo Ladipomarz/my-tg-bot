@@ -13,7 +13,15 @@ from telegram.ext import (
 )
 
 from config import BOT_TOKEN
-from utils.db import create_tables, update_payment_status_by_order_code, get_order_by_code
+from utils.db import (
+    create_tables,
+    update_payment_status_by_order_code,
+    get_order_by_code,
+    expire_pending_order_if_needed,
+)
+from menus.main_menu import get_main_menu
+from menus.orders_menu import get_pending_order_menu
+
 from handlers.start import start, handle_main_menu
 from handlers.tools import tools_callback, handle_user_input
 from handlers.orders import orders_callback
@@ -36,30 +44,57 @@ app = FastAPI()
 tg_app = ApplicationBuilder().token(BOT_TOKEN).build()
 
 
+async def on_error(update, context):
+    logger.exception("Unhandled Telegram error", exc_info=context.error)
+
+
+tg_app.add_error_handler(on_error)
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
         return
 
     data = (q.data or "").strip()
+    user_id = q.from_user.id
+
     await q.answer()
 
-    if data.startswith("tool_") or data == "cancel_ssn":
+    # back to main menu
+    if data == "back_main":
+        await q.edit_message_text("Back to main menu...")
+        await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
+        return
+
+    # ✅ PENDING ORDER GATE FOR TOOLS (restored)
+    if data.startswith("tool_"):
+        pending = expire_pending_order_if_needed(user_id)
+        if pending and pending.get("status") == "pending":
+            await q.edit_message_text(
+                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                reply_markup=get_pending_order_menu(),
+            )
+            return
         return await tools_callback(update, context)
 
+    # cancel_ssn should ALWAYS work even if pending
+    if data == "cancel_ssn":
+        return await tools_callback(update, context)
+
+    # orders menu callbacks
     if data.startswith("orders_"):
         return await orders_callback(update, context)
 
+    # payments callbacks
     if data.startswith("pay_"):
         return await payments_callback(update, context)
 
-    if data == "back_main":
-        await q.edit_message_text("Back to main menu...")
-        await q.message.reply_text("Main menu:", reply_markup=None)
-        return
+    logger.info("Unhandled callback data: %s", data)
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # SSN flow
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
@@ -98,6 +133,7 @@ async def on_shutdown():
 @app.post(TELEGRAM_PATH)
 async def telegram_webhook(req: Request):
     payload = await req.json()
+    logger.info("TG UPDATE received: %s", payload.get("update_id"))
     update = Update.de_json(payload, tg_app.bot)
     await tg_app.process_update(update)
     return Response(status_code=200)
@@ -125,7 +161,6 @@ async def plisio_webhook(req: Request):
     if status in paid:
         update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
 
-        # Optional: notify user in TG
         order = get_order_by_code(order_number)
         if order and order.get("user_id"):
             await tg_app.bot.send_message(
@@ -144,8 +179,3 @@ async def plisio_webhook(req: Request):
 @app.get("/health")
 async def health():
     return {"ok": True}
-
-async def on_error(update, context):
-    logger.exception("Unhandled error", exc_info=context.error)
-
-tg_app.add_error_handler(on_error)
