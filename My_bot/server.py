@@ -11,7 +11,7 @@ from telegram.ext import (
     filters,
 )
 
-from config import BOT_TOKEN
+from My_bot.config import BOT_TOKEN
 from utils.db import create_tables, update_payment_status_by_order_code
 from handlers.start import start, handle_main_menu
 from handlers.tools import tools_callback, handle_user_input
