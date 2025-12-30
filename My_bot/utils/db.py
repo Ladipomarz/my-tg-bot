@@ -11,6 +11,7 @@ def get_connection():
         raise RuntimeError("DATABASE_URL not set")
     return psycopg.connect(DATABASE_URL)
 
+
 def migrate_users_schema():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -18,7 +19,6 @@ def migrate_users_schema():
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;")
         conn.commit()
-
 
 
 def migrate_orders_schema():
@@ -30,11 +30,15 @@ def migrate_orders_schema():
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
 
-            # ✅ payment tracking for Plisio (and future providers)
+            # payment tracking for Plisio (and future providers)
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_provider TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_txn_id TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_status TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_updated_at TIMESTAMP;")
+
+            # ✅ fulfillment / delivery tracking (manual step after paid)
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_status TEXT;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;")
         conn.commit()
 
 
@@ -99,8 +103,6 @@ def add_user(user_id: int, first_name: str | None = None, username: str | None =
     )
 
 
-
-
 def get_user(user_id: int):
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -135,8 +137,20 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
         with conn.cursor(row_factory=dict_row) as cur:
             code = _generate_order_code(cur)
             cur.execute("""
-                INSERT INTO orders (user_id, order_code, status, description, created_at, expires_at, pay_status, pay_provider, pay_updated_at)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                INSERT INTO orders (
+                    user_id,
+                    order_code,
+                    status,
+                    description,
+                    created_at,
+                    expires_at,
+                    pay_status,
+                    pay_provider,
+                    pay_updated_at,
+                    delivery_status,
+                    delivered_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, order_code;
             """, (
                 user_id,
@@ -148,6 +162,8 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
                 "pending",
                 None,
                 now,
+                "not_delivered",
+                None,
             ))
             row = cur.fetchone()
         conn.commit()
@@ -254,6 +270,39 @@ def update_payment_status_by_order_code(order_code: str, *, pay_status: str, pay
                     pay_updated_at = %s
                 WHERE order_code = %s;
             """, (pay_status, pay_txn_id, datetime.datetime.utcnow(), order_code))
+        conn.commit()
+
+
+def set_delivery_status(order_id: int, delivery_status: str):
+    """
+    delivery_status:
+      - not_delivered
+      - delivered
+    """
+    migrate_orders_schema()
+    delivered_at = datetime.datetime.utcnow() if delivery_status == "delivered" else None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE orders
+                SET delivery_status = %s,
+                    delivered_at = %s
+                WHERE id = %s;
+            """, (delivery_status, delivered_at, order_id))
+        conn.commit()
+
+
+def mark_order_delivered(order_code: str):
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE orders
+                SET delivery_status = 'delivered',
+                    delivered_at = %s
+                WHERE order_code = %s;
+            """, (datetime.datetime.utcnow(), order_code))
         conn.commit()
 
 

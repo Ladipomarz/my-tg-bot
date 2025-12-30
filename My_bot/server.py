@@ -1,5 +1,8 @@
 import os
+import json
 import logging
+from urllib.parse import parse_qs
+
 from fastapi import FastAPI, Request, Response
 
 from telegram import Update
@@ -70,7 +73,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
-    # ✅ Gate tool_ inline buttons (this is where your pending check belongs)
+    # ✅ Gate tool_ inline buttons (pending check)
     if data.startswith("tool_"):
         pending = expire_pending_order_if_needed(user_id)
         if pending and pending.get("status") == "pending":
@@ -145,45 +148,44 @@ async def telegram_webhook(req: Request):
     return Response(status_code=200)
 
 
+def _parse_plisio_body(body: bytes) -> dict:
+    """
+    Parse Plisio webhook body WITHOUT req.form() (no python-multipart needed).
+    Supports:
+      - JSON
+      - application/x-www-form-urlencoded (key=value&...)
+    """
+    if not body or body.strip() == b"":
+        return {}
+
+    # Try JSON first
+    try:
+        return json.loads(body.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        pass
+
+    # Fallback: parse querystring-like body
+    decoded = body.decode("utf-8", errors="replace")
+    qs = parse_qs(decoded)
+    return {k: (v[0] if len(v) == 1 else v) for k, v in qs.items()}
+
 
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
     body = await req.body()
-    ctype = (req.headers.get("content-type") or "").lower()
 
-    # 1) Empty body (some providers "ping" endpoints)
+    # Empty body: ignore
     if not body or body.strip() == b"":
         logger.warning("PLISIO WEBHOOK: empty body, headers=%s", dict(req.headers))
         return {"ok": True}
 
-    payload = None
-
-    # 2) JSON
-    if "application/json" in ctype or "application/" in ctype and "json" in ctype:
-        try:
-            payload = json.loads(body)
-        except json.JSONDecodeError:
-            logger.exception("PLISIO WEBHOOK: invalid JSON body=%r", body[:500])
-            return {"ok": True}
-
-    # 3) Form-encoded (common for webhooks)
-    if payload is None and ("application/x-www-form-urlencoded" in ctype or "multipart/form-data" in ctype):
-        form = await req.form()
-        payload = dict(form)
-
-    # 4) Fallback: try to parse as querystring-like
-    if payload is None:
-        try:
-            decoded = body.decode("utf-8", errors="replace")
-            payload = {k: v[0] if len(v) == 1 else v for k, v in parse_qs(decoded).items()}
-        except Exception:
-            logger.exception("PLISIO WEBHOOK: unknown body format body=%r", body[:500])
-            return {"ok": True}
-
+    payload = _parse_plisio_body(body)
     logger.info("PLISIO WEBHOOK parsed: %s", payload)
 
-    # Some accounts send payload in {data:{...}} others send flat JSON
+    # Some accounts send payload in {data:{...}} others send flat
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
+    if not isinstance(p, dict):
+        return {"ok": True}
 
     order_number = (
         p.get("order_number")
@@ -197,34 +199,58 @@ async def plisio_webhook(req: Request):
     if not order_number:
         return {"ok": True}
 
+    # Load order (for user_id and to avoid message spam)
+    order = get_order_by_code(order_number) or {}
+    user_id = order.get("user_id")
+    current_pay_status = (order.get("pay_status") or "").lower().strip()
+
+    # Status groups
     paid = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired = {"expired", "cancelled", "canceled", "failed", "error"}
+    detected = {"pending", "new"}  # payment seen but not confirmed
 
+    # 1) Payment detected (send ONCE)
+    if status in detected:
+        if current_pay_status not in {"detected", "paid"}:
+            update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
+            if user_id:
+                try:
+                    await tg_app.bot.send_message(
+                        chat_id=user_id,
+                        text=f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.",
+                    )
+                except Exception:
+                    logger.exception("Failed to notify user for detected payment")
+        return {"ok": True}
+
+    # 2) Paid/confirmed (final)
     if status in paid:
-        update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
+        if current_pay_status != "paid":
+            update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
+            if user_id:
+                try:
+                    await tg_app.bot.send_message(
+                        chat_id=user_id,
+                        text=f"✅ Payment confirmed for order {order_number}.",
+                    )
+                except Exception:
+                    logger.exception("Failed to notify user for paid order")
+        return {"ok": True}
 
-        order = get_order_by_code(order_number)
-        if order and order.get("user_id"):
-            try:
-                await tg_app.bot.send_message(
-                    chat_id=order["user_id"],
-                    text=f"✅ Payment confirmed for order {order_number}.",
-                )
-            except Exception:
-                logger.exception("Failed to notify user for paid order")
-
-    elif status in expired:
+    # 3) Expired/failed
+    if status in expired:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
-    else:
-        update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
+        return {"ok": True}
 
+    # 4) Anything else: store as-is (don’t crash)
+    update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
-
 
 
 @app.get("/health")
 async def health():
     return {"ok": True}
+
 
 @app.get("/webhooks/plisio")
 async def plisio_webhook_get():
