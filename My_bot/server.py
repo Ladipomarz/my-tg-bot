@@ -172,79 +172,69 @@ def _parse_plisio_body(body: bytes) -> dict:
 
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
-    body = await req.body()
+    ctype = (req.headers.get("content-type") or "").lower()
 
-    # Empty body: ignore
-    if not body or body.strip() == b"":
-        logger.warning("PLISIO WEBHOOK: empty body, headers=%s", dict(req.headers))
-        return {"ok": True}
+    payload = None
 
-    payload = _parse_plisio_body(body)
+    # ✅ multipart/form-data or x-www-form-urlencoded
+    if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
+        form = await req.form()          # <-- this needs python-multipart installed
+        payload = dict(form)
+    else:
+        # ✅ JSON
+        try:
+            payload = await req.json()
+        except Exception:
+            body = await req.body()
+            logger.warning("PLISIO WEBHOOK: could not parse body=%r", body[:500])
+            return {"ok": True}
+
     logger.info("PLISIO WEBHOOK parsed: %s", payload)
 
-    # Some accounts send payload in {data:{...}} others send flat
-    p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
-    if not isinstance(p, dict):
-        return {"ok": True}
+    p = payload.get("data") if isinstance(payload.get("data"), dict) else payload
 
-    order_number = (
-        p.get("order_number")
-        or p.get("orderNumber")
-        or p.get("order_id")
-        or p.get("orderId")
-    )
+    order_number = p.get("order_number") or p.get("orderNumber") or p.get("order_id") or p.get("orderId")
     txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
 
     if not order_number:
         return {"ok": True}
 
-    # Load order (for user_id and to avoid message spam)
     order = get_order_by_code(order_number) or {}
     user_id = order.get("user_id")
     current_pay_status = (order.get("pay_status") or "").lower().strip()
 
-    # Status groups
     paid = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired = {"expired", "cancelled", "canceled", "failed", "error"}
-    detected = {"pending", "new"}  # payment seen but not confirmed
+    detected = {"pending", "new"}
 
-    # 1) Payment detected (send ONCE)
     if status in detected:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
             if user_id:
-                try:
-                    await tg_app.bot.send_message(
-                        chat_id=user_id,
-                        text=f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.",
-                    )
-                except Exception:
-                    logger.exception("Failed to notify user for detected payment")
+                await tg_app.bot.send_message(
+                    chat_id=user_id,
+                    text=f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.",
+                )
         return {"ok": True}
 
-    # 2) Paid/confirmed (final)
     if status in paid:
         if current_pay_status != "paid":
             update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
             if user_id:
-                try:
-                    await tg_app.bot.send_message(
-                        chat_id=user_id,
-                        text=f"✅ Payment confirmed for order {order_number}.",
-                    )
-                except Exception:
-                    logger.exception("Failed to notify user for paid order")
+                await tg_app.bot.send_message(
+                    chat_id=user_id,
+                    text=f"✅ Payment confirmed for order {order_number}.",
+                )
         return {"ok": True}
 
-    # 3) Expired/failed
     if status in expired:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
 
-    # 4) Anything else: store as-is (don’t crash)
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
+
 
 
 @app.get("/health")
