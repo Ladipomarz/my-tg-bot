@@ -67,16 +67,17 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
-    # ✅ PENDING ORDER GATE FOR TOOLS (restored)
-    if data.startswith("tool_"):
-        pending = expire_pending_order_if_needed(user_id)
-        if pending and pending.get("status") == "pending":
-            await q.edit_message_text(
-                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                reply_markup=get_pending_order_menu(),
-            )
-            return
-        return await tools_callback(update, context)
+    # ✅ Gate as soon as user clicks Tools in main menu
+    if data == "tools_open":
+     pending = expire_pending_order_if_needed(user_id)
+    if pending and pending.get("status") == "pending":
+        await q.edit_message_text(
+            f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+            reply_markup=get_pending_order_menu(),
+        )
+        return
+    # no pending -> open tools menu
+    return await tools_callback(update, context)
 
     # cancel_ssn should ALWAYS work even if pending
     if data == "cancel_ssn":
