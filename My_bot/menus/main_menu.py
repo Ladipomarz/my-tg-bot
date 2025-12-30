@@ -5,4 +5,5 @@ def get_main_menu():
         ["🧰 Tools", "🛒 Orders"],
     ]
 
-    return ReplyKeyboardMarkup(buttons, resize_keyboard=True)
+    return ReplyKeyboardMarkup(buttons, resize_keyboard=True, is_persistent=True,
+     one_time_keyboard=False,)
