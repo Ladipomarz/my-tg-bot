@@ -69,6 +69,9 @@ async def open_orders_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    if not query or not query.data:
+        return
+
     data = query.data
     user_id = query.from_user.id
 
@@ -77,14 +80,27 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending = expire_pending_order_if_needed(user_id)
 
         if pending and pending.get("status") == "pending":
-            context.user_data["orders_order_id"] = pending["id"]
-            context.user_data["orders_order_code"] = pending["order_code"]
+            pay_status = (pending.get("pay_status") or "").lower().strip()
 
+            # 🚫 Only treat as "pending" if user has NOT paid/detected yet
+            if pay_status in {"pending", "", "new"}:
+                context.user_data["orders_order_id"] = pending["id"]
+                context.user_data["orders_order_code"] = pending["order_code"]
+
+                await safe_send(
+                    query,
+                    context,
+                    _pending_text(pending),
+                    reply_markup=get_pending_order_menu(),
+                )
+                return
+
+            # ✅ payment already detected/paid -> show processing message
             await safe_send(
                 query,
                 context,
-                _pending_text(pending),
-                reply_markup=get_pending_order_menu(),
+                f"✅ Payment already detected for {pending['order_code']}.\nYour order is being processed.",
+                reply_markup=get_tools_inline(),
             )
             return
 
@@ -101,15 +117,27 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         lines = ["Your last orders:"]
         for o in orders:
-            emoji = {
-                "pending": "🕒",
-                "paid": "💰",
-                "completed": "✅",
-                "cancelled": "❌",
-                "expired": "⌛",
-            }.get(o["status"], "❔")
+            status = (o.get("status") or "").lower().strip()
+            pay_status = (o.get("pay_status") or "").lower().strip()
 
-            lines.append(f"{emoji} {o['order_code']} — {o['status']}")
+            if pay_status == "detected":
+                emoji = "🟡"
+                label = "processing (payment detected)"
+            elif pay_status == "paid":
+                emoji = "💰"
+                label = "paid"
+            else:
+                emoji = {
+                    "pending": "🕒",
+                    "processing": "🟡",
+                    "delivered": "📦",
+                    "completed": "✅",
+                    "cancelled": "❌",
+                    "expired": "⌛",
+                }.get(status, "❔")
+                label = status or "unknown"
+
+            lines.append(f"{emoji} {o.get('order_code')} — {label}")
 
         await safe_send(query, context, "\n".join(lines))
         return
@@ -122,8 +150,17 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_send(query, context, "No active pending order.")
             return
 
-        invoice_url = pending.get("invoice_url")
+        pay_status = (pending.get("pay_status") or "").lower().strip()
+        if pay_status not in {"pending", "", "new"}:
+            await safe_send(
+                query,
+                context,
+                f"✅ Payment already detected for {pending['order_code']}.\nYour order is being processed.",
+                reply_markup=get_tools_inline(),
+            )
+            return
 
+        invoice_url = pending.get("invoice_url")
         if invoice_url:
             await safe_send(
                 query,
@@ -147,7 +184,7 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_send(query, context, f"❌ Order {pending['order_code']} cancelled.")
         return
 
-    # ✅ Proceed
+    # ✅ Proceed (Create new order)
     if data == "orders_proceed":
         desc = context.user_data.get("order_pending_description", "SSN Service")
 
@@ -176,4 +213,3 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "orders_back":
         await safe_send(query, context, "Orders:", reply_markup=get_orders_menu())
         return
-

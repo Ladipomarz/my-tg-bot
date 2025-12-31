@@ -3,6 +3,8 @@ import asyncio
 import logging
 import httpx
 from fastapi import FastAPI, Request, Response
+from utils.db import update_order_status
+
 
 from telegram import Update
 from telegram.ext import (
@@ -358,7 +360,8 @@ async def plisio_webhook(req: Request):
     if detected_now:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
-
+            update_order_status(order["id"], "processing")
+    
             # Send Telegram message ONLY if Telegram is reachable
             if chat_id and await ensure_telegram_ready():
                 asyncio.create_task(
@@ -383,11 +386,13 @@ async def plisio_webhook(req: Request):
     if status in expired_statuses:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
-
+    
+    if current_pay_status in {"detected", "paid"}:
+     return {"ok": True}
+    
     # 4) Otherwise store status (optional)
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
-
 
 @app.get("/health")
 async def health():
