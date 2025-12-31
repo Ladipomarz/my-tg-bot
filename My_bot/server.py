@@ -53,9 +53,9 @@ app = FastAPI()
 # ✅ Telegram timeouts (Railway can be flaky)
 tg_request = HTTPXRequest(
     connect_timeout=30.0,
-    read_timeout=45.0,
-    write_timeout=45.0,
-    pool_timeout=45.0,
+    read_timeout=90.0,
+    write_timeout=90.0,
+    pool_timeout=90.0,
 )
 
 tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).build()
@@ -117,7 +117,7 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
         return None
 
 
-async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def callback_router(update: UpTimedOutdate, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
         return
@@ -126,10 +126,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = q.from_user.id
 
     # ✅ don't let q.answer timeouts kill your handler
+    # ✅ Never let Telegram slowness break callbacks
     try:
-        await q.answer()
-    except Exception:
-        logger.exception("q.answer() timed out (ignored)")
+           await q.answer(cache_time=2)
+    except Exception as e:
+     logger.warning("q.answer() failed (ignored): %s", e)
+
 
     if data == "back_main":
         try:
