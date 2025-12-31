@@ -1,7 +1,9 @@
 import os
 import asyncio
 import logging
+import json
 
+import httpx
 from fastapi import FastAPI, Request, Response
 
 from telegram import Update
@@ -36,6 +38,9 @@ logger = logging.getLogger("server")
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
 
+PLISIO_API_KEY = os.getenv("PLISIO_API_KEY", "").strip()
+PLISIO_BASE_URL = "https://api.plisio.net/api/v1"
+
 if not PUBLIC_BASE_URL:
     raise RuntimeError("PUBLIC_BASE_URL missing")
 if not WEBHOOK_SECRET:
@@ -45,7 +50,7 @@ TELEGRAM_PATH = f"/webhook/{WEBHOOK_SECRET}"
 
 app = FastAPI()
 
-# ✅ Increase Telegram timeouts
+# ✅ Telegram timeouts (Railway can be flaky)
 tg_request = HTTPXRequest(
     connect_timeout=30.0,
     read_timeout=45.0,
@@ -64,7 +69,7 @@ tg_app.add_error_handler(on_error)
 
 
 async def _safe_send_message(chat_id: int, text: str):
-    # Retry a little because Telegram has been timing out for you
+    # Retry a little because Telegram can timeout
     for attempt in range(1, 4):
         try:
             await tg_app.bot.send_message(chat_id=chat_id, text=text)
@@ -72,6 +77,44 @@ async def _safe_send_message(chat_id: int, text: str):
         except Exception as e:
             logger.exception("Telegram send_message failed attempt %s/3: %s", attempt, e)
             await asyncio.sleep(1.5 * attempt)
+
+
+def _to_float(x) -> float:
+    try:
+        return float(str(x).strip())
+    except Exception:
+        return 0.0
+
+
+async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
+    """
+    Fetch invoice details from Plisio, returns invoice dict or None.
+    Endpoint seen in your logs:
+      GET /invoices/{txn_id}?api_key=...
+    """
+    if not PLISIO_API_KEY or not txn_id:
+        return None
+
+    url = f"{PLISIO_BASE_URL}/invoices/{txn_id}"
+    params = {"api_key": PLISIO_API_KEY}
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+            r = await client.get(url, params=params)
+        if r.status_code != 200:
+            logger.warning("Plisio invoice details HTTP %s: %s", r.status_code, r.text[:300])
+            return None
+
+        data = r.json()
+        if data.get("status") != "success":
+            logger.warning("Plisio invoice details not success: %s", str(data)[:300])
+            return None
+
+        inv = (data.get("data") or {}).get("invoice") or {}
+        return inv if isinstance(inv, dict) else None
+    except Exception:
+        logger.exception("Failed to fetch Plisio invoice details")
+        return None
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -82,7 +125,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (q.data or "").strip()
     user_id = q.from_user.id
 
-    # ✅ Never let Telegram slowness kill button handling
+    # ✅ don't let q.answer timeouts kill your handler
     try:
         await q.answer()
     except Exception:
@@ -172,10 +215,10 @@ async def _set_webhook_with_retry():
 async def on_startup():
     create_tables()
 
-    # ✅ Retry Telegram init/start instead of crashing app
+    # ✅ retry init/start so app doesn't die on Telegram hiccups
     for attempt in range(1, 6):
         try:
-            await tg_app.initialize()   # calls get_me()
+            await tg_app.initialize()  # calls get_me()
             await tg_app.start()
             break
         except Exception as e:
@@ -210,11 +253,22 @@ async def telegram_webhook(req: Request):
 
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
+    """
+    Rules you requested:
+    - Send user message ONLY once when payment is DETECTED
+    - Do NOT send message on paid/confirmed
+    - Use DB lock to prevent spam
+    - Detect reliably even if webhook doesn't include received_amount:
+      -> call invoice details API using txn_id
+    """
     ctype = (req.headers.get("content-type") or "").lower()
 
+    # Parse webhook body (form or json)
+    payload = None
     try:
         if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
-            form = await req.form()  # requires python-multipart
+            # requires python-multipart installed
+            form = await req.form()
             payload = dict(form)
         else:
             payload = await req.json()
@@ -223,6 +277,7 @@ async def plisio_webhook(req: Request):
         logger.warning("PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500])
         return {"ok": True}
 
+    # Unwrap {data:{...}} if present
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
     if not isinstance(p, dict):
         return {"ok": True}
@@ -241,11 +296,26 @@ async def plisio_webhook(req: Request):
     paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
 
-    # ✅ “Detected” only when Plisio sends status = pending
-    detected_statuses = {"pending"}
+    # --- DETECTION LOGIC (NO SPAM) ---
+    # We consider "detected" ONLY when we can prove money > 0 received.
+    # Webhook often does NOT include received_amount, so we fetch invoice details.
+    detected_now = False
 
-    # 1) Payment detected -> send user message ONCE
-    if status in detected_statuses:
+    # If payload has received_amount use it
+    received_amount = _to_float(p.get("received_amount"))
+    if received_amount > 0:
+        detected_now = True
+    else:
+        # fallback: use invoice details if we have txn_id
+        if isinstance(txn_id, str) and txn_id.strip():
+            inv = await _fetch_plisio_invoice_details(txn_id.strip())
+            if inv:
+                ra = _to_float(inv.get("received_amount"))
+                if ra > 0:
+                    detected_now = True
+
+    # 1) If detected -> send ONCE (only if not already detected/paid)
+    if detected_now:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
             if chat_id:
@@ -268,7 +338,8 @@ async def plisio_webhook(req: Request):
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
 
-    # 4) Any other statuses
+    # 4) Otherwise store status (optional)
+    # Keep pending/new/etc in DB without messaging
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
 
