@@ -83,23 +83,25 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
-    # ✅ Gate tool_ inline buttons ONLY while payment is NOT confirmed
-    # After pay_status == "paid", everything returns to normal.
+    # ✅ Gate tool_ inline buttons ONLY BEFORE payment is detected
+    # After pay_status == "detected" or "paid", everything returns to normal.
     if data.startswith("tool_"):
         pending = expire_pending_order_if_needed(user_id)
 
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
 
-            # Block tools before paid
-            if pay_status in {"pending", "", "new", "detected"}:
+            # Block tools ONLY if payment is not detected yet
+            # (pending/new/empty = user has not sent funds)
+            if pay_status in {"pending", "", "new"}:
                 await q.edit_message_text(
                     f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                     reply_markup=get_pending_order_menu(),
                 )
                 return
 
-            # If paid -> allow tools normally
+            # If pay_status is "detected" or "paid" -> allow tools normally
+
         return await tools_callback(update, context)
 
     # allow cancel_ssn always
@@ -203,7 +205,6 @@ async def plisio_webhook(req: Request):
     if not order_number:
         return {"ok": True}
 
-    # Load order so we don't spam user
     order = get_order_by_code(order_number) or {}
     user_id = order.get("user_id")
     current_pay_status = (order.get("pay_status") or "").lower().strip()
