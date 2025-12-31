@@ -1,7 +1,6 @@
 import os
-import json
+import asyncio
 import logging
-from urllib.parse import parse_qs
 
 from fastapi import FastAPI, Request, Response
 
@@ -54,6 +53,17 @@ async def on_error(update, context):
 tg_app.add_error_handler(on_error)
 
 
+async def _safe_send_message(chat_id: int, text: str):
+    """
+    Never block webhook or bot flow on Telegram network.
+    Any Telegram slowness/timeouts won't freeze the bot now.
+    """
+    try:
+        await tg_app.bot.send_message(chat_id=chat_id, text=text)
+    except Exception:
+        logger.exception("Telegram send_message failed")
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
@@ -73,15 +83,23 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
         return
 
-    # ✅ Gate tool_ inline buttons (pending check)
+    # ✅ Gate tool_ inline buttons ONLY while payment is NOT confirmed
+    # After pay_status == "paid", everything returns to normal.
     if data.startswith("tool_"):
         pending = expire_pending_order_if_needed(user_id)
+
         if pending and pending.get("status") == "pending":
-            await q.edit_message_text(
-                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                reply_markup=get_pending_order_menu(),
-            )
-            return
+            pay_status = (pending.get("pay_status") or "").lower().strip()
+
+            # Block tools before paid
+            if pay_status in {"pending", "", "new", "detected"}:
+                await q.edit_message_text(
+                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                    reply_markup=get_pending_order_menu(),
+                )
+                return
+
+            # If paid -> allow tools normally
         return await tools_callback(update, context)
 
     # allow cancel_ssn always
@@ -148,93 +166,82 @@ async def telegram_webhook(req: Request):
     return Response(status_code=200)
 
 
-def _parse_plisio_body(body: bytes) -> dict:
-    """
-    Parse Plisio webhook body WITHOUT req.form() (no python-multipart needed).
-    Supports:
-      - JSON
-      - application/x-www-form-urlencoded (key=value&...)
-    """
-    if not body or body.strip() == b"":
-        return {}
-
-    # Try JSON first
-    try:
-        return json.loads(body.decode("utf-8", errors="replace"))
-    except json.JSONDecodeError:
-        pass
-
-    # Fallback: parse querystring-like body
-    decoded = body.decode("utf-8", errors="replace")
-    qs = parse_qs(decoded)
-    return {k: (v[0] if len(v) == 1 else v) for k, v in qs.items()}
-
-
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
+    """
+    Plisio sends multipart/form-data or x-www-form-urlencoded often.
+    With python-multipart installed, req.form() works safely.
+    """
     ctype = (req.headers.get("content-type") or "").lower()
 
-    payload = None
-
-    # ✅ multipart/form-data or x-www-form-urlencoded
-    if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
-        form = await req.form()          # <-- this needs python-multipart installed
-        payload = dict(form)
-    else:
-        # ✅ JSON
-        try:
+    try:
+        if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
+            form = await req.form()  # requires python-multipart
+            payload = dict(form)
+        else:
             payload = await req.json()
-        except Exception:
-            body = await req.body()
-            logger.warning("PLISIO WEBHOOK: could not parse body=%r", body[:500])
-            return {"ok": True}
+    except Exception:
+        body = await req.body()
+        logger.warning("PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500])
+        return {"ok": True}
 
     logger.info("PLISIO WEBHOOK parsed: %s", payload)
 
-    p = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
+    if not isinstance(p, dict):
+        return {"ok": True}
 
-    order_number = p.get("order_number") or p.get("orderNumber") or p.get("order_id") or p.get("orderId")
+    order_number = (
+        p.get("order_number")
+        or p.get("orderNumber")
+        or p.get("order_id")
+        or p.get("orderId")
+    )
     txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
 
     if not order_number:
         return {"ok": True}
 
+    # Load order so we don't spam user
     order = get_order_by_code(order_number) or {}
     user_id = order.get("user_id")
     current_pay_status = (order.get("pay_status") or "").lower().strip()
 
-    paid = {"paid", "completed", "success", "confirmed", "finish", "finished"}
-    expired = {"expired", "cancelled", "canceled", "failed", "error"}
-    detected = {"pending"}
+    paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
+    expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
 
-    if status in detected:
+    # ✅ ONLY detected on "pending" (NOT "new")
+    detected_statuses = {"pending"}
+
+    # 1) Payment detected (send to user ONCE)
+    if status in detected_statuses:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
+
             if user_id:
-                await tg_app.bot.send_message(
-                    chat_id=user_id,
-                    text=f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.",
+                asyncio.create_task(
+                    _safe_send_message(
+                        user_id,
+                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now."
+                    )
                 )
         return {"ok": True}
 
-    if status in paid:
+    # 2) Payment confirmed (NO user message, just update DB)
+    if status in paid_statuses:
         if current_pay_status != "paid":
             update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
-            if user_id:
-                await tg_app.bot.send_message(
-                    chat_id=user_id,
-                    text=f"✅ Payment confirmed for order {order_number}.",
-                )
         return {"ok": True}
 
-    if status in expired:
+    # 3) Expired/failed
+    if status in expired_statuses:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
 
+    # 4) Any other statuses
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
-
 
 
 @app.get("/health")
