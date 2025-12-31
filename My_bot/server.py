@@ -57,6 +57,29 @@ tg_request = HTTPXRequest(
 )
 
 tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).build()
+TG_READY = False
+TG_LOCK = asyncio.Lock()
+
+async def ensure_telegram_ready():
+    global TG_READY
+
+    if TG_READY:
+        return True
+
+    async with TG_LOCK:
+        if TG_READY:
+            return True
+
+        try:
+            await tg_app.initialize()
+            await tg_app.start()
+            TG_READY = True
+            logger.info("Telegram app is ready")
+            return True
+        except Exception as e:
+            logger.exception("Telegram not ready yet: %s", e)
+            return False
+
 
 
 async def on_error(update, context):
@@ -214,21 +237,22 @@ async def _set_webhook_with_retry():
 @app.on_event("startup")
 async def on_startup():
     create_tables()
+    # FastAPI starts even if Telegram is down
+    asyncio.create_task(_background_telegram_bootstrap())
 
-    # ✅ retry init/start so app doesn't die on Telegram hiccups
-    for attempt in range(1, 6):
-        try:
-            await tg_app.initialize()  # calls get_me()
-            await tg_app.start()
-            break
-        except Exception as e:
-            logger.exception("Telegram init/start failed (attempt %s/5): %s", attempt, e)
-            await asyncio.sleep(2 * attempt)
-    else:
-        logger.error("Telegram init failed after retries. FastAPI will still run, but bot may not respond.")
-        return
 
-    await _set_webhook_with_retry()
+async def _background_telegram_bootstrap():
+    webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
+    while True:
+        ok = await ensure_telegram_ready()
+        if ok:
+            try:
+                await tg_app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+                logger.info("Telegram webhook set: %s", webhook_url)
+                return
+            except Exception as e:
+                logger.exception("set_webhook failed (will retry): %s", e)
+        await asyncio.sleep(10)
 
 
 @app.on_event("shutdown")
@@ -318,14 +342,11 @@ async def plisio_webhook(req: Request):
     if detected_now:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
-            if chat_id:
-                asyncio.create_task(
-                    _safe_send_message(
-                        chat_id,
-                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now."
-                    )
-                )
-        return {"ok": True}
+
+    if chat_id and await ensure_telegram_ready():
+        asyncio.create_task(_safe_send_message(chat_id, "..."))
+    else:
+        logger.warning("Telegram not ready; detected message skipped for %s", order_number)
 
     # 2) Paid/confirmed -> update DB ONLY (NO user message)
     if status in paid_statuses:
