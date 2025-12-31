@@ -45,12 +45,12 @@ TELEGRAM_PATH = f"/webhook/{WEBHOOK_SECRET}"
 
 app = FastAPI()
 
-# ✅ Increase Telegram timeouts (fix ConnectTimeout / TimedOut)
+# ✅ Increase Telegram timeouts
 tg_request = HTTPXRequest(
-    connect_timeout=20.0,
-    read_timeout=30.0,
-    write_timeout=30.0,
-    pool_timeout=30.0,
+    connect_timeout=30.0,
+    read_timeout=45.0,
+    write_timeout=45.0,
+    pool_timeout=45.0,
 )
 
 tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).build()
@@ -64,10 +64,14 @@ tg_app.add_error_handler(on_error)
 
 
 async def _safe_send_message(chat_id: int, text: str):
-    try:
-        await tg_app.bot.send_message(chat_id=chat_id, text=text)
-    except Exception:
-        logger.exception("Telegram send_message failed")
+    # Retry a little because Telegram has been timing out for you
+    for attempt in range(1, 4):
+        try:
+            await tg_app.bot.send_message(chat_id=chat_id, text=text)
+            return
+        except Exception as e:
+            logger.exception("Telegram send_message failed attempt %s/3: %s", attempt, e)
+            await asyncio.sleep(1.5 * attempt)
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -78,14 +82,21 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (q.data or "").strip()
     user_id = q.from_user.id
 
-    await q.answer()
+    # ✅ Never let Telegram slowness kill button handling
+    try:
+        await q.answer()
+    except Exception:
+        logger.exception("q.answer() timed out (ignored)")
 
     if data == "back_main":
         try:
             await q.edit_message_text("Back to main menu...")
         except Exception:
             pass
-        await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
+        try:
+            await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
+        except Exception:
+            pass
         return
 
     # ✅ Gate ONLY before payment is detected
@@ -97,10 +108,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # block only if payment NOT detected yet
             if pay_status in {"pending", "", "new"}:
-                await q.edit_message_text(
-                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                    reply_markup=get_pending_order_menu(),
-                )
+                try:
+                    await q.edit_message_text(
+                        f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                        reply_markup=get_pending_order_menu(),
+                    )
+                except Exception:
+                    logger.exception("edit_message_text failed (ignored)")
                 return
 
         return await tools_callback(update, context)
@@ -125,7 +139,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.exception("SSN flow error")
             for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
                 context.user_data.pop(key, None)
-            await update.message.reply_text("❌ Something went wrong. Please start again.")
+            try:
+                await update.message.reply_text("❌ Something went wrong. Please start again.")
+            except Exception:
+                pass
         return
 
     await handle_main_menu(update, context)
@@ -137,10 +154,6 @@ tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
 
 async def _set_webhook_with_retry():
-    """
-    ✅ Do NOT crash startup if Telegram is slow.
-    Retry a few times, then keep app running anyway.
-    """
     webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
 
     for attempt in range(1, 6):
@@ -152,24 +165,39 @@ async def _set_webhook_with_retry():
             logger.exception("set_webhook failed (attempt %s/5): %s", attempt, e)
             await asyncio.sleep(2 * attempt)
 
-    logger.error("Webhook NOT set after retries. App will keep running; it may recover on next deploy/restart.")
+    logger.error("Webhook NOT set after retries. App will keep running.")
 
 
 @app.on_event("startup")
 async def on_startup():
     create_tables()
 
-    await tg_app.initialize()
-    await tg_app.start()
+    # ✅ Retry Telegram init/start instead of crashing app
+    for attempt in range(1, 6):
+        try:
+            await tg_app.initialize()   # calls get_me()
+            await tg_app.start()
+            break
+        except Exception as e:
+            logger.exception("Telegram init/start failed (attempt %s/5): %s", attempt, e)
+            await asyncio.sleep(2 * attempt)
+    else:
+        logger.error("Telegram init failed after retries. FastAPI will still run, but bot may not respond.")
+        return
 
-    # ✅ Don’t let this kill the app if Telegram times out
     await _set_webhook_with_retry()
 
 
 @app.on_event("shutdown")
 async def on_shutdown():
-    await tg_app.stop()
-    await tg_app.shutdown()
+    try:
+        await tg_app.stop()
+    except Exception:
+        pass
+    try:
+        await tg_app.shutdown()
+    except Exception:
+        pass
 
 
 @app.post(TELEGRAM_PATH)
@@ -207,36 +235,40 @@ async def plisio_webhook(req: Request):
         return {"ok": True}
 
     order = get_order_by_code(order_number) or {}
-    user_id = order.get("user_id")
+    chat_id = order.get("user_id")
     current_pay_status = (order.get("pay_status") or "").lower().strip()
 
     paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
 
-    # ✅ Only treat "pending" as payment detected (not "new")
+    # ✅ “Detected” only when Plisio sends status = pending
     detected_statuses = {"pending"}
 
+    # 1) Payment detected -> send user message ONCE
     if status in detected_statuses:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
-            if user_id:
+            if chat_id:
                 asyncio.create_task(
                     _safe_send_message(
-                        user_id,
+                        chat_id,
                         f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now."
                     )
                 )
         return {"ok": True}
 
+    # 2) Paid/confirmed -> update DB ONLY (NO user message)
     if status in paid_statuses:
         if current_pay_status != "paid":
             update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
         return {"ok": True}
 
+    # 3) Expired/failed
     if status in expired_statuses:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
 
+    # 4) Any other statuses
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
 
