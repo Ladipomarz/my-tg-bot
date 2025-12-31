@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 set -e
 
-cd "$(dirname "$0")/My_bot"
+cd "$(dirname "$0")"
 
 echo "PWD=$(pwd)"
 echo "Files in PWD:"
 ls -la
 
-echo "Testing import server..."
-python -c "import server; print('✅ server imported'); print('Has app:', hasattr(server, 'app'))"
+echo "Files in My_bot:"
+ls -la My_bot
 
-exec uvicorn server:app --host 0.0.0.0 --port "${PORT:-8080}"
+echo "Testing import My_bot.bot..."
+python -c "import My_bot.bot as b; print('✅ bot imported'); print('Has app:', hasattr(b, 'app'))"
 
-
+uvicorn My_bot.bot:app --host 0.0.0.0 --port "${PORT:-8000}"
