@@ -1,8 +1,6 @@
 import os
 import asyncio
 import logging
-import json
-
 import httpx
 from fastapi import FastAPI, Request, Response
 
@@ -117,7 +115,7 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
         return None
 
 
-async def callback_router(update: UpTimedOutdate, context: ContextTypes.DEFAULT_TYPE):
+async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
         return
