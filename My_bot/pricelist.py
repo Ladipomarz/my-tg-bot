@@ -2,7 +2,7 @@
 
 # Service pricing (USD)
 PRICES = {
-    "ssn": 6.00,
+    "ssn": 1.00,
 }
 
 DEFAULT_PRICE = 20.00
