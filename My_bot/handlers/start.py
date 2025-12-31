@@ -48,11 +48,23 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key == "tools":
         pending = expire_pending_order_if_needed(update.effective_user.id)
 
+        # ✅ DEBUG (shows what gate sees)
+        if pending:
+            print(
+                "GATE CHECK:",
+                pending.get("order_code"),
+                "status=",
+                pending.get("status"),
+                "pay_status=",
+                pending.get("pay_status"),
+            )
+        else:
+            print("GATE CHECK: no pending order")
+
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
 
             # 🚫 Block ONLY if payment NOT detected yet
-            # (pending/new/empty = user hasn't sent funds yet)
             if pay_status in {"pending", "", "new"}:
                 await update.message.reply_text(
                     f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
@@ -60,8 +72,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            # ✅ If pay_status is "detected" or "paid" -> allow tools normally
-
+        # ✅ If pay_status is "detected" or "paid" -> allow tools normally
         return await open_tools_menu(update, context)
 
     # ✅ Orders (ReplyKeyboard)

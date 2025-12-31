@@ -224,7 +224,7 @@ async def _set_webhook_with_retry():
 
     for attempt in range(1, 6):
         try:
-            await tg_app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            await tg_app.bot.set_webhook(url=webhook_url, drop_pending_updates=False)
             logger.info("Telegram webhook set: %s", webhook_url)
             return
         except Exception as e:
@@ -278,7 +278,7 @@ async def telegram_webhook(req: Request):
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
     """
-    Rules you requested:
+    Rules:
     - Send user message ONLY once when payment is DETECTED
     - Do NOT send message on paid/confirmed
     - Use DB lock to prevent spam
@@ -287,8 +287,7 @@ async def plisio_webhook(req: Request):
     """
     ctype = (req.headers.get("content-type") or "").lower()
 
-    # Parse webhook body (form or json)
-    payload = None
+    # 1) Parse webhook body (form or json)
     try:
         if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
             # requires python-multipart installed
@@ -301,12 +300,17 @@ async def plisio_webhook(req: Request):
         logger.warning("PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500])
         return {"ok": True}
 
-    # Unwrap {data:{...}} if present
+    # 2) Unwrap {data:{...}} if present
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
     if not isinstance(p, dict):
         return {"ok": True}
 
-    order_number = p.get("order_number") or p.get("orderNumber") or p.get("order_id") or p.get("orderId")
+    order_number = (
+        p.get("order_number")
+        or p.get("orderNumber")
+        or p.get("order_id")
+        or p.get("orderId")
+    )
     txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
 
@@ -320,33 +324,54 @@ async def plisio_webhook(req: Request):
     paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
 
-    # --- DETECTION LOGIC (NO SPAM) ---
-    # We consider "detected" ONLY when we can prove money > 0 received.
-    # Webhook often does NOT include received_amount, so we fetch invoice details.
+    # -----------------------------
+    # DETECTION LOGIC (NO SPAM)
+    # -----------------------------
+    # Goal: detect payment as soon as ANY funds are received (works for SOL/BTC/USDT etc)
     detected_now = False
 
-    # If payload has received_amount use it
+    # A) If webhook provides received_amount, use it
     received_amount = _to_float(p.get("received_amount"))
     if received_amount > 0:
         detected_now = True
     else:
-        # fallback: use invoice details if we have txn_id
+        # B) Otherwise fetch invoice details and detect using multiple fields
+        inv = None
         if isinstance(txn_id, str) and txn_id.strip():
             inv = await _fetch_plisio_invoice_details(txn_id.strip())
-            if inv:
-                ra = _to_float(inv.get("received_amount"))
-                if ra > 0:
-                    detected_now = True
 
-    # 1) If detected -> send ONCE (only if not already detected/paid)
+        if inv and isinstance(inv, dict):
+            total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum"))
+            received = _to_float(inv.get("received_amount"))
+            remaining = _to_float(inv.get("remaining_amount"))
+            pending_amt = _to_float(inv.get("pending_amount"))
+
+            # ✅ detected if ANY money has moved
+            if received > 0:
+                detected_now = True
+            elif total > 0 and remaining >= 0 and remaining < total:
+                detected_now = True
+            elif total > 0 and pending_amt >= 0 and pending_amt < total:
+                detected_now = True
+
+    # 1) If detected -> update DB + send ONCE (locked by DB)
     if detected_now:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
 
-    if chat_id and await ensure_telegram_ready():
-        asyncio.create_task(_safe_send_message(chat_id, "..."))
-    else:
-        logger.warning("Telegram not ready; detected message skipped for %s", order_number)
+            # Send Telegram message ONLY if Telegram is reachable
+            if chat_id and await ensure_telegram_ready():
+                asyncio.create_task(
+                    _safe_send_message(
+                        chat_id,
+                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now."
+                    )
+                )
+            else:
+                logger.warning("Telegram not ready; detected message skipped for %s", order_number)
+
+        # ✅ IMPORTANT: stop here so we don't overwrite pay_status below
+        return {"ok": True}
 
     # 2) Paid/confirmed -> update DB ONLY (NO user message)
     if status in paid_statuses:
@@ -360,7 +385,6 @@ async def plisio_webhook(req: Request):
         return {"ok": True}
 
     # 4) Otherwise store status (optional)
-    # Keep pending/new/etc in DB without messaging
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
 
