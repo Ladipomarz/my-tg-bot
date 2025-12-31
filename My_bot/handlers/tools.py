@@ -5,6 +5,8 @@ from menus.tools_menu import get_tools_inline, get_ssn_services_menu
 from utils.validator import is_valid_dob, is_valid_name
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
+from utils.db import get_pending_order
+from menus.orders_menu import get_pending_order_menu
 
 
 # ---------- UI HELPERS ----------
@@ -33,18 +35,48 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    data = (query.data or "").strip()
+    """
+    Handles INLINE tool_* callbacks (and safely handles message-calls if any).
+    """
 
-    # SSN Services menu
-    if data == "tool_ssn_services":
-        await safe_send(
-            query,
-            context,
-            "SSN Services:",
-            reply_markup=get_ssn_services_menu(),
-        )
-        return
+    user_id = update.effective_user.id
+
+    # Determine if this call is from inline callback or from a normal message
+    query = getattr(update, "callback_query", None)
+    data = None
+    if query and getattr(query, "data", None):
+        data = (query.data or "").strip()
+
+    # ✅ Pending order gate:
+    # Block ONLY if payment NOT detected yet (pending/new/empty)
+    pending = get_pending_order(user_id)
+    if pending and pending.get("status") == "pending":
+        pay_status = (pending.get("pay_status") or "").lower().strip()
+
+        if pay_status in {"pending", "", "new"}:
+            # If this is a callback, respond via safe_send(query,...)
+            if query:
+                await safe_send(
+                    query,
+                    context,
+                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                    reply_markup=get_pending_order_menu(),
+                )
+            else:
+                # Fallback: normal message path
+                await safe_send(
+                    update,
+                    context,
+                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                    reply_markup=get_pending_order_menu(),
+                )
+            return
+
+        # ✅ If detected or paid → allow tools normally (do NOT block)
+
+    # If tools_callback is somehow called without callback data, just open tools menu
+    if not data:
+        return await open_tools_menu(update, context)
 
     # Back to Tools Menu
     if data == "tool_back_tools":
