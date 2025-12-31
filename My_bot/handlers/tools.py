@@ -2,11 +2,11 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from menus.tools_menu import get_tools_inline, get_ssn_services_menu
+from menus.orders_menu import get_pending_order_menu
 from utils.validator import is_valid_dob, is_valid_name
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
-from menus.orders_menu import get_pending_order_menu
 
 
 # ---------- UI HELPERS ----------
@@ -35,48 +35,42 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """
-    Handles INLINE tool_* callbacks (and safely handles message-calls if any).
-    """
+    # ✅ This handler is for INLINE BUTTON callbacks
+    query = update.callback_query
+    if not query or not query.data:
+        return
 
+    data = (query.data or "").strip()
     user_id = update.effective_user.id
 
-    # Determine if this call is from inline callback or from a normal message
-    query = getattr(update, "callback_query", None)
-    data = None
-    if query and getattr(query, "data", None):
-        data = (query.data or "").strip()
-
-    # ✅ Pending order gate:
-    # Block ONLY if payment NOT detected yet (pending/new/empty)
+    # ✅ Pending-order gate:
+    # block ONLY if payment is NOT detected yet
     pending = get_pending_order(user_id)
     if pending and pending.get("status") == "pending":
         pay_status = (pending.get("pay_status") or "").lower().strip()
 
+        # unpaid / invoice-created only
         if pay_status in {"pending", "", "new"}:
-            # If this is a callback, respond via safe_send(query,...)
-            if query:
-                await safe_send(
-                    query,
-                    context,
-                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                    reply_markup=get_pending_order_menu(),
-                )
-            else:
-                # Fallback: normal message path
-                await safe_send(
-                    update,
-                    context,
-                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                    reply_markup=get_pending_order_menu(),
-                )
+            await safe_send(
+                query,
+                context,
+                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                reply_markup=get_pending_order_menu(),
+            )
             return
+        # ✅ detected/paid -> allow normal tools
 
-        # ✅ If detected or paid → allow tools normally (do NOT block)
+    # --- NOW handle actual tool buttons ---
 
-    # If tools_callback is somehow called without callback data, just open tools menu
-    if not data:
-        return await open_tools_menu(update, context)
+    # SSN Services menu  ✅ (this is what your "Services" button sends)
+    if data == "tool_ssn_services":
+        await safe_send(
+            query,
+            context,
+            "SSN Services:",
+            reply_markup=get_ssn_services_menu(),
+        )
+        return
 
     # Back to Tools Menu
     if data == "tool_back_tools":
@@ -98,7 +92,6 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Start SSN lookup flow
     if data == "tool_ssn_lookup":
         _clear_ssn_state(context)
-
         context.user_data["ssn_step"] = "first_name"
 
         await safe_send(
@@ -198,30 +191,23 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         context.user_data["dob"] = text
-
-        # ✅ End SSN flow safely (remove step key, don't set None)
         context.user_data.pop("ssn_step", None)
 
         display_text = "Order Almost Done!. 🔍"
         order_description = "SSN Services"
-
         await ask_order_confirmation(update, context, display_text, order_description)
         return
 
-    # STEP 5: Info (for types 1, 3, 4)
+    # STEP 5: Info
     if step == "info":
-        # basic non-empty guard
         if not text:
             await safe_send(update, context, "Enter information:", reply_markup=get_cancel_button())
             return
 
         context.user_data["info"] = text
-
-        # ✅ End SSN flow safely
         context.user_data.pop("ssn_step", None)
 
         display_text = "Order Almost Done!. 🔍"
         order_description = "SSN Services"
-
         await ask_order_confirmation(update, context, display_text, order_description)
         return
