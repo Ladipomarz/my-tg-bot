@@ -59,3 +59,13 @@ async def safe_send(
 
     return msg
 
+async def safe_delete_user_message(update):
+    """
+    Best-effort delete of user's message (private chats, <48h).
+    Does nothing if deletion is not allowed.
+    """
+    try:
+        if update and update.message:
+            await update.message.delete()
+    except Exception:
+        pass

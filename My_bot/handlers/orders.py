@@ -1,6 +1,10 @@
 import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 from menus.orders_menu import (
     get_orders_menu,
@@ -9,6 +13,7 @@ from menus.orders_menu import (
 )
 from menus.tools_menu import get_tools_inline
 from utils.auto_delete import safe_send
+from handlers.payments import show_make_payment
 
 from utils.db import (
     create_order,
@@ -38,10 +43,13 @@ def _pending_text(order: dict) -> str:
 
 
 def open_invoice_kb(url: str) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🔗 Open payment page", url=url)]])
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🔗 Open payment page", url=url)]]
+    )
 
 
 # ---------- GLOBAL CONFIRM HELPER ----------
+
 
 async def ask_order_confirmation(
     update_or_query,
@@ -61,11 +69,13 @@ async def ask_order_confirmation(
 
 # ---------- ORDERS MENU ----------
 
+
 async def open_orders_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_send(update, context, "Orders:", reply_markup=get_orders_menu())
 
 
 # ---------- ORDERS CALLBACK ----------
+
 
 async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -186,7 +196,21 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ✅ Proceed (Create new order)
     if data == "orders_proceed":
-        desc = context.user_data.get("order_pending_description", "SSN Service")
+        desc = context.user_data.get("order_pending_description")
+
+        logger.info(
+            "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
+            user_id,
+            desc,
+            context.user_data.get("custom_price_usd"),
+            context.user_data.get("esim_email"),
+        )
+
+        if not desc:
+            logger.warning(
+                "orders_proceed missing order_pending_description; defaulting to SSN Service"
+            )
+        desc = "SSN Service"
 
         order_id, order_code = create_order(
             user_id=user_id,
@@ -197,13 +221,13 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["orders_order_id"] = order_id
         context.user_data["orders_order_code"] = order_code
 
-        from handlers.payments import show_make_payment
         await show_make_payment(update, context, order_code)
 
         context.user_data.pop("order_pending_description", None)
         return
 
     # ❌ Cancel create
+
     if data == "orders_cancel":
         context.user_data.pop("order_pending_description", None)
         await safe_send(query, context, "Order not created.")
@@ -213,3 +237,24 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "orders_back":
         await safe_send(query, context, "Orders:", reply_markup=get_orders_menu())
         return
+
+
+async def debug_last_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # pull last orders
+    orders = get_orders_for_user(user_id)
+    if not orders:
+        await update.message.reply_text("No orders found for you.")
+        return
+
+    o = orders[0]  # assuming get_orders_for_user returns newest first
+    msg = (
+        "🧾 Last order:\n"
+        f"Code: {o.get('order_code')}\n"
+        f"Description: {o.get('description')}\n"
+        f"Status: {o.get('status')}\n"
+        f"Pay status: {o.get('pay_status')}\n"
+        f"Invoice: {o.get('invoice_url')}\n"
+    )
+    await update.message.reply_text(msg)

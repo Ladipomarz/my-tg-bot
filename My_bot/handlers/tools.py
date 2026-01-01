@@ -23,22 +23,41 @@ from utils.validator import (
 
 # ---------- UI HELPERS ----------
 
+
 def ssn_nav_kb() -> InlineKeyboardMarkup:
     # Back + Cancel (2 buttons)
-    return InlineKeyboardMarkup([[
-        InlineKeyboardButton("⬅ Back", callback_data="ssn_back"),
-        InlineKeyboardButton("❌ Cancel", callback_data="cancel_ssn"),
-    ]])
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⬅ Back", callback_data="ssn_back"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel_ssn"),
+            ]
+        ]
+    )
 
 
 def _clear_ssn_state(context: ContextTypes.DEFAULT_TYPE) -> None:
-    for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+    for key in [
+        "ssn_step",
+        "first_name",
+        "last_name",
+        "type",
+        "dob",
+        "info",
+        "from_ssn",
+    ]:
         context.user_data.pop(key, None)
 
 
 def _clear_esim_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     # include esim_step so email prompt state clears too
-    for key in ["esim_step", "esim_duration", "esim_country", "custom_price_usd", "esim_email"]:
+    for key in [
+        "esim_step",
+        "esim_duration",
+        "esim_country",
+        "custom_price_usd",
+        "esim_email",
+    ]:
         context.user_data.pop(key, None)
 
 
@@ -56,13 +75,7 @@ def _prompt_for_step(step: str, lookup_type: str | None = None) -> str:
     if step == "last_name":
         return "Enter Last Name:"
     if step == "type":
-        return (
-            "Select Type:\n"
-            "1️⃣ City\n"
-            "2️⃣ DOB\n"
-            "3️⃣ State\n"
-            "4️⃣ ZIP Code"
-        )
+        return "Select Type:\n" "1️⃣ City\n" "2️⃣ DOB\n" "3️⃣ State\n" "4️⃣ ZIP Code"
     if step == "dob":
         return "Enter DOB (YYYY/MM/DD or YYYY-MM-DD):"
     if step == "info":
@@ -85,6 +98,7 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 
 # ---------- TOOLS MENU + CALLBACKS ----------
+
 
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # This is required because handlers/start.py imports it.
@@ -134,18 +148,27 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "ssn_back":
         step = context.user_data.get("ssn_step")
         if not step:
-            await safe_send(query, context, "SSN Services:", reply_markup=get_ssn_services_menu())
+            await safe_send(
+                query, context, "SSN Services:", reply_markup=get_ssn_services_menu()
+            )
             return
 
         prev = _ssn_prev_step(step)
         if not prev:
             _clear_ssn_state(context)
-            await safe_send(query, context, "SSN Services:", reply_markup=get_ssn_services_menu())
+            await safe_send(
+                query, context, "SSN Services:", reply_markup=get_ssn_services_menu()
+            )
             return
 
         context.user_data["ssn_step"] = prev
         lookup_type = context.user_data.get("type")
-        await safe_send(query, context, _prompt_for_step(prev, lookup_type), reply_markup=ssn_nav_kb())
+        await safe_send(
+            query,
+            context,
+            _prompt_for_step(prev, lookup_type),
+            reply_markup=ssn_nav_kb(),
+        )
         return
 
     if data == "cancel_ssn":
@@ -172,6 +195,7 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["esim_country"] = "USA"
 
         from pricelist import ESIM_PRICES_USD
+
         if duration not in ESIM_PRICES_USD:
             await safe_send(
                 query,
@@ -192,7 +216,9 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ---------- Tools menus ----------
     if data == "tool_ssn_services":
         _clear_ssn_state(context)
-        await safe_send(query, context, "SSN Services:", reply_markup=get_ssn_services_menu())
+        await safe_send(
+            query, context, "SSN Services:", reply_markup=get_ssn_services_menu()
+        )
         return
 
     if data == "tool_back_tools":
@@ -204,16 +230,24 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "tool_ssn_lookup":
         _clear_ssn_state(context)
         context.user_data["ssn_step"] = "first_name"
-        await safe_send(query, context, _prompt_for_step("first_name"), reply_markup=ssn_nav_kb())
+        await safe_send(
+            query, context, _prompt_for_step("first_name"), reply_markup=ssn_nav_kb()
+        )
         return
 
     if data == "tool_ssn_magic":
         _clear_ssn_state(context)
-        await safe_send(query, context, "SSN Magic Coming Soon...", reply_markup=get_ssn_services_menu())
+        await safe_send(
+            query,
+            context,
+            "SSN Magic Coming Soon...",
+            reply_markup=get_ssn_services_menu(),
+        )
         return
 
 
 # ---------- SSN USER INPUT FLOW ----------
+
 
 async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     step = context.user_data.get("ssn_step")
@@ -236,7 +270,9 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data["first_name"] = text
         context.user_data["ssn_step"] = "last_name"
-        await safe_send(update, context, _prompt_for_step("last_name"), reply_markup=ssn_nav_kb())
+        await safe_send(
+            update, context, _prompt_for_step("last_name"), reply_markup=ssn_nav_kb()
+        )
         return
 
     # STEP 2: Last Name
@@ -252,7 +288,9 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         context.user_data["last_name"] = text
         context.user_data["ssn_step"] = "type"
-        await safe_send(update, context, _prompt_for_step("type"), reply_markup=ssn_nav_kb())
+        await safe_send(
+            update, context, _prompt_for_step("type"), reply_markup=ssn_nav_kb()
+        )
         return
 
     # STEP 3: Select Lookup Type
@@ -275,11 +313,15 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if text == "2":
             context.user_data["ssn_step"] = "dob"
-            await safe_send(update, context, _prompt_for_step("dob"), reply_markup=ssn_nav_kb())
+            await safe_send(
+                update, context, _prompt_for_step("dob"), reply_markup=ssn_nav_kb()
+            )
             return
 
         context.user_data["ssn_step"] = "info"
-        await safe_send(update, context, _prompt_for_step("info", text), reply_markup=ssn_nav_kb())
+        await safe_send(
+            update, context, _prompt_for_step("info", text), reply_markup=ssn_nav_kb()
+        )
         return
 
     # STEP 4: DOB
@@ -297,7 +339,9 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["dob"] = dob_norm
         context.user_data.pop("ssn_step", None)
 
-        await ask_order_confirmation(update, context, "Order Almost Done!. 🔍", "SSN Services")
+        await ask_order_confirmation(
+            update, context, "Order Almost Done!. 🔍", "SSN Services"
+        )
         return
 
     # STEP 5: Info
@@ -306,7 +350,12 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if chosen_type == "1":  # City
             if not is_valid_name(text):
-                await safe_send(update, context, "❌ Invalid city.\nUse letters only.", reply_markup=ssn_nav_kb())
+                await safe_send(
+                    update,
+                    context,
+                    "❌ Invalid city.\nUse letters only.",
+                    reply_markup=ssn_nav_kb(),
+                )
                 return
             context.user_data["info"] = text
 
@@ -337,11 +386,14 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["info"] = text
 
         context.user_data.pop("ssn_step", None)
-        await ask_order_confirmation(update, context, "Order Almost Done!. 🔍", "SSN Services")
+        await ask_order_confirmation(
+            update, context, "Order Almost Done!. 🔍", "SSN Services"
+        )
         return
 
 
 # ---------- eSIM USER INPUT FLOW ----------
+
 
 async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("esim_step") != "email":
@@ -349,7 +401,9 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
 
     email = (update.message.text or "").strip()
     if not is_valid_email(email):
-        await safe_send(update, context, "❌ Invalid email. Try again (example: name@gmail.com).")
+        await safe_send(
+            update, context, "❌ Invalid email. Try again (example: name@gmail.com)."
+        )
         return
 
     context.user_data["esim_email"] = email

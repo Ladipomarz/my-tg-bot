@@ -4,6 +4,10 @@ import logging
 import httpx
 from fastapi import FastAPI, Request, Response
 from utils.db import update_order_status
+from utils.auto_delete import safe_delete_user_message
+from handlers.orders import debug_last_order
+
+
 
 from telegram import Update
 from telegram.ext import (
@@ -222,21 +226,40 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await payments_callback(update, context)
 
     logger.info("Unhandled callback data: %s", data)
+    
+    
+    async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        
+    # 🔥 delete user's text input globally (best-effort)
+       await safe_delete_user_message(update)
 
-
-async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
 
-    # ✅ Global navigation should always work, even mid-flow
+    # navigation always works
     if text in {"🧰 Tools", "🛒 Orders"}:
-        # clear SSN flow state
-        for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+        for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn",
+                    "esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd"]:
             context.user_data.pop(key, None)
-        # clear eSIM flow state (email step etc)
-        for key in ["esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd"]:
-            context.user_data.pop(key, None)
-
         return await handle_main_menu(update, context)
+
+    if context.user_data.get("ssn_step"):
+        try:
+            await handle_user_input(update, context)
+        except Exception:
+            ...
+        return
+
+    if context.user_data.get("esim_step") == "email":
+        try:
+            await handle_esim_email_input(update, context)
+        except Exception:
+            ...
+        return
+
+    await handle_main_menu(update, context)
+
+
+
 
     # ✅ SSN flow
     if context.user_data.get("ssn_step"):
@@ -276,6 +299,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
+
 
 
 async def _set_webhook_with_retry():
