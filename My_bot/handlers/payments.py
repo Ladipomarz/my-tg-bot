@@ -82,8 +82,19 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.edit_message_text("❌ No pending order.")
         return
 
-    amount_usd = get_price("ssn")  # SSN only for now
     order_code = pending["order_code"]
+
+    # ✅ PRICE OVERRIDE:
+    # If tools flow set a custom price (eSIM), use it.
+    # Otherwise fallback to SSN default.
+    amount_usd = context.user_data.get("custom_price_usd")
+    if amount_usd is None:
+        amount_usd = get_price("ssn")  # default
+
+    # Use description for nicer invoice title
+    desc = (pending.get("description") or "").strip()
+    if not desc:
+        desc = "Service"
 
     if data.startswith("pay_back:"):
         await q.edit_message_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
@@ -139,7 +150,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             inv = await create_plisio_invoice(
                 order_number=order_code,
-                order_name=f"SSN Service {order_code}",
+                order_name=f"{desc} {order_code}",
                 amount_usd=amount_usd,
                 crypto_currency=plisio_currency,
                 callback_url=f"{public_base}/webhooks/plisio",

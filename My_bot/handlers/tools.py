@@ -1,14 +1,12 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from menus.tools_menu import get_tools_inline, get_ssn_services_menu
+from menus.tools_menu import get_tools_inline, get_ssn_services_menu, get_esim_duration_menu
 from menus.orders_menu import get_pending_order_menu
 from utils.validator import is_valid_dob, is_valid_name
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
-from menus.tools_menu import get_tools_inline, get_ssn_services_menu, get_esim_duration_menu
-
 
 
 # ---------- UI HELPERS ----------
@@ -25,7 +23,13 @@ def _clear_ssn_state(context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop(key, None)
 
 
-# ---------- TOOLS MENU + SSN CALLBACKS ----------
+def _clear_esim_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear only eSIM-related keys."""
+    for key in ["esim_duration", "esim_country", "custom_price_usd"]:
+        context.user_data.pop(key, None)
+
+
+# ---------- TOOLS MENU + CALLBACKS ----------
 
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_send(
@@ -62,20 +66,56 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         # ✅ detected/paid -> allow normal tools
 
-        # eSIM Services
-    if data == "esim_services":
-     await safe_send(
-        query,
-        context,
-        "🛜 eSIM Service\nCountry: 🇺🇸 USA (default)\n🔁 Renewable\n\nSelect duration:",
-        reply_markup=get_esim_duration_menu(),
-     )
-     return
-
-
     # --- NOW handle actual tool buttons ---
 
-    # SSN Services menu  ✅ (this is what your "Services" button sends)
+    # eSIM Services
+    if data == "esim_services":
+        _clear_esim_state(context)
+        context.user_data["esim_country"] = "USA"
+
+        await safe_send(
+            query,
+            context,
+            "🛜 eSIM Service\nCountry: 🇺🇸 USA (default)\n🔁 Renewable\n\nSelect duration:",
+            reply_markup=get_esim_duration_menu(),
+        )
+        return
+
+    # eSIM duration selection -> create order after duration chosen
+    if data.startswith("esim_duration:"):
+        duration = data.split(":", 1)[1].strip()  # 1m / 3m / 1y
+        context.user_data["esim_duration"] = duration
+        context.user_data["esim_country"] = "USA"
+
+        # Price from pricelist.py (you will set these)
+        from pricelist import ESIM_PRICES_USD
+
+        if duration not in ESIM_PRICES_USD:
+            await safe_send(
+                query,
+                context,
+                "❌ Invalid duration. Please choose again:",
+                reply_markup=get_esim_duration_menu(),
+            )
+            return
+
+        amount_usd = ESIM_PRICES_USD[duration]
+        context.user_data["custom_price_usd"] = amount_usd
+
+        # IMPORTANT: description MUST start with "eSIM" so bot.py can detect it
+        pretty = {"1m": "1 Month", "3m": "3 Months", "1y": "1 Year"}.get(duration, duration)
+        order_description = f"eSIM USA - {pretty}"
+
+        display_text = (
+            "Order Almost Done!. 🛜\n\n"
+            f"✅ {order_description}\n"
+            f"💵 Price: ${amount_usd}"
+        )
+
+        await ask_order_confirmation(query, context, display_text, order_description)
+        return
+
+    # SSN Services menu ✅
     if data == "tool_ssn_services":
         await safe_send(
             query,
@@ -88,6 +128,7 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Back to Tools Menu
     if data == "tool_back_tools":
         _clear_ssn_state(context)
+        _clear_esim_state(context)
         await safe_send(
             query,
             context,
