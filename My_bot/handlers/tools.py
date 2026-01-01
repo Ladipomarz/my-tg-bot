@@ -91,6 +91,11 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = (query.data or "").strip()
     user_id = update.effective_user.id
+    
+        # Any tools navigation cancels SSN text flow
+    if data.startswith("tool_") and data not in {"tool_ssn_lookup"}:
+        _clear_ssn_state(context)
+
 
     # Pending-order gate (block only if unpaid)
     pending = get_pending_order(user_id)
@@ -168,25 +173,37 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ---------- Tools menus ----------
+    # SSN Services menu ✅
     if data == "tool_ssn_services":
+        _clear_ssn_state(context)  # ✅ exit any SSN input mode
         await safe_send(query, context, "SSN Services:", reply_markup=get_ssn_services_menu())
         return
 
+    # Back to Tools Menu
     if data == "tool_back_tools":
         _clear_ssn_state(context)
         _clear_esim_state(context)
-        await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
+        await safe_send(
+            query,
+            context,
+            "Tools:",
+            reply_markup=get_tools_inline(),
+        )
         return
 
+    # Start SSN lookup flow
     if data == "tool_ssn_lookup":
         _clear_ssn_state(context)
         context.user_data["ssn_step"] = "first_name"
         await safe_send(query, context, _prompt_for_step("first_name"), reply_markup=ssn_nav_kb())
         return
 
+    # SSN Magic placeholder
     if data == "tool_ssn_magic":
+        _clear_ssn_state(context)  # ✅ exit any SSN input mode
         await safe_send(query, context, "SSN Magic Coming Soon...", reply_markup=get_ssn_services_menu())
         return
+
 
 
 # ---------- SSN USER INPUT FLOW ----------
