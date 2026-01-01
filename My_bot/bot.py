@@ -229,9 +229,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     
     async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
         
     # 🔥 delete user's text input globally (best-effort)
-       await safe_delete_user_message(update)
+    await safe_delete_user_message(update)
 
     text = (update.message.text or "").strip()
 
@@ -298,7 +299,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 
 
