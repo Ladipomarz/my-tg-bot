@@ -223,6 +223,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = (update.message.text or "").strip()
+
+    # ✅ Global navigation should always work, even mid-SSN flow
+    if text in {"🧰 Tools", "🛒 Orders"}:
+        # cancel SSN wizard state so buttons don't get validated as names
+        for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+            context.user_data.pop(key, None)
+
+        # route to your existing main menu handler
+        return await handle_main_menu(update, context)
+
+    # Existing SSN flow
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
@@ -237,6 +249,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await handle_main_menu(update, context)
+
 
 
 tg_app.add_handler(CommandHandler("start", start))
