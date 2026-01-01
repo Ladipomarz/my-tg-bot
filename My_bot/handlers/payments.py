@@ -88,9 +88,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # If tools flow set a custom price (eSIM), use it.
     # Otherwise fallback to SSN default.
     amount_usd = context.user_data.get("custom_price_usd")
-    if amount_usd is None:
-        amount_usd = get_price("ssn")  # default
-
+    
+    
     # Use description for nicer invoice title
     desc = (pending.get("description") or "").strip()
     if not desc:

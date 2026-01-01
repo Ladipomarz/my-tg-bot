@@ -10,7 +10,9 @@ def get_tools_inline():
              InlineKeyboardButton("Esim", callback_data="esim_services"),
         ],
 
-        [InlineKeyboardButton("⬅ Back", callback_data="back_main"),]
+        [   InlineKeyboardButton("🖥️RDP", callback_data="tool_rdp"),
+            InlineKeyboardButton("⬅ Back", callback_data="back_main"),
+            ],
     ]
     return InlineKeyboardMarkup(buttons)
 

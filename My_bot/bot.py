@@ -23,13 +23,15 @@ from utils.db import (
     get_order_by_code,
     expire_pending_order_if_needed,
 )
-from menus.main_menu import get_main_menu
+from menus.main_menu import get_main_menu  
 from menus.orders_menu import get_pending_order_menu
 
 from handlers.start import start, handle_main_menu
-from handlers.tools import tools_callback, handle_user_input
 from handlers.orders import orders_callback
 from handlers.payments import payments_callback
+from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
+
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -225,16 +227,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (update.message.text or "").strip()
 
-    # ✅ Global navigation should always work, even mid-SSN flow
+    # ✅ Global navigation should always work, even mid-flow
     if text in {"🧰 Tools", "🛒 Orders"}:
-        # cancel SSN wizard state so buttons don't get validated as names
+        # clear SSN flow state
         for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
             context.user_data.pop(key, None)
+        # clear eSIM flow state (email step etc)
+        for key in ["esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd"]:
+            context.user_data.pop(key, None)
 
-        # route to your existing main menu handler
         return await handle_main_menu(update, context)
 
-    # Existing SSN flow
+    # ✅ SSN flow
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
@@ -248,7 +252,24 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
+    # ✅ eSIM email flow
+    if context.user_data.get("esim_step") == "email":
+        try:
+            await handle_esim_email_input(update, context)
+        except Exception:
+            logger.exception("eSIM email flow error")
+            for key in ["esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd"]:
+                context.user_data.pop(key, None)
+            try:
+                await update.message.reply_text("❌ Something went wrong. Please start again.")
+            except Exception:
+                pass
+        return
+
+    # default
     await handle_main_menu(update, context)
+
+
 
 
 

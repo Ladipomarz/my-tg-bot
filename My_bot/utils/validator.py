@@ -111,3 +111,8 @@ def suggest_us_states_full_name(state_str: str, n: int = 3) -> list[str]:
     close = difflib.get_close_matches(s, candidates, n=n, cutoff=0.55)
     return [_US_STATE_NORM_TO_CANON[c] for c in close]
 
+
+def is_valid_email(email: str) -> bool:
+    email = (email or "").strip()
+    # simple + safe (good enough for checkout)
+    return bool(re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]{2,}$", email))
