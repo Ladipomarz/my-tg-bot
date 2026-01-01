@@ -91,10 +91,13 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = (query.data or "").strip()
     user_id = update.effective_user.id
-    
-        # Any tools navigation cancels SSN text flow
-    if data.startswith("tool_") and data not in {"tool_ssn_lookup"}:
+
+    # Any tools navigation cancels SSN text flow (prevents "Invalid first name" when navigating)
+    if data.startswith("tool_") and data != "tool_ssn_lookup":
         _clear_ssn_state(context)
+
+    # ... rest of your logic ...
+
 
 
     # Pending-order gate (block only if unpaid)
