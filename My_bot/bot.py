@@ -203,8 +203,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await tools_callback(update, context)
     
         # eSIM callbacks
-    if data == "esim_services" or data.startswith("esim_duration:"):
-        return await tools_callback(update, context)
+   # Tools-related callbacks (SSN + eSIM)
+    if (
+    data.startswith("tool_")
+    or data == "esim_services"
+    or data.startswith("esim_duration:")
+    or data in {"ssn_back", "cancel_ssn"}
+):
+     return await tools_callback(update, context)
 
 
     if data.startswith("orders_"):
