@@ -2,12 +2,8 @@ import os
 import asyncio
 import logging
 import httpx
+
 from fastapi import FastAPI, Request, Response
-from utils.db import update_order_status
-from utils.auto_delete import safe_delete_user_message
-from handlers.orders import debug_last_order
-
-
 
 from telegram import Update
 from telegram.ext import (
@@ -21,20 +17,24 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 
 from config import BOT_TOKEN
+
 from utils.db import (
     create_tables,
     update_payment_status_by_order_code,
     get_order_by_code,
     expire_pending_order_if_needed,
+    update_order_status,
 )
-from menus.main_menu import get_main_menu  
+
+from utils.auto_delete import safe_delete_user_message
+
+from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
 
 from handlers.start import start, handle_main_menu
-from handlers.orders import orders_callback
+from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
-
 
 
 logging.basicConfig(level=logging.INFO)
@@ -103,7 +103,9 @@ async def _safe_send_message(chat_id: int, text: str):
             await tg_app.bot.send_message(chat_id=chat_id, text=text)
             return
         except Exception as e:
-            logger.exception("Telegram send_message failed attempt %s/3: %s", attempt, e)
+            logger.exception(
+                "Telegram send_message failed attempt %s/3: %s", attempt, e
+            )
             await asyncio.sleep(1.5 * attempt)
 
 
@@ -129,13 +131,18 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
     try:
         async with httpx.AsyncClient(timeout=20) as client:
             r = await client.get(url, params=params)
+
         if r.status_code != 200:
-            logger.warning("Plisio invoice details HTTP %s: %s", r.status_code, r.text[:300])
+            logger.warning(
+                "Plisio invoice details HTTP %s: %s", r.status_code, r.text[:300]
+            )
             return None
 
         data = r.json()
         if data.get("status") != "success":
-            logger.warning("Plisio invoice details not success: %s", str(data)[:300])
+            logger.warning(
+                "Plisio invoice details not success: %s", str(data)[:300]
+            )
             return None
 
         inv = (data.get("data") or {}).get("invoice") or {}
@@ -157,6 +164,9 @@ async def send_esim_processing_notice(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=chat_id, text=msg)
 
 
+# ------------------------------
+# CALLBACK ROUTER (INLINE BUTTONS)
+# ------------------------------
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
@@ -165,13 +175,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (q.data or "").strip()
     user_id = q.from_user.id
 
-    # ✅ don't let q.answer timeouts kill your handler
-    # ✅ Never let Telegram slowness break callbacks
+    # Never let Telegram slowness break callbacks
     try:
         await q.answer(cache_time=2)
     except Exception as e:
         logger.warning("q.answer() failed (ignored): %s", e)
 
+    logger.info("callback_router got data=%r", data)
+
+    # Back to main
     if data == "back_main":
         try:
             await q.edit_message_text("Back to main menu...")
@@ -182,17 +194,19 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
-    logger.info("callback_router got data=%r", data)
 
-
-    # ✅ Gate ONLY before payment is detected
-    if data.startswith("tool_") or data.startswith("esim_duration:"):
+    # Tools / SSN / eSIM callbacks
+    is_tools_related = (
+        data.startswith("tool_")
+        or data == "esim_services"
+        or data.startswith("esim_duration:")
+        or data in {"ssn_back", "cancel_ssn"}
+    )
+    if is_tools_related:
+        # Gate ONLY before payment is detected
         pending = expire_pending_order_if_needed(user_id)
-
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
-
-            # block only if payment NOT detected yet
             if pay_status in {"pending", "", "new"}:
                 try:
                     await q.edit_message_text(
@@ -205,102 +219,105 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return await tools_callback(update, context)
 
-    if data == "cancel_ssn":
-        return await tools_callback(update, context)
-    
-        # eSIM callbacks
-   # Tools-related callbacks (SSN + eSIM)
-    if (
-    data.startswith("tool_")
-    or data == "esim_services"
-    or data.startswith("esim_duration:")
-    or data in {"ssn_back", "cancel_ssn"}
-):
-     return await tools_callback(update, context)
-
-
+    # Orders callbacks
     if data.startswith("orders_"):
         return await orders_callback(update, context)
 
+    # Payment callbacks
     if data.startswith("pay_"):
         return await payments_callback(update, context)
 
     logger.info("Unhandled callback data: %s", data)
-    
-    
-    async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-     tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
-        
-    # 🔥 delete user's text input globally (best-effort)
+
+
+# ------------------------------
+# TEXT ROUTER (USER MESSAGES)
+# ------------------------------
+async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Delete user's text input globally (best-effort, private chat, <48h)
     await safe_delete_user_message(update)
 
     text = (update.message.text or "").strip()
 
-    # navigation always works
+    # When user taps the persistent keyboard, clear flows and let main menu route
     if text in {"🧰 Tools", "🛒 Orders"}:
-        for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn",
-                    "esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd"]:
+        # Clear all flow-related state (SSN + eSIM)
+        for key in [
+            "ssn_step",
+            "first_name",
+            "last_name",
+            "type",
+            "dob",
+            "info",
+            "from_ssn",
+            "esim_step",
+            "esim_email",
+            "esim_duration",
+            "esim_country",
+            "custom_price_usd",
+            "order_pending_description",
+        ]:
             context.user_data.pop(key, None)
+
         return await handle_main_menu(update, context)
 
-    if context.user_data.get("ssn_step"):
-        try:
-            await handle_user_input(update, context)
-        except Exception:
-            ...
-        return
-
-    if context.user_data.get("esim_step") == "email":
-        try:
-            await handle_esim_email_input(update, context)
-        except Exception:
-            ...
-        return
-
-    await handle_main_menu(update, context)
-
-
-
-
-    # ✅ SSN flow
+    # SSN text flow
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
         except Exception:
             logger.exception("SSN flow error")
-            for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+            for key in [
+                "ssn_step",
+                "first_name",
+                "last_name",
+                "type",
+                "dob",
+                "info",
+                "from_ssn",
+            ]:
                 context.user_data.pop(key, None)
             try:
-                await update.message.reply_text("❌ Something went wrong. Please start again.")
+                await update.message.reply_text(
+                    "❌ Something went wrong. Please start again."
+                )
             except Exception:
                 pass
         return
 
-    # ✅ eSIM email flow
+    # eSIM email flow
     if context.user_data.get("esim_step") == "email":
         try:
             await handle_esim_email_input(update, context)
         except Exception:
             logger.exception("eSIM email flow error")
-            for key in ["esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd"]:
+            for key in [
+                "esim_step",
+                "esim_email",
+                "esim_duration",
+                "esim_country",
+                "custom_price_usd",
+            ]:
                 context.user_data.pop(key, None)
             try:
-                await update.message.reply_text("❌ Something went wrong. Please start again.")
+                await update.message.reply_text(
+                    "❌ Something went wrong. Please start again."
+                )
             except Exception:
                 pass
         return
 
-    # default
+    # Default
     await handle_main_menu(update, context)
 
 
-
-
-
+# ------------------------------
+# HANDLERS REGISTRATION
+# ------------------------------
 tg_app.add_handler(CommandHandler("start", start))
-tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
-
+tg_app.add_handler(CallbackQueryHandler(callback_router))
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
 
 async def _set_webhook_with_retry():
@@ -321,7 +338,6 @@ async def _set_webhook_with_retry():
 @app.on_event("startup")
 async def on_startup():
     create_tables()
-    # FastAPI starts even if Telegram is down
     asyncio.create_task(_background_telegram_bootstrap())
 
 
@@ -361,30 +377,32 @@ async def telegram_webhook(req: Request):
 
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
-    """
-    Rules:
-    - Send user message ONLY once when payment is DETECTED
-    - Do NOT send message on paid/confirmed
-    - Detect reliably even if webhook doesn't include received_amount:
-      -> call invoice details API using txn_id
-    """
     ctype = (req.headers.get("content-type") or "").lower()
 
     # 1) Parse webhook body (form or json)
     try:
-        if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
-            # requires python-multipart installed
+        if (
+            "multipart/form-data" in ctype
+            or "application/x-www-form-urlencoded" in ctype
+        ):
             form = await req.form()
             payload = dict(form)
         else:
             payload = await req.json()
     except Exception:
         body = await req.body()
-        logger.warning("PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500])
+        logger.warning(
+            "PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500]
+        )
         return {"ok": True}
 
     # 2) Unwrap {data:{...}} if present
-    p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
+    p = (
+        payload.get("data")
+        if isinstance(payload, dict)
+        and isinstance(payload.get("data"), dict)
+        else payload
+    )
     if not isinstance(p, dict):
         return {"ok": True}
 
@@ -394,7 +412,9 @@ async def plisio_webhook(req: Request):
         or p.get("order_id")
         or p.get("orderId")
     )
-    txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
+    txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get(
+        "invoice_id"
+    )
     status = (p.get("status") or p.get("state") or "").lower().strip()
 
     if not order_number:
@@ -413,23 +433,22 @@ async def plisio_webhook(req: Request):
     # -----------------------------
     detected_now = False
 
-    # A) If webhook provides received_amount, use it
     received_amount = _to_float(p.get("received_amount"))
     if received_amount > 0:
         detected_now = True
     else:
-        # B) Otherwise fetch invoice details and detect using multiple fields
         inv = None
         if isinstance(txn_id, str) and txn_id.strip():
             inv = await _fetch_plisio_invoice_details(txn_id.strip())
 
         if inv and isinstance(inv, dict):
-            total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum"))
+            total = _to_float(
+                inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum")
+            )
             received = _to_float(inv.get("received_amount"))
             remaining = _to_float(inv.get("remaining_amount"))
             pending_amt = _to_float(inv.get("pending_amount"))
 
-            # ✅ detected if ANY money has moved
             if received > 0:
                 detected_now = True
             elif total > 0 and remaining >= 0 and remaining < total:
@@ -440,50 +459,59 @@ async def plisio_webhook(req: Request):
     # 1) If detected -> update DB + send ONCE
     if detected_now:
         if current_pay_status not in {"detected", "paid"}:
-            update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
+            update_payment_status_by_order_code(
+                order_number, pay_status="detected", pay_txn_id=txn_id
+            )
             try:
                 update_order_status(order["id"], "processing")
             except Exception:
                 logger.exception("update_order_status failed (ignored)")
 
-            # Send Telegram message ONLY if Telegram is reachable
             if chat_id and await ensure_telegram_ready():
                 asyncio.create_task(
                     _safe_send_message(
                         chat_id,
-                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now."
+                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now.",
                     )
                 )
 
                 # ✅ eSIM: schedule extra message 3 minutes after detected
                 if order_desc.startswith("esim"):
                     try:
-                        job_name = f"esim_notice_{order_number}"
-                        existing = tg_app.job_queue.get_jobs_by_name(job_name)
-                        if not existing:
-                            tg_app.job_queue.run_once(
-                                send_esim_processing_notice,
-                                when=180,  # 3 minutes
-                                data={"chat_id": chat_id},
-                                name=job_name,
-                            )
+                        if tg_app.job_queue is None:
+                            logger.warning("JobQueue not available; eSIM notice not scheduled.")
+                        else:
+                            job_name = f"esim_notice_{order_number}"
+                            existing = tg_app.job_queue.get_jobs_by_name(job_name)
+                            if not existing:
+                                tg_app.job_queue.run_once(
+                                    send_esim_processing_notice,
+                                    when=180,
+                                    data={"chat_id": chat_id},
+                                    name=job_name,
+                                )
                     except Exception:
                         logger.exception("Failed to schedule eSIM notice (ignored)")
             else:
-                logger.warning("Telegram not ready; detected message skipped for %s", order_number)
+                logger.warning(
+                    "Telegram not ready; detected message skipped for %s", order_number
+                )
 
-        # ✅ IMPORTANT: stop here so we don't overwrite pay_status below
         return {"ok": True}
 
     # 2) Paid/confirmed -> update DB ONLY (NO user message)
     if status in paid_statuses:
         if current_pay_status != "paid":
-            update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
+            update_payment_status_by_order_code(
+                order_number, pay_status="paid", pay_txn_id=txn_id
+            )
         return {"ok": True}
 
     # 3) Expired/failed
     if status in expired_statuses:
-        update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
+        update_payment_status_by_order_code(
+            order_number, pay_status="expired", pay_txn_id=txn_id
+        )
         return {"ok": True}
 
     # Ignore noise if already detected/paid
@@ -491,7 +519,9 @@ async def plisio_webhook(req: Request):
         return {"ok": True}
 
     # 4) Otherwise store status (optional)
-    update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
+    update_payment_status_by_order_code(
+        order_number, pay_status=status or "pending", pay_txn_id=txn_id
+    )
     return {"ok": True}
 
 
