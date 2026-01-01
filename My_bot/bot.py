@@ -176,6 +176,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
+    logger.info("callback_router got data=%r", data)
+
 
     # ✅ Gate ONLY before payment is detected
     if data.startswith("tool_") or data.startswith("esim_duration:"):
@@ -199,6 +201,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data == "cancel_ssn":
         return await tools_callback(update, context)
+    
+        # eSIM callbacks
+    if data == "esim_services" or data.startswith("esim_duration:"):
+        return await tools_callback(update, context)
+
 
     if data.startswith("orders_"):
         return await orders_callback(update, context)
