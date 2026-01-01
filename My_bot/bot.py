@@ -178,7 +178,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ✅ Gate ONLY before payment is detected
-    if data.startswith("tool_"):
+    if data.startswith("tool_") or data.startswith("esim_duration:"):
         pending = expire_pending_order_if_needed(user_id)
 
         if pending and pending.get("status") == "pending":
