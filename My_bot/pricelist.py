@@ -5,11 +5,16 @@ PRICES = {
     "ssn": 1.00,
 }
 
-DEFAULT_PRICE = 20.00
+ESIM_PRICES_USD = {
+    "1m": 1.00,
+    "3m": 31,   # set yours
+    "1y": 100,  # set yours
+}
+
 
 
 def get_price(service_code: str) -> float:
-    return float(PRICES.get(service_code, DEFAULT_PRICE))
+    return float(PRICES.get(service_code))
 
 
 # Plisio currency minimums (USD) — prevents 422 errors

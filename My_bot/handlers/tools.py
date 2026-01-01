@@ -7,6 +7,8 @@ from utils.validator import is_valid_dob, is_valid_name
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
+from menus.tools_menu import get_tools_inline, get_ssn_services_menu, get_esim_duration_menu
+
 
 
 # ---------- UI HELPERS ----------
@@ -59,6 +61,17 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
         # ✅ detected/paid -> allow normal tools
+
+        # eSIM Services
+    if data == "esim_services":
+     await safe_send(
+        query,
+        context,
+        "🛜 eSIM Service\nCountry: 🇺🇸 USA (default)\n🔁 Renewable\n\nSelect duration:",
+        reply_markup=get_esim_duration_menu(),
+     )
+     return
+
 
     # --- NOW handle actual tool buttons ---
 

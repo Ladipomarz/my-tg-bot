@@ -5,7 +5,6 @@ import httpx
 from fastapi import FastAPI, Request, Response
 from utils.db import update_order_status
 
-
 from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
@@ -62,6 +61,7 @@ tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).build()
 TG_READY = False
 TG_LOCK = asyncio.Lock()
 
+
 async def ensure_telegram_ready():
     global TG_READY
 
@@ -81,7 +81,6 @@ async def ensure_telegram_ready():
         except Exception as e:
             logger.exception("Telegram not ready yet: %s", e)
             return False
-
 
 
 async def on_error(update, context):
@@ -112,7 +111,7 @@ def _to_float(x) -> float:
 async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
     """
     Fetch invoice details from Plisio, returns invoice dict or None.
-    Endpoint seen in your logs:
+    Endpoint:
       GET /invoices/{txn_id}?api_key=...
     """
     if not PLISIO_API_KEY or not txn_id:
@@ -140,6 +139,18 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
         return None
 
 
+# ✅ eSIM: delayed message (3 minutes after payment detected)
+async def send_esim_processing_notice(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    chat_id = job.data["chat_id"]
+
+    msg = (
+        "Usually Esims take 24 hours to be processed but we will make sure to make this faster "
+        "do not reach out to support until 24 hours is elapsed and package not received"
+    )
+    await context.bot.send_message(chat_id=chat_id, text=msg)
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
@@ -151,10 +162,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ don't let q.answer timeouts kill your handler
     # ✅ Never let Telegram slowness break callbacks
     try:
-           await q.answer(cache_time=2)
+        await q.answer(cache_time=2)
     except Exception as e:
-     logger.warning("q.answer() failed (ignored): %s", e)
-
+        logger.warning("q.answer() failed (ignored): %s", e)
 
     if data == "back_main":
         try:
@@ -283,7 +293,6 @@ async def plisio_webhook(req: Request):
     Rules:
     - Send user message ONLY once when payment is DETECTED
     - Do NOT send message on paid/confirmed
-    - Use DB lock to prevent spam
     - Detect reliably even if webhook doesn't include received_amount:
       -> call invoice details API using txn_id
     """
@@ -322,6 +331,7 @@ async def plisio_webhook(req: Request):
     order = get_order_by_code(order_number) or {}
     chat_id = order.get("user_id")
     current_pay_status = (order.get("pay_status") or "").lower().strip()
+    order_desc = (order.get("description") or "").strip().lower()
 
     paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
@@ -329,7 +339,6 @@ async def plisio_webhook(req: Request):
     # -----------------------------
     # DETECTION LOGIC (NO SPAM)
     # -----------------------------
-    # Goal: detect payment as soon as ANY funds are received (works for SOL/BTC/USDT etc)
     detected_now = False
 
     # A) If webhook provides received_amount, use it
@@ -356,12 +365,15 @@ async def plisio_webhook(req: Request):
             elif total > 0 and pending_amt >= 0 and pending_amt < total:
                 detected_now = True
 
-    # 1) If detected -> update DB + send ONCE (locked by DB)
+    # 1) If detected -> update DB + send ONCE
     if detected_now:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
-            update_order_status(order["id"], "processing")
-    
+            try:
+                update_order_status(order["id"], "processing")
+            except Exception:
+                logger.exception("update_order_status failed (ignored)")
+
             # Send Telegram message ONLY if Telegram is reachable
             if chat_id and await ensure_telegram_ready():
                 asyncio.create_task(
@@ -370,6 +382,21 @@ async def plisio_webhook(req: Request):
                         f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now."
                     )
                 )
+
+                # ✅ eSIM: schedule extra message 3 minutes after detected
+                if order_desc.startswith("esim"):
+                    try:
+                        job_name = f"esim_notice_{order_number}"
+                        existing = tg_app.job_queue.get_jobs_by_name(job_name)
+                        if not existing:
+                            tg_app.job_queue.run_once(
+                                send_esim_processing_notice,
+                                when=180,  # 3 minutes
+                                data={"chat_id": chat_id},
+                                name=job_name,
+                            )
+                    except Exception:
+                        logger.exception("Failed to schedule eSIM notice (ignored)")
             else:
                 logger.warning("Telegram not ready; detected message skipped for %s", order_number)
 
@@ -386,13 +413,15 @@ async def plisio_webhook(req: Request):
     if status in expired_statuses:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
-    
+
+    # Ignore noise if already detected/paid
     if current_pay_status in {"detected", "paid"}:
-     return {"ok": True}
-    
+        return {"ok": True}
+
     # 4) Otherwise store status (optional)
     update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
     return {"ok": True}
+
 
 @app.get("/health")
 async def health():
