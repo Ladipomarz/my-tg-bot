@@ -754,10 +754,33 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await handle_main_menu(update, context)
+    
+    # ------------------------------
+# /admin wrapper (IMPORTANT)
+# ------------------------------
+async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    return await admin_command(update, context, ADMIN_IDS)
 
-
+# ------------------------------
+# HANDLERS REGISTRATION (correct)
+# ------------------------------
 tg_app.add_handler(CommandHandler("start", start))
-tg_app.add_handler(CommandHandler("admin", admin_command))
+tg_app.add_handler(CommandHandler("admin", admin_entry))
+
+# callbacks (INLINE BUTTONS)
+tg_app.add_handler(CallbackQueryHandler(callback_router))
+
+# IMPORTANT: media before text (QR upload wizard)
+tg_app.add_handler(
+    MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router)
+)
+
+# normal text
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+
+
+
+
 
 @app.on_event("startup")
 async def on_startup():
