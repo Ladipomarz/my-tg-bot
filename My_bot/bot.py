@@ -517,6 +517,8 @@ async def media_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # CALLBACK ROUTER (INLINE BUTTONS)
 # ------------------------------
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ Admin delivery reply handler (must be first)
+
     q = update.callback_query
     if not q or not q.data:
         return
@@ -695,6 +697,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ Admin wizard capture (per-field)
     if await _admin_capture_text(update, context):
         return
+    
+
 
     # User main keyboard -> clear flows
     if text in {"🧰 Tools", "🛒 Orders"}:
@@ -752,7 +756,6 @@ tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
-tg_app.add_handler(CommandHandler("admin", lambda u, c: admin_command(u, c, ADMIN_IDS)))
 
 
 # IMPORTANT: media before text (for QR upload wizard)
