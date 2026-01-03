@@ -5,3 +5,5 @@ pycryptodome
 fastapi
 uvicorn
 python-multipart
+reportlab
+
