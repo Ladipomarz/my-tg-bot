@@ -50,72 +50,65 @@ def open_invoice_kb(url: str) -> InlineKeyboardMarkup:
     )
 
 
-def history_kb(
-    page: int, has_prev: bool, has_next: bool, delivered_codes: list[str]
-) -> InlineKeyboardMarkup:
+def history_kb(*, page: int, has_next: bool, has_prev: bool, delivered_files: list[tuple[str, str]]):
+    """
+    delivered_files: list of (order_code, filename) for delivered orders on this page
+
+    Buttons:
+      - One 'service.xxx' button per delivered order
+      - Next/Back on same row
+    """
     rows = []
 
-    # Buttons for delivered orders: service.txt
-    for code in delivered_codes:
-        rows.append(
-            [InlineKeyboardButton("service.txt", callback_data=f"order_file:{code}")]
-        )
+    # File buttons (look like links)
+    for order_code, filename in delivered_files:
+        label = filename.strip() if filename else "service.txt"
+        rows.append([InlineKeyboardButton(label, callback_data=f"order_file:{order_code}")])
 
     nav = []
     if has_prev:
-        nav.append(
-            InlineKeyboardButton(
-                "⬅ Prev", callback_data=f"orders_history_page:{page-1}"
-            )
-        )
+        nav.append(InlineKeyboardButton("⬅ Back", callback_data=f"orders_history_page:{page-1}"))
     if has_next:
-        nav.append(
-            InlineKeyboardButton(
-                "Next ➡", callback_data=f"orders_history_page:{page+1}"
-            )
-        )
+        nav.append(InlineKeyboardButton("Next ➡", callback_data=f"orders_history_page:{page+1}"))
     if nav:
         rows.append(nav)
 
-    rows.append([InlineKeyboardButton("⬅ Back", callback_data="orders_back")])
+    rows.append([InlineKeyboardButton("Back", callback_data="orders_back")])
     return InlineKeyboardMarkup(rows)
 
 
-async def show_history(
-    update_or_query, context: ContextTypes.DEFAULT_TYPE, user_id: int, page: int
-):
+async def show_history(update_or_query, context: ContextTypes.DEFAULT_TYPE, user_id: int, page: int):
     """
-    Shows paginated, clean order history.
-    - Cancelled/Expired auto-hidden after 60s is handled inside get_orders_for_user() (db.py).
-    - Delivered shows [service.txt] in text + a real button that resends the saved file.
+    Clean paginated order history.
+    - Shows delivered rows with [service.pdf]/[service.txt] and button(s).
     """
-    offset = page * PAGE_SIZE
+    # If your DB doesn't support offset, we paginate in Python:
+    # fetch more and slice. This keeps it compatible.
+    fetch_limit = (page + 1) * PAGE_SIZE + 1
+    all_orders = get_orders_for_user(user_id, limit=fetch_limit)
 
-    # Fetch one extra to detect "has_next"
-    orders = get_orders_for_user(user_id, limit=PAGE_SIZE + 1, offset=offset)
-
-    if not orders:
+    if not all_orders:
         await safe_send(update_or_query, context, "You have no orders yet.")
         return
 
-    has_next = len(orders) > PAGE_SIZE
-    if has_next:
-        orders = orders[:PAGE_SIZE]
+    start = page * PAGE_SIZE
+    end = start + PAGE_SIZE
 
+    page_orders = all_orders[start:end]
     has_prev = page > 0
+    has_next = len(all_orders) > end
 
     lines = ["Your orders:"]
+    delivered_files: list[tuple[str, str]] = []
 
-    delivered_codes: list[str] = []
-
-    for o in orders:
+    for o in page_orders:
         status = (o.get("status") or "").lower().strip()
         pay_status = (o.get("pay_status") or "").lower().strip()
         delivery_status = (o.get("delivery_status") or "").lower().strip()
 
-        code = o.get("order_code") or ""
+        code = (o.get("order_code") or "").strip()
 
-        # Clean user-facing status mapping (single label)
+        # User-facing mapping
         if status == "cancelled":
             emoji, label = "❌", "cancelled"
         elif status == "expired":
@@ -127,28 +120,26 @@ async def show_history(
         else:
             emoji, label = "🕒", "awaiting payment"
 
-        # Show illusion text + collect for buttons if delivered and has file saved
-        if delivery_status == "delivered" and (o.get("delivery_file_id") or "").strip():
-            lines.append(f"{emoji} {code} — {label} [service.txt]")
-            delivered_codes.append(code)
+        # Delivered file display + button
+        if delivery_status == "delivered":
+            file_id = (o.get("delivery_file_id") or "").strip()
+            filename = (o.get("delivery_filename") or "").strip() or "service.txt"
+
+            if file_id:
+                lines.append(f"{emoji} {code} — {label} [{filename}]")
+                delivered_files.append((code, filename))
+            else:
+                lines.append(f"{emoji} {code} — {label}")
         else:
             lines.append(f"{emoji} {code} — {label}")
 
-    kb = history_kb(
-        page=page, has_prev=has_prev, has_next=has_next, delivered_codes=delivered_codes
-    )
+    kb = history_kb(page=page, has_next=has_next, has_prev=has_prev, delivered_files=delivered_files)
     await safe_send(update_or_query, context, "\n".join(lines), reply_markup=kb)
 
 
 # ---------- GLOBAL CONFIRM HELPER ----------
 
-
-async def ask_order_confirmation(
-    update_or_query,
-    context: ContextTypes.DEFAULT_TYPE,
-    display_text: str,
-    order_description: str,
-):
+async def ask_order_confirmation(update_or_query, context: ContextTypes.DEFAULT_TYPE, display_text: str, order_description: str):
     context.user_data["order_pending_description"] = order_description
 
     await safe_send(
@@ -161,20 +152,18 @@ async def ask_order_confirmation(
 
 # ---------- ORDERS MENU ----------
 
-
 async def open_orders_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_send(update, context, "Orders:", reply_markup=get_orders_menu())
 
 
 # ---------- ORDERS CALLBACK ----------
 
-
 async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     if not query or not query.data:
         return
 
-    data = query.data
+    data = (query.data or "").strip()
     user_id = query.from_user.id
 
     # 🆕 New Order
@@ -184,7 +173,6 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
 
-            # 🚫 Only treat as "pending" if user has NOT paid/detected yet
             if pay_status in {"pending", "", "new"}:
                 context.user_data["orders_order_id"] = pending["id"]
                 context.user_data["orders_order_code"] = pending["order_code"]
@@ -197,7 +185,6 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 )
                 return
 
-            # ✅ payment already detected/paid -> show processing message
             await safe_send(
                 query,
                 context,
@@ -209,12 +196,12 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
         return
 
-    # 📂 Order History (page 0)
+    # 📂 Order History
     if data == "orders_history":
         await show_history(query, context, user_id=user_id, page=0)
         return
 
-    # 📂 Order History (pagination)
+    # 📂 History paging
     if data.startswith("orders_history_page:"):
         try:
             page = int(data.split(":", 1)[1])
@@ -234,26 +221,24 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_send(query, context, "❌ Order not found.")
             return
 
-        # Security: only the owner can pull their file
         if int(order.get("user_id") or 0) != int(user_id):
             await safe_send(query, context, "❌ You can’t access this order.")
             return
 
         delivery_status = (order.get("delivery_status") or "").lower().strip()
         file_id = (order.get("delivery_file_id") or "").strip()
-        filename = (
-            order.get("delivery_filename") or "service.txt"
-        ).strip() or "service.txt"
+        filename = (order.get("delivery_filename") or "service.txt").strip() or "service.txt"
 
         if delivery_status != "delivered" or not file_id:
             await safe_send(query, context, "❌ No delivered file available yet.")
             return
 
-        # Re-send file (do NOT use safe_send; file should be persistent)
+        # Re-send (persistent)
         await context.bot.send_document(
             chat_id=user_id,
             document=file_id,
-            caption=f"📄 {filename} for {order_code}",
+            filename=filename,
+            caption=f"📦 Re-sent {filename} for {order_code}",
         )
         return
 
@@ -304,9 +289,7 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         desc = context.user_data.get("order_pending_description")
 
         if not desc:
-            logger.warning(
-                "orders_proceed missing order_pending_description; defaulting to SSN Service"
-            )
+            logger.warning("orders_proceed missing order_pending_description; defaulting to SSN Service")
             desc = "SSN Service"
 
         logger.info(
@@ -320,13 +303,12 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order_id, order_code = create_order(
             user_id=user_id,
             description=desc,
-            ttl_seconds=3600,  # 1 hour
+            ttl_seconds=3600,
         )
 
         context.user_data["orders_order_id"] = order_id
         context.user_data["orders_order_code"] = order_code
 
-        # Better UX: edit the same message
         await show_make_payment(query, context, order_code)
 
         context.user_data.pop("order_pending_description", None)
@@ -352,7 +334,7 @@ async def debug_last_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("No orders found for you.")
         return
 
-    o = orders[0]  # newest first
+    o = orders[0]
     msg = (
         "🧾 Last order:\n"
         f"Code: {o.get('order_code')}\n"

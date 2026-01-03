@@ -73,6 +73,8 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_pay_status ON orders(pay_status);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_delivery_status ON orders(delivery_status);")
 
         conn.commit()
 
@@ -334,37 +336,57 @@ def set_delivery_status(order_id: int, delivery_status: str):
     delivery_status:
       - not_delivered
       - delivered
+    Keeps status + timestamps consistent.
     """
     migrate_orders_schema()
-    delivered_at = datetime.datetime.utcnow() if delivery_status == "delivered" else None
+
+    now = datetime.datetime.utcnow()
+
+    if delivery_status == "delivered":
+        status = "delivered"
+        delivered_at = now
+    else:
+        status = "processing"
+        delivered_at = None
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE orders
                 SET delivery_status = %s,
-                    delivered_at = %s
+                    delivered_at = %s,
+                    status = %s,
+                    status_updated_at = %s
                 WHERE id = %s;
-            """, (delivery_status, delivered_at, order_id))
+            """, (
+                delivery_status,
+                delivered_at,
+                status,
+                now,
+                order_id
+            ))
         conn.commit()
 
 
+
 def mark_order_delivered(order_code: str):
-    """Marks delivered. File id/name are saved separately via save_delivery_file_by_code()."""
     migrate_orders_schema()
+    now = datetime.datetime.utcnow()
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE orders
                 SET delivery_status = 'delivered',
-                    delivered_at = %s
+                    delivered_at = %s,
+                    status = 'delivered',
+                    status_updated_at = %s
                 WHERE order_code = %s;
-            """, (datetime.datetime.utcnow(), order_code))
+            """, (now, now, order_code))
         conn.commit()
 
 
-def save_delivery_file_by_code(order_code: str, *, file_id: str, filename: str = "service.txt"):
-    """Save Telegram document file_id so user can re-request file later."""
+
+def save_delivery_file_by_code(order_code: str, *, file_id: str, filename: str):
     migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -375,6 +397,20 @@ def save_delivery_file_by_code(order_code: str, *, file_id: str, filename: str =
                 WHERE order_code = %s;
             """, (file_id, filename, order_code))
         conn.commit()
+
+
+def get_delivery_file_by_code(order_code: str):
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT delivery_file_id, delivery_filename
+                FROM orders
+                WHERE order_code = %s
+                LIMIT 1;
+            """, (order_code,))
+            return cur.fetchone()
+
 
 
 def get_order_by_code(order_code: str):
