@@ -72,6 +72,46 @@ async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE,
         await update_or_query.message.reply_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
 
 
+def _safe_float(v):
+    """Convert v to float safely; return None if impossible."""
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _resolve_amount_usd(context: ContextTypes.DEFAULT_TYPE, pending: dict) -> float | None:
+    """
+    Priority:
+      1) context.user_data['custom_price_usd'] (eSIM flow)
+      2) fallback to SSN default from pricelist
+    """
+    # 1) eSIM custom override
+    custom = _safe_float(context.user_data.get("custom_price_usd"))
+    if custom is not None and custom > 0:
+        return custom
+
+    # 2) fallback: SSN default
+    # (adjust the key below if your pricelist uses a different key)
+    try:
+        ssn_price = get_price("ssn")
+        ssn_price = _safe_float(ssn_price)
+        if ssn_price is not None and ssn_price > 0:
+            return ssn_price
+    except Exception:
+        logger.exception("Failed to get SSN default price via get_price('ssn')")
+
+    # If you store price in DB pending (optional), try these keys too:
+    for k in ("amount_usd", "price_usd", "usd_amount"):
+        dbv = _safe_float(pending.get(k))
+        if dbv is not None and dbv > 0:
+            return dbv
+
+    return None
+
+
 async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
@@ -84,16 +124,28 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     order_code = pending["order_code"]
 
-    # ✅ PRICE OVERRIDE:
-    # If tools flow set a custom price (eSIM), use it.
-    # Otherwise fallback to SSN default.
-    amount_usd = context.user_data.get("custom_price_usd")
-    
-    
     # Use description for nicer invoice title
-    desc = (pending.get("description") or "").strip()
-    if not desc:
-        desc = "Service"
+    desc = (pending.get("description") or "").strip() or "Service"
+
+    # ✅ Resolve amount safely (prevents None crashes)
+    amount_usd = _resolve_amount_usd(context, pending)
+
+    logger.info(
+        "payments_callback user_id=%s order_code=%s desc=%r custom_price_usd=%r resolved_amount_usd=%r data=%r",
+        q.from_user.id,
+        order_code,
+        desc,
+        context.user_data.get("custom_price_usd"),
+        amount_usd,
+        data,
+    )
+
+    if amount_usd is None:
+        await q.edit_message_text(
+            "❌ Could not determine price for this order.\n"
+            "Please restart the order and try again."
+        )
+        return
 
     if data.startswith("pay_back:"):
         await q.edit_message_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
@@ -149,7 +201,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             inv = await create_plisio_invoice(
                 order_number=order_code,
-                order_name=f"{(pending.get('description') or 'Service')} {order_code}",
+                order_name=f"{desc} {order_code}",
                 amount_usd=amount_usd,
                 crypto_currency=plisio_currency,
                 callback_url=f"{public_base}/webhooks/plisio",
@@ -182,3 +234,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"❌ Failed to create payment link:\n{e}\n\nChoose another coin.",
                 reply_markup=coin_picker_kb(order_code, amount_usd),
             )
+        return
+
+    # If some unknown callback comes in
+    await q.edit_message_text("❌ Unknown action. Please try again.")

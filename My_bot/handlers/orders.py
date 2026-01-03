@@ -193,39 +193,41 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_order_status(pending["id"], "cancelled")
         await safe_send(query, context, f"❌ Order {pending['order_code']} cancelled.")
         return
-
+    
     # ✅ Proceed (Create new order)
-    if data == "orders_proceed":
-        desc = context.user_data.get("order_pending_description")
-        
-        if not desc:
-            logger.warning(
-                "orders_proceed missing order_pending_description; defaulting to SSN Service"
-            )
-        desc = "SSN Service"
+if data == "orders_proceed":
+    desc = context.user_data.get("order_pending_description")
 
-        logger.info(
-            "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
-            user_id,
-            desc,
-            context.user_data.get("custom_price_usd"),
-            context.user_data.get("esim_email"),
+    if not desc:
+        logger.warning(
+            "orders_proceed missing order_pending_description; defaulting to SSN Service"
         )
+        desc = "SSN Service"   # ✅ move this inside the if
 
+    logger.info(
+        "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
+        user_id,
+        desc,
+        context.user_data.get("custom_price_usd"),
+        context.user_data.get("esim_email"),
+    )
 
-        order_id, order_code = create_order(
-            user_id=user_id,
-            description=desc,
-            ttl_seconds=3600,  # 1 hour
-        )
+    order_id, order_code = create_order(
+        user_id=user_id,
+        description=desc,
+        ttl_seconds=3600,  # 1 hour
+    )
 
-        context.user_data["orders_order_id"] = order_id
-        context.user_data["orders_order_code"] = order_code
+    context.user_data["orders_order_id"] = order_id
+    context.user_data["orders_order_code"] = order_code
 
-        await show_make_payment(update, context, order_code)
+    await show_make_payment(update, context, order_code)
 
-        context.user_data.pop("order_pending_description", None)
-        return
+    context.user_data.pop("order_pending_description", None)
+    return
+    
+    
+
 
     # ❌ Cancel create
 
