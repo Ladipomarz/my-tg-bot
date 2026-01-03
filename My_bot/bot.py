@@ -5,6 +5,8 @@ import httpx
 import datetime
 import io
 import re
+import json
+
 
 from fastapi import FastAPI, Request, Response
 
@@ -22,6 +24,7 @@ from telegram.request import HTTPXRequest
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 
+
 from utils.db import (
     create_tables,
     update_payment_status_by_order_code,
@@ -30,6 +33,8 @@ from utils.db import (
     update_order_status,
     save_delivery_file_by_code,
     mark_order_delivered,
+    save_delivery_meta_by_code,
+    get_delivery_payload_by_code
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -295,7 +300,7 @@ async def _admin_send_next_prompt(update: Update, context: ContextTypes.DEFAULT_
         await _admin_finish_delivery(update, context)
         return
 
-    _key, label = steps[idx]
+    key, label, _optional = steps[idx]
     prompt = await update.message.reply_text(
         f"✅ Deliver wizard for {wiz.get('order_code')}\n\n"
         f"Send:\n{label}\n\n"
@@ -390,6 +395,14 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
 
             bio = io.BytesIO(txt.encode("utf-8"))
             bio.name = "service.txt"
+            
+
+            old_msg_id = order.get("delivered_message_id")
+            if old_msg_id:
+                try:
+                    await context.bot.delete_message(chat_id=customer_chat_id, message_id=int(old_msg_id))
+                except Exception:
+                    pass
 
             sent = await context.bot.send_document(
                 chat_id=customer_chat_id,
@@ -443,19 +456,21 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     if idx >= len(steps):
         return False
 
-    key, _label = steps[idx]
+    key, _label, optional = steps[idx]
     val = (update.message.text or "").strip()
 
-    if not val:
-        await update.message.reply_text("❌ Empty value. Send again.")
-        return True
+    
 
     if val.lower() == "skip":
-        if key in {"warning", "qr_link"}:
+        if optional:
             wiz.setdefault("data", {})[key] = ""
             wiz["idx"] = idx + 1
             context.user_data["admin_wizard"] = wiz
             await _admin_send_next_prompt(update, context)
+            return True
+        
+        if not val:
+            await update.message.reply_text("❌ Empty value. Send again.")
             return True
 
         if key == "qr_image":
@@ -546,6 +561,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ ADMIN list menu + paging
     if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:"):
         return await admin_callback(update, context, ADMIN_IDS)
+    
 
     # ✅ ADMIN deliver wizard start
     if data.startswith("admin_deliver:"):
@@ -581,20 +597,123 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             return
+        
 
         desc = (order.get("description") or "").strip()
         is_esim = desc.lower().startswith("esim")
+        
+        
+       # ✅ Admin edit/resend delivered (re-open wizard with saved fields)
+        if data.startswith("admin_edit:"):
+             if not _is_admin(user_id):
+                try:
+                    await q.edit_message_text("❌ Not authorized.")
+                except Exception:
+                    pass
+                
+                return
+    order_code = data.split(":", 1)[1].strip()
+    order = get_order_by_code(order_code)
+    if not order:
+        await q.edit_message_text("❌ Order not found.")
+        return
+
+    # Load previous payload
+    prev = get_delivery_payload_by_code(order_code) or {}
+    payload_json = (prev.get("delivery_payload_json") or "").strip()
+
+    try:
+        saved = json.loads(payload_json) if payload_json else {}
+    except Exception:
+        saved = {}
+
+    desc = (order.get("description") or "").strip()
+    is_esim = desc.lower().startswith("esim")
+
+    # Start wizard with existing data
+    if is_esim:
+        # email is already in description -> auto
+        email_auto = extract_email_from_description(desc)
+        steps = [
+            ("phone_last4", "🟡 Phone last 4 digits (example: 0451)"),
+            ("activation_code", "🟡 Activation Code"),
+            ("iccid", "🟡 ICCID"),
+            ("qr_link", "🟡 QR Code Link (optional) — type 'skip'"),
+            ("qr_image", "🟡 Upload QR Image (optional) — send photo OR type 'skip'"),
+        ]
+        data0 = {
+            "email": email_auto or (saved.get("email") or ""),
+            "phone_last4": saved.get("phone_last4") or "",
+            "activation_code": saved.get("activation_code") or "",
+            "iccid": saved.get("iccid") or "",
+            "qr_link": saved.get("qr_link") or "",
+        }
+        qr_img = saved.get("qr_image_file_id") or ""
+    else:
+        steps = [
+            ("full_name", "🔴 Full Name"),
+            ("dob", "🔴 DOB (example: 01/31/1998)"),
+            ("ssn", "🔴 SSN"),
+            ("address_history", "⚫ Address History (paste multi-line if needed)"),
+            ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip'"),
+        ]
+        data0 = {
+            "full_name": saved.get("full_name") or "",
+            "dob": saved.get("dob") or "",
+            "ssn": saved.get("ssn") or "",
+            "address_history": saved.get("address_history") or "",
+            "warning": saved.get("warning") or "",
+        }
+        qr_img = ""
+
+    context.user_data["admin_wizard"] = {
+        "order_code": order_code,
+        "steps": steps,
+        "idx": 0,
+        "data": data0,
+        "prompt_msg_id": None,
+        "qr_image_file_id": qr_img,
+    }
+
+    try:
+        await q.edit_message_text(
+            f"✏️ Edit & Resend started for {order_code}\n\n"
+            "Send the new values one-by-one.\n"
+            "Type the new value, or type 'skip' for optional fields."
+        )
+    except Exception:
+        pass
+
+    # prompt next
+    try:
+        await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
+    except Exception:
+        try:
+            await q.message.reply_text("❌ Failed to start edit wizard.")
+        except Exception:
+            pass
+        
+        return
+    
+
+
+
+        
+        
 
         # ✅ steps (email REMOVED; auto from description)
-        if is_esim:
-            steps = [
+    if is_esim:
+        
+        
+        steps = [
                 ("phone_last4", "🟡 Phone last 4 digits (example: 0451)"),
                 ("activation_code", "🟡 Activation Code"),
                 ("iccid", "🟡 ICCID"),
                 ("qr_link", "🟡 QR Code Link (optional) — type 'skip'"),
                 ("qr_image", "🟡 Upload QR Image (optional) — send photo OR type 'skip'"),
             ]
-        else:
+        
+    else:
             steps = [
                 ("full_name", "🔴 Full Name"),
                 ("dob", "🔴 DOB (example: 01/31/1998)"),
@@ -602,8 +721,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ("address_history", "⚫ Address History (paste multi-line if needed)"),
                 ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip' if none"),
             ]
+            
 
-        context.user_data["admin_wizard"] = {
+            context.user_data["admin_wizard"] = {
             "order_code": order_code,
             "steps": steps,
             "idx": 0,
@@ -611,24 +731,28 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "prompt_msg_id": None,
             "qr_image_file_id": None,
         }
-
-        try:
+            
+            
+            
+    try:
+                
+        
             await q.edit_message_text(
                 f"✅ Deliver wizard started for {order_code}\n\n"
                 "I will ask you for fields one-by-one."
             )
-        except Exception:
+    except Exception:
             pass
 
-        try:
+    try:
             await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
-        except Exception:
+    except Exception:
             logger.exception("Failed to send first admin wizard prompt")
             try:
                 await q.message.reply_text("❌ Failed to start wizard. Try again.")
             except Exception:
                 pass
-        return
+            return
 
     # ✅ BLOCK admin from user UI callbacks
     if _is_admin(user_id):

@@ -1,5 +1,6 @@
 import datetime
 import random
+import json
 import psycopg
 from psycopg.rows import dict_row
 
@@ -30,22 +31,29 @@ def migrate_orders_schema():
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
 
-            # payment tracking for Plisio (and future providers)
+            # payment tracking
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_provider TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_txn_id TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_status TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_updated_at TIMESTAMP;")
 
-            # ✅ fulfillment / delivery tracking (manual step after paid)
+            # fulfillment / delivery tracking
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_status TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;")
 
-            # ✅ store delivered file reference for re-send later
+            # delivered file reference for re-send
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_file_id TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_filename TEXT;")
 
-            # ✅ for "hide cancelled/expired after 1 minute"
+            # hide cancelled/expired after 1 minute
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP;")
+
+            # ✅ NEW: store admin delivery fields as JSON (for view/edit/re-deliver)
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_payload_json TEXT;")
+
+            # ✅ NEW: store the message_id of the delivery document sent to user
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_message_id BIGINT;")
+
         conn.commit()
 
 
@@ -73,8 +81,6 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_pay_status ON orders(pay_status);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_delivery_status ON orders(delivery_status);")
 
         conn.commit()
 
@@ -102,15 +108,8 @@ def upsert_user(
 
 
 def add_user(user_id: int, first_name: str | None = None, username: str | None = None):
-    """
-    Backwards compatible wrapper.
-    Old code: add_user(user.id, user.first_name, user.username)
-    """
-    return upsert_user(
-        user_id,
-        username=username,
-        first_name=first_name,
-    )
+    # backwards compatible wrapper
+    return upsert_user(user_id, username=username, first_name=first_name)
 
 
 def get_user(user_id: int):
@@ -133,10 +132,7 @@ def _generate_order_code(cur) -> str:
 
 def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
     """
-    Your handlers expect:
-      order_id, order_code = create_order(..., ttl_seconds=3600)
-
-    So we return (id, order_code).
+    Returns: (id, order_code)
     """
     migrate_orders_schema()
 
@@ -161,9 +157,11 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
                     delivered_at,
                     delivery_file_id,
                     delivery_filename,
-                    status_updated_at
+                    status_updated_at,
+                    delivery_payload_json,
+                    delivered_message_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, order_code;
             """, (
                 user_id,
@@ -179,7 +177,9 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
                 None,
                 None,
                 None,
-                now,  # status_updated_at
+                now,
+                None,
+                None,
             ))
             row = cur.fetchone()
         conn.commit()
@@ -188,7 +188,6 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
 
 
 def set_order_status(order_id: int, status: str):
-    """Updates status and status_updated_at (needed for hide-after-1-minute)."""
     migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -201,7 +200,6 @@ def set_order_status(order_id: int, status: str):
         conn.commit()
 
 
-# ✅ Backwards-compatible alias (your handlers import update_order_status)
 def update_order_status(order_id: int, status: str):
     return set_order_status(order_id, status)
 
@@ -264,7 +262,6 @@ def get_orders_for_user(
                 """, (user_id, limit, offset))
                 return cur.fetchall()
 
-            # hide cancelled/expired once they are older than cutoff
             cur.execute("""
                 SELECT *
                 FROM orders
@@ -332,58 +329,31 @@ def update_payment_status_by_order_code(
 
 
 def set_delivery_status(order_id: int, delivery_status: str):
-    """
-    delivery_status:
-      - not_delivered
-      - delivered
-    Keeps status + timestamps consistent.
-    """
     migrate_orders_schema()
-
-    now = datetime.datetime.utcnow()
-
-    if delivery_status == "delivered":
-        status = "delivered"
-        delivered_at = now
-    else:
-        status = "processing"
-        delivered_at = None
+    delivered_at = datetime.datetime.utcnow() if delivery_status == "delivered" else None
 
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE orders
                 SET delivery_status = %s,
-                    delivered_at = %s,
-                    status = %s,
-                    status_updated_at = %s
+                    delivered_at = %s
                 WHERE id = %s;
-            """, (
-                delivery_status,
-                delivered_at,
-                status,
-                now,
-                order_id
-            ))
+            """, (delivery_status, delivered_at, order_id))
         conn.commit()
-
 
 
 def mark_order_delivered(order_code: str):
     migrate_orders_schema()
-    now = datetime.datetime.utcnow()
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
                 UPDATE orders
                 SET delivery_status = 'delivered',
-                    delivered_at = %s,
-                    status = 'delivered',
-                    status_updated_at = %s
+                    delivered_at = %s
                 WHERE order_code = %s;
-            """, (now, now, order_code))
+            """, (datetime.datetime.utcnow(), order_code))
         conn.commit()
-
 
 
 def save_delivery_file_by_code(order_code: str, *, file_id: str, filename: str):
@@ -411,6 +381,51 @@ def get_delivery_file_by_code(order_code: str):
             """, (order_code,))
             return cur.fetchone()
 
+
+# ✅ NEW: store admin input payload + delivery message id
+def save_delivery_meta_by_code(
+    order_code: str,
+    *,
+    payload: dict,
+    delivered_message_id: int | None = None,
+):
+    migrate_orders_schema()
+    payload_json = json.dumps(payload)
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE orders
+                SET delivery_payload_json = %s,
+                    delivered_message_id = %s
+                WHERE order_code = %s;
+            """, (payload_json, delivered_message_id, order_code))
+        conn.commit()
+
+
+def get_delivery_payload_by_code(order_code: str) -> dict | None:
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT delivery_payload_json
+                FROM orders
+                WHERE order_code = %s
+                LIMIT 1;
+            """, (order_code,))
+            row = cur.fetchone()
+
+    if not row:
+        return None
+
+    raw = row[0]
+    if not raw:
+        return None
+
+    try:
+        return json.loads(raw)
+    except Exception:
+        return None
 
 
 def get_order_by_code(order_code: str):
