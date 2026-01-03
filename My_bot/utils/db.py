@@ -39,6 +39,13 @@ def migrate_orders_schema():
             # ✅ fulfillment / delivery tracking (manual step after paid)
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_status TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMP;")
+
+            # ✅ store delivered file reference for re-send later
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_file_id TEXT;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_filename TEXT;")
+
+            # ✅ for "hide cancelled/expired after 1 minute"
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP;")
         conn.commit()
 
 
@@ -65,6 +72,7 @@ def create_tables():
 
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
 
         conn.commit()
 
@@ -148,9 +156,12 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
                     pay_provider,
                     pay_updated_at,
                     delivery_status,
-                    delivered_at
+                    delivered_at,
+                    delivery_file_id,
+                    delivery_filename,
+                    status_updated_at
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, order_code;
             """, (
                 user_id,
@@ -164,6 +175,9 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
                 now,
                 "not_delivered",
                 None,
+                None,
+                None,
+                now,  # status_updated_at
             ))
             row = cur.fetchone()
         conn.commit()
@@ -172,9 +186,16 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
 
 
 def set_order_status(order_id: int, status: str):
+    """Updates status and status_updated_at (needed for hide-after-1-minute)."""
+    migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("UPDATE orders SET status = %s WHERE id = %s;", (status, order_id))
+            cur.execute("""
+                UPDATE orders
+                SET status = %s,
+                    status_updated_at = %s
+                WHERE id = %s;
+            """, (status, datetime.datetime.utcnow(), order_id))
         conn.commit()
 
 
@@ -212,17 +233,47 @@ def expire_pending_order_if_needed(user_id: int):
     return pending
 
 
-def get_orders_for_user(user_id: int, limit: int = 20):
+def get_orders_for_user(
+    user_id: int,
+    limit: int = 20,
+    offset: int = 0,
+    *,
+    hide_cancelled_expired_after_seconds: int = 60,
+    include_archived: bool = False,
+):
+    """
+    Paginated orders.
+    - include_archived=False hides cancelled/expired after N seconds (default 60s).
+    - include_archived=True returns everything.
+    """
     migrate_orders_schema()
+
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(seconds=int(hide_cancelled_expired_after_seconds))
+
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
+            if include_archived:
+                cur.execute("""
+                    SELECT *
+                    FROM orders
+                    WHERE user_id = %s
+                    ORDER BY id DESC
+                    LIMIT %s OFFSET %s;
+                """, (user_id, limit, offset))
+                return cur.fetchall()
+
+            # hide cancelled/expired once they are older than cutoff
             cur.execute("""
                 SELECT *
                 FROM orders
                 WHERE user_id = %s
+                  AND NOT (
+                        status IN ('cancelled', 'expired')
+                        AND COALESCE(status_updated_at, created_at, NOW()) < %s
+                  )
                 ORDER BY id DESC
-                LIMIT %s;
-            """, (user_id, limit))
+                LIMIT %s OFFSET %s;
+            """, (user_id, cutoff, limit, offset))
             return cur.fetchall()
 
 
@@ -259,7 +310,12 @@ def set_order_payment(
         conn.commit()
 
 
-def update_payment_status_by_order_code(order_code: str, *, pay_status: str, pay_txn_id: str | None = None):
+def update_payment_status_by_order_code(
+    order_code: str,
+    *,
+    pay_status: str,
+    pay_txn_id: str | None = None
+):
     migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -294,6 +350,7 @@ def set_delivery_status(order_id: int, delivery_status: str):
 
 
 def mark_order_delivered(order_code: str):
+    """Marks delivered. File id/name are saved separately via save_delivery_file_by_code()."""
     migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -306,9 +363,59 @@ def mark_order_delivered(order_code: str):
         conn.commit()
 
 
+def save_delivery_file_by_code(order_code: str, *, file_id: str, filename: str = "service.txt"):
+    """Save Telegram document file_id so user can re-request file later."""
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE orders
+                SET delivery_file_id = %s,
+                    delivery_filename = %s
+                WHERE order_code = %s;
+            """, (file_id, filename, order_code))
+        conn.commit()
+
+
 def get_order_by_code(order_code: str):
     migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM orders WHERE order_code = %s LIMIT 1;", (order_code,))
             return cur.fetchone()
+
+
+def get_paid_orders_for_admin(limit: int = 10, offset: int = 0):
+    """
+    Orders ready to fulfill:
+    pay_status in (detected, paid) AND not delivered yet.
+    """
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT *
+                FROM orders
+                WHERE COALESCE(pay_status,'') IN ('detected','paid')
+                  AND COALESCE(delivery_status,'not_delivered') <> 'delivered'
+                ORDER BY COALESCE(pay_updated_at, created_at, NOW()) DESC, id DESC
+                LIMIT %s OFFSET %s;
+            """, (limit, offset))
+            return cur.fetchall()
+
+
+def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
+    """
+    Delivered orders list for admin.
+    """
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT *
+                FROM orders
+                WHERE COALESCE(delivery_status,'') = 'delivered'
+                ORDER BY COALESCE(delivered_at, created_at, NOW()) DESC, id DESC
+                LIMIT %s OFFSET %s;
+            """, (limit, offset))
+            return cur.fetchall()

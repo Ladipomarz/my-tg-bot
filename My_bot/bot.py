@@ -2,10 +2,12 @@ import os
 import asyncio
 import logging
 import httpx
+import io
+import datetime
 
 from fastapi import FastAPI, Request, Response
 
-from telegram import Update
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -15,6 +17,9 @@ from telegram.ext import (
     filters,
 )
 from telegram.request import HTTPXRequest
+from handlers.admin import admin_command, admin_callback
+from menus.admin_menu import get_admin_menu  # optional if you want to show it elsewhere
+
 
 from config import BOT_TOKEN
 
@@ -24,6 +29,8 @@ from utils.db import (
     get_order_by_code,
     expire_pending_order_if_needed,
     update_order_status,
+    save_delivery_file_by_code,
+    mark_order_delivered,
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -45,6 +52,14 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
 
 PLISIO_API_KEY = os.getenv("PLISIO_API_KEY", "").strip()
 PLISIO_BASE_URL = "https://api.plisio.net/api/v1"
+
+# Admin IDs (comma-separated Telegram user IDs)
+# Example: ADMIN_IDS="12345678,987654321"
+ADMIN_IDS = {
+    int(x.strip())
+    for x in (os.getenv("ADMIN_IDS", "")).split(",")
+    if x.strip().isdigit()
+}
 
 if not PUBLIC_BASE_URL:
     raise RuntimeError("PUBLIC_BASE_URL missing")
@@ -109,6 +124,59 @@ async def _safe_send_message(chat_id: int, text: str):
             await asyncio.sleep(1.5 * attempt)
 
 
+async def _notify_admin_new_paid_order(order: dict):
+    """
+    Send admin: 🟡 New paid order ... [Deliver (.txt)]
+    Triggered when payment transitions into detected for the first time.
+    """
+    if not ADMIN_IDS:
+        logger.warning("ADMIN_IDS not set; admin notifications skipped")
+        return
+
+    order_code = (order.get("order_code") or "").strip()
+    desc = (order.get("description") or "").strip() or "Service"
+    user_id = order.get("user_id")
+
+    text = (
+        "🟡 New paid order\n"
+        f"Order: {order_code}\n"
+        f"User: {user_id}\n"
+        f"Item: {desc}\n\n"
+        "Tap Deliver (.txt) then reply with the delivery text."
+    )
+
+    kb = InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton(
+                    "Deliver (.txt)", callback_data=f"admin_deliver:{order_code}"
+                )
+            ]
+        ]
+    )
+
+    for admin_id in ADMIN_IDS:
+        try:
+            await tg_app.bot.send_message(chat_id=admin_id, text=text, reply_markup=kb)
+        except Exception:
+            logger.exception(
+                "Failed to notify admin %s for order %s", admin_id, order_code
+            )
+
+
+async def _delete_message_later(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    chat_id = job.data.get("chat_id")
+    message_id = job.data.get("message_id")
+    if not chat_id or not message_id:
+        return
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        # ignore delete errors
+        pass
+
+
 def _to_float(x) -> float:
     try:
         return float(str(x).strip())
@@ -140,9 +208,7 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
 
         data = r.json()
         if data.get("status") != "success":
-            logger.warning(
-                "Plisio invoice details not success: %s", str(data)[:300]
-            )
+            logger.warning("Plisio invoice details not success: %s", str(data)[:300])
             return None
 
         inv = (data.get("data") or {}).get("invoice") or {}
@@ -195,6 +261,65 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
+    # ✅ Admin callbacks (deliver flow)
+    if data.startswith("admin_deliver:"):
+        if user_id not in ADMIN_IDS:
+            try:
+                await q.edit_message_text("❌ Not authorized.")
+            except Exception:
+                pass
+            return
+
+        order_code = data.split(":", 1)[1].strip()
+        order = get_order_by_code(order_code)
+        if not order:
+            try:
+                await q.edit_message_text("❌ Order not found.")
+            except Exception:
+                pass
+            return
+
+        pay_status = (order.get("pay_status") or "").lower().strip()
+        delivery_status = (order.get("delivery_status") or "").lower().strip()
+
+        # We treat detected as good enough to fulfill (per your request)
+        if pay_status not in {"detected", "paid"}:
+            try:
+                await q.edit_message_text(
+                    f"❌ Order {order_code} is not paid/detected yet."
+                )
+            except Exception:
+                pass
+            return
+
+        if delivery_status == "delivered":
+            try:
+                await q.edit_message_text(
+                    f"✅ Order {order_code} is already delivered."
+                )
+            except Exception:
+                pass
+            return
+        if (
+            data == "admin_menu"
+            or data.startswith("admin_paid:")
+            or data.startswith("admin_delivered:")
+        ):
+            return await admin_callback(update, context, ADMIN_IDS)
+
+        # set admin pending state
+        context.user_data["admin_deliver_waiting"] = True
+        context.user_data["admin_deliver_order_code"] = order_code
+
+        try:
+            await q.edit_message_text(
+                f"✅ Deliver mode for {order_code}\n\n"
+                "Now reply with the delivery text (the content that should go into service.txt)."
+            )
+        except Exception:
+            pass
+        return
+
     # Tools / SSN / eSIM callbacks
     is_tools_related = (
         data.startswith("tool_")
@@ -220,7 +345,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await tools_callback(update, context)
 
     # Orders callbacks
-    if data.startswith("orders_"):
+    if (
+        data.startswith("orders_")
+        or data.startswith("order_file:")
+        or data.startswith("orders_history_page:")
+    ):
         return await orders_callback(update, context)
 
     # Payment callbacks
@@ -238,6 +367,128 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_delete_user_message(update)
 
     text = (update.message.text or "").strip()
+    user_id = update.effective_user.id
+
+    # ✅ Admin delivery reply handler
+    if user_id in ADMIN_IDS and context.user_data.get("admin_deliver_waiting"):
+        order_code = (context.user_data.get("admin_deliver_order_code") or "").strip()
+        if not order_code:
+            context.user_data.pop("admin_deliver_waiting", None)
+            context.user_data.pop("admin_deliver_order_code", None)
+            try:
+                await update.message.reply_text(
+                    "❌ Admin deliver state missing order code."
+                )
+            except Exception:
+                pass
+            return
+
+        order = get_order_by_code(order_code)
+        if not order:
+            context.user_data.pop("admin_deliver_waiting", None)
+            context.user_data.pop("admin_deliver_order_code", None)
+            try:
+                await update.message.reply_text("❌ Order not found.")
+            except Exception:
+                pass
+            return
+
+        pay_status = (order.get("pay_status") or "").lower().strip()
+        if pay_status not in {"detected", "paid"}:
+            context.user_data.pop("admin_deliver_waiting", None)
+            context.user_data.pop("admin_deliver_order_code", None)
+            try:
+                await update.message.reply_text(
+                    f"❌ Order {order_code} is not paid/detected yet."
+                )
+            except Exception:
+                pass
+            return
+
+        delivery_text = text
+        if not delivery_text:
+            try:
+                await update.message.reply_text(
+                    "❌ Delivery text is empty. Send again."
+                )
+            except Exception:
+                pass
+            return
+
+        customer_chat_id = order.get("user_id")
+        if not customer_chat_id:
+            context.user_data.pop("admin_deliver_waiting", None)
+            context.user_data.pop("admin_deliver_order_code", None)
+            try:
+                await update.message.reply_text("❌ Order has no user_id.")
+            except Exception:
+                pass
+            return
+
+        # Build service.txt
+        filename = "service.txt"
+        content = (
+            f"Order: {order_code}\n"
+            f"Description: {order.get('description')}\n"
+            f"Delivered at: {datetime.datetime.utcnow().isoformat()} UTC\n\n"
+            f"{delivery_text}\n"
+        )
+
+        bio = io.BytesIO(content.encode("utf-8"))
+        bio.name = filename
+
+        try:
+            # Send to user (persistent message)
+            sent = await context.bot.send_document(
+                chat_id=customer_chat_id,
+                document=bio,
+                caption=f"📦 Your order {order_code} has been delivered.",
+            )
+
+            # Save file_id for future re-send in history
+            doc = getattr(sent, "document", None)
+            file_id = getattr(doc, "file_id", None) if doc else None
+            if file_id:
+                save_delivery_file_by_code(
+                    order_code, file_id=file_id, filename=filename
+                )
+
+            # Mark delivered
+            mark_order_delivered(order_code)
+
+            # Optional: auto-delete delivery message after 24 hours (if JobQueue exists)
+            try:
+                if tg_app.job_queue is not None:
+                    tg_app.job_queue.run_once(
+                        _delete_message_later,
+                        when=24 * 3600,
+                        data={
+                            "chat_id": customer_chat_id,
+                            "message_id": sent.message_id,
+                        },
+                        name=f"delmsg_{order_code}",
+                    )
+            except Exception:
+                logger.exception("Failed to schedule delivery message delete (ignored)")
+
+            try:
+                await update.message.reply_text(
+                    f"✅ Delivered {order_code} to user {customer_chat_id} as {filename}."
+                )
+            except Exception:
+                pass
+
+        except Exception:
+            logger.exception("Admin delivery failed")
+            try:
+                await update.message.reply_text("❌ Failed to deliver. Try again.")
+            except Exception:
+                pass
+
+        # Clear admin deliver state
+        context.user_data.pop("admin_deliver_waiting", None)
+        context.user_data.pop("admin_deliver_order_code", None)
+        return
 
     # When user taps the persistent keyboard, clear flows and let main menu route
     if text in {"🧰 Tools", "🛒 Orders"}:
@@ -318,6 +569,7 @@ tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+tg_app.add_handler(CommandHandler("admin", lambda u, c: admin_command(u, c, ADMIN_IDS)))
 
 
 async def _set_webhook_with_retry():
@@ -399,8 +651,7 @@ async def plisio_webhook(req: Request):
     # 2) Unwrap {data:{...}} if present
     p = (
         payload.get("data")
-        if isinstance(payload, dict)
-        and isinstance(payload.get("data"), dict)
+        if isinstance(payload, dict) and isinstance(payload.get("data"), dict)
         else payload
     )
     if not isinstance(p, dict):
@@ -412,9 +663,7 @@ async def plisio_webhook(req: Request):
         or p.get("order_id")
         or p.get("orderId")
     )
-    txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get(
-        "invoice_id"
-    )
+    txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
 
     if not order_number:
@@ -443,7 +692,9 @@ async def plisio_webhook(req: Request):
 
         if inv and isinstance(inv, dict):
             total = _to_float(
-                inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum")
+                inv.get("invoice_total_sum")
+                or inv.get("amount")
+                or inv.get("invoice_sum")
             )
             received = _to_float(inv.get("received_amount"))
             remaining = _to_float(inv.get("remaining_amount"))
@@ -467,6 +718,13 @@ async def plisio_webhook(req: Request):
             except Exception:
                 logger.exception("update_order_status failed (ignored)")
 
+            # ✅ notify admin ONCE when it first becomes detected
+            try:
+                if await ensure_telegram_ready():
+                    asyncio.create_task(_notify_admin_new_paid_order(order))
+            except Exception:
+                logger.exception("Admin notify failed (ignored)")
+
             if chat_id and await ensure_telegram_ready():
                 asyncio.create_task(
                     _safe_send_message(
@@ -479,7 +737,9 @@ async def plisio_webhook(req: Request):
                 if order_desc.startswith("esim"):
                     try:
                         if tg_app.job_queue is None:
-                            logger.warning("JobQueue not available; eSIM notice not scheduled.")
+                            logger.warning(
+                                "JobQueue not available; eSIM notice not scheduled."
+                            )
                         else:
                             job_name = f"esim_notice_{order_number}"
                             existing = tg_app.job_queue.get_jobs_by_name(job_name)
