@@ -544,7 +544,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if data.startswith("admin_"):
-     return await admin_callback(...)
+     return await admin_callback(update, context, ADMIN_IDS)
 
 
     # ✅ Admin dashboard callbacks (menu / paging) handled by handlers.admin
