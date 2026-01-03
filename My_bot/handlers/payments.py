@@ -149,7 +149,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             inv = await create_plisio_invoice(
                 order_number=order_code,
-                order_name=f"{desc} {order_code}",
+                order_name=f"{(pending.get('description') or 'Service')} {order_code}",
                 amount_usd=amount_usd,
                 crypto_currency=plisio_currency,
                 callback_url=f"{public_base}/webhooks/plisio",
