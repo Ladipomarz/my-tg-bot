@@ -197,6 +197,12 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ Proceed (Create new order)
     if data == "orders_proceed":
         desc = context.user_data.get("order_pending_description")
+        
+        if not desc:
+            logger.warning(
+                "orders_proceed missing order_pending_description; defaulting to SSN Service"
+            )
+        desc = "SSN Service"
 
         logger.info(
             "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
@@ -206,11 +212,6 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.get("esim_email"),
         )
 
-        if not desc:
-            logger.warning(
-                "orders_proceed missing order_pending_description; defaulting to SSN Service"
-            )
-        desc = "SSN Service"
 
         order_id, order_code = create_order(
             user_id=user_id,
