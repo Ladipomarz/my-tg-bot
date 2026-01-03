@@ -4,6 +4,7 @@ import logging
 import httpx
 import datetime
 import io
+import re
 
 from fastapi import FastAPI, Request, Response
 
@@ -19,7 +20,6 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 
 from config import BOT_TOKEN
-
 from utils.esim_pdf import build_esim_pdf_bytes
 
 from utils.db import (
@@ -29,7 +29,6 @@ from utils.db import (
     expire_pending_order_if_needed,
     update_order_status,
     save_delivery_file_by_code,
-    get_delivery_file_by_code,
     mark_order_delivered,
 )
 
@@ -45,7 +44,6 @@ from handlers.tools import tools_callback, handle_user_input, handle_esim_email_
 
 from handlers.admin import admin_command, admin_callback
 
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
 
@@ -55,8 +53,6 @@ WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
 PLISIO_API_KEY = os.getenv("PLISIO_API_KEY", "").strip()
 PLISIO_BASE_URL = "https://api.plisio.net/api/v1"
 
-# Admin IDs (comma-separated Telegram user IDs)
-# Example: ADMIN_IDS="12345678,987654321"
 ADMIN_IDS = {
     int(x.strip())
     for x in (os.getenv("ADMIN_IDS", "")).split(",")
@@ -72,7 +68,6 @@ TELEGRAM_PATH = f"/webhook/{WEBHOOK_SECRET}"
 
 app = FastAPI()
 
-# ✅ Telegram timeouts (Railway can be flaky)
 tg_request = HTTPXRequest(
     connect_timeout=30.0,
     read_timeout=90.0,
@@ -85,8 +80,22 @@ TG_READY = False
 TG_LOCK = asyncio.Lock()
 
 
+# ------------------------------
+# HELPERS
+# ------------------------------
 def _is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
+
+
+def extract_email_from_description(desc: str) -> str:
+    """
+    Your DB stores: "eSIM USA - 1 Month | Email: cc@vf.com"
+    We auto-extract so admin doesn't type it.
+    """
+    if not desc:
+        return ""
+    m = re.search(r"email:\s*([^\s|]+)", desc, re.IGNORECASE)
+    return m.group(1) if m else ""
 
 
 def _parse_plan_days(desc: str) -> tuple[str, int]:
@@ -264,11 +273,9 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
         return None
 
 
-# ✅ eSIM: delayed message (3 minutes after payment detected)
 async def send_esim_processing_notice(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
     chat_id = job.data["chat_id"]
-
     msg = (
         "Usually Esims take 24 hours to be processed but we will make sure to make this faster "
         "do not reach out to support until 24 hours is elapsed and package not received"
@@ -285,14 +292,13 @@ async def _admin_send_next_prompt(update: Update, context: ContextTypes.DEFAULT_
     idx = int(wiz.get("idx") or 0)
 
     if idx >= len(steps):
-        # Finish delivery
         await _admin_finish_delivery(update, context)
         return
 
-    key, label = steps[idx]
+    _key, label = steps[idx]
     prompt = await update.message.reply_text(
         f"✅ Deliver wizard for {wiz.get('order_code')}\n\n"
-        f"Reply to THIS message with:\n{label}\n\n"
+        f"Send:\n{label}\n\n"
         "Type: skip (if optional)"
     )
     wiz["prompt_msg_id"] = prompt.message_id
@@ -330,6 +336,9 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
             plan_name, plan_days = _parse_plan_days(desc)
             expires = delivered_utc + datetime.timedelta(days=plan_days)
 
+            # ✅ AUTO EMAIL from description
+            email = extract_email_from_description(desc)
+
             phone_last4 = (data.get("phone_last4") or "").strip()
             phone_mask = f"XXX-XXX-{phone_last4}" if phone_last4 else "XXX-XXX-____"
 
@@ -338,7 +347,7 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
                 phone_number_masked=phone_mask,
                 plan_name=plan_name,
                 plan_expires_str=_fmt_mmddyyyy(expires),
-                email=(data.get("email") or "").strip(),
+                email=email,
                 activation_code=(data.get("activation_code") or "").strip(),
                 iccid=(data.get("iccid") or "").strip(),
                 qr_link=(data.get("qr_link") or "").strip(),
@@ -395,7 +404,7 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
 
         mark_order_delivered(order_code)
 
-        # Delivery message stays 24h then auto-delete
+        # auto-delete delivery msg after 24h (optional)
         try:
             if tg_app.job_queue is not None:
                 tg_app.job_queue.run_once(
@@ -418,7 +427,8 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
 
 async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     """
-    Capture admin wizard text input (must be reply to prompt msg).
+    ✅ FIX: In wizard mode, accept the next admin message as the next field
+    (NO reply_to_message requirement).
     """
     user_id = update.effective_user.id
     if not _is_admin(user_id):
@@ -433,16 +443,13 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     if idx >= len(steps):
         return False
 
-    prompt_id = wiz.get("prompt_msg_id")
-    rtm = update.message.reply_to_message
-    if not (prompt_id and rtm and rtm.message_id == prompt_id):
-        await update.message.reply_text("❌ Please reply to the wizard prompt message.")
-        return True
-
-    key, label = steps[idx]
+    key, _label = steps[idx]
     val = (update.message.text or "").strip()
 
-    # Handle skip
+    if not val:
+        await update.message.reply_text("❌ Empty value. Send again.")
+        return True
+
     if val.lower() == "skip":
         if key in {"warning", "qr_link"}:
             wiz.setdefault("data", {})[key] = ""
@@ -460,7 +467,6 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         await update.message.reply_text("❌ This field cannot be skipped.")
         return True
 
-    # Store normal field
     wiz.setdefault("data", {})[key] = val
     wiz["idx"] = idx + 1
     context.user_data["admin_wizard"] = wiz
@@ -486,14 +492,8 @@ async def media_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if idx >= len(steps):
         return
 
-    key, label = steps[idx]
+    key, _label = steps[idx]
     if key != "qr_image":
-        return
-
-    prompt_id = wiz.get("prompt_msg_id")
-    rtm = update.message.reply_to_message
-    if not (prompt_id and rtm and rtm.message_id == prompt_id):
-        await update.message.reply_text("❌ Please reply to the QR upload prompt message.")
         return
 
     file_id = None
@@ -514,7 +514,7 @@ async def media_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ------------------------------
-# CALLBACK ROUTER (INLINE BUTTONS)
+# CALLBACK ROUTER
 # ------------------------------
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
@@ -531,9 +531,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info("callback_router got data=%r", data)
 
-    # ------------------------------
     # Back to main (everyone)
-    # ------------------------------
     if data == "back_main":
         try:
             await q.edit_message_text("Back to main menu...")
@@ -545,15 +543,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
-    # ------------------------------
-    # ✅ ADMIN ROUTES (must come BEFORE user routes)
-    # ------------------------------
-
-    # Admin menu + paging lists
+    # ✅ ADMIN list menu + paging
     if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:"):
         return await admin_callback(update, context, ADMIN_IDS)
 
-    # Admin deliver wizard start
+    # ✅ ADMIN deliver wizard start
     if data.startswith("admin_deliver:"):
         if not _is_admin(user_id):
             try:
@@ -591,15 +585,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         desc = (order.get("description") or "").strip()
         is_esim = desc.lower().startswith("esim")
 
-        # Setup steps
+        # ✅ steps (email REMOVED; auto from description)
         if is_esim:
             steps = [
-                ("email", "🟡 eSIM Email"),
                 ("phone_last4", "🟡 Phone last 4 digits (example: 0451)"),
                 ("activation_code", "🟡 Activation Code"),
                 ("iccid", "🟡 ICCID"),
-                ("qr_link", "🟡 QR Code Link (optional) — type 'skip' if none"),
-                ("qr_image", "🟡 Upload QR Image (optional) — reply with photo/document OR type 'skip'"),
+                ("qr_link", "🟡 QR Code Link (optional) — type 'skip'"),
+                ("qr_image", "🟡 Upload QR Image (optional) — send photo OR type 'skip'"),
             ]
         else:
             steps = [
@@ -619,17 +612,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "qr_image_file_id": None,
         }
 
-        # Edit the list message (nice UX)
         try:
             await q.edit_message_text(
                 f"✅ Deliver wizard started for {order_code}\n\n"
-                "I will ask you for fields one-by-one.\n"
-                "Reply to each prompt message."
+                "I will ask you for fields one-by-one."
             )
         except Exception:
             pass
 
-        # Send first prompt using your helper
         try:
             await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
         except Exception:
@@ -640,7 +630,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # If admin clicks user UI buttons, block and send them to admin menu
+    # ✅ BLOCK admin from user UI callbacks
     if _is_admin(user_id):
         if (
             data.startswith("tool_")
@@ -652,19 +642,17 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             try:
                 await q.edit_message_text(
                     "Admin menu:",
-                    reply_markup=InlineKeyboardMarkup([
-                        [InlineKeyboardButton("Open Admin Menu", callback_data="admin_menu")]
-                    ])
+                    reply_markup=InlineKeyboardMarkup(
+                        [[InlineKeyboardButton("Open Admin Menu", callback_data="admin_menu")]]
+                    ),
                 )
             except Exception:
                 pass
             return
 
     # ------------------------------
-    # ✅ USER ROUTES
+    # USER ROUTES
     # ------------------------------
-
-    # Tools / SSN / eSIM callbacks (users only)
     is_tools_related = (
         data.startswith("tool_")
         or data == "esim_services"
@@ -684,48 +672,62 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     logger.exception("edit_message_text failed (ignored)")
                 return
-
         return await tools_callback(update, context)
 
-    # Orders callbacks
-    if data.startswith("orders_") or data.startswith("order_file:") or data.startswith("orders_history_page:"):
+    if (
+        data.startswith("orders_")
+        or data.startswith("order_file:")
+        or data.startswith("orders_history_page:")
+    ):
         return await orders_callback(update, context)
 
-    # Payment callbacks
     if data.startswith("pay_"):
         return await payments_callback(update, context)
 
     logger.info("Unhandled callback data: %s", data)
-    
-    
+
+
+# ------------------------------
+# TEXT ROUTER
+# ------------------------------
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ Admin wizard capture FIRST
+    if await _admin_capture_text(update, context):
+        return
+
+    # best-effort delete user message
     await safe_delete_user_message(update)
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
 
-    # ✅ Admin wizard capture FIRST (so replies always work)
-    if await _admin_capture_text(update, context):
-        return
-
-    # ✅ Admin-only: don't let admin enter user menus
+    # ✅ Admin-only: no user menus
     if _is_admin(user_id) and text in {"🧰 Tools", "🛒 Orders"}:
         context.user_data.pop("admin_wizard", None)
         await update.message.reply_text("Admin menu: use /admin")
         return
 
-    # User main keyboard -> clear flows
+    # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders"}:
         for key in [
-            "ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn",
-            "esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd",
+            "ssn_step",
+            "first_name",
+            "last_name",
+            "type",
+            "dob",
+            "info",
+            "from_ssn",
+            "esim_step",
+            "esim_email",
+            "esim_duration",
+            "esim_country",
+            "custom_price_usd",
             "order_pending_description",
         ]:
             context.user_data.pop(key, None)
-
         return await handle_main_menu(update, context)
 
-    # SSN text flow
+    # SSN flow
     if context.user_data.get("ssn_step"):
         try:
             await handle_user_input(update, context)
@@ -739,7 +741,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # eSIM email flow
+    # eSIM email flow (user flow)
     if context.user_data.get("esim_step") == "email":
         try:
             await handle_esim_email_input(update, context)
@@ -754,32 +756,43 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await handle_main_menu(update, context)
-    
-    # ------------------------------
-# /admin wrapper (IMPORTANT)
+
+
+# ------------------------------
+# /admin wrapper
 # ------------------------------
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
 
+
 # ------------------------------
-# HANDLERS REGISTRATION (correct)
+# REGISTER HANDLERS
 # ------------------------------
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("admin", admin_entry))
+tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 
-# callbacks (INLINE BUTTONS)
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 
 # IMPORTANT: media before text (QR upload wizard)
-tg_app.add_handler(
-    MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router)
-)
-
-# normal text
+tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
 
-
+# ------------------------------
+# WEBHOOK BOOTSTRAP
+# ------------------------------
+async def _set_webhook_with_retry():
+    webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
+    for attempt in range(1, 6):
+        try:
+            await tg_app.bot.set_webhook(url=webhook_url, drop_pending_updates=True)
+            logger.info("Telegram webhook set: %s", webhook_url)
+            return
+        except Exception as e:
+            logger.exception("set_webhook failed (attempt %s/5): %s", attempt, e)
+            await asyncio.sleep(2 * attempt)
+    logger.error("Webhook NOT set after retries. App will keep running.")
 
 
 @app.on_event("startup")
@@ -822,11 +835,13 @@ async def telegram_webhook(req: Request):
     return Response(status_code=200)
 
 
+# ------------------------------
+# PLISIO WEBHOOK
+# ------------------------------
 @app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
     ctype = (req.headers.get("content-type") or "").lower()
 
-    # Parse webhook body
     try:
         if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
             form = await req.form()
@@ -838,7 +853,6 @@ async def plisio_webhook(req: Request):
         logger.warning("PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500])
         return {"ok": True}
 
-    # Unwrap {data:{...}}
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
     if not isinstance(p, dict):
         return {"ok": True}
@@ -881,7 +895,6 @@ async def plisio_webhook(req: Request):
             elif total > 0 and pending_amt >= 0 and pending_amt < total:
                 detected_now = True
 
-    # If detected -> update + notify ONCE
     if detected_now:
         if current_pay_status not in {"detected", "paid"}:
             update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
@@ -890,7 +903,6 @@ async def plisio_webhook(req: Request):
             except Exception:
                 logger.exception("update_order_status failed (ignored)")
 
-            # Notify admin ONCE
             try:
                 if await ensure_telegram_ready():
                     asyncio.create_task(_notify_admin_new_paid_order(order))
@@ -905,7 +917,6 @@ async def plisio_webhook(req: Request):
                     )
                 )
 
-                # eSIM notice after 3 mins
                 if order_desc.startswith("esim"):
                     try:
                         if tg_app.job_queue is not None:
@@ -923,13 +934,11 @@ async def plisio_webhook(req: Request):
 
         return {"ok": True}
 
-    # Paid/confirmed -> DB only
     if status in paid_statuses:
         if current_pay_status != "paid":
             update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
         return {"ok": True}
 
-    # Expired/failed
     if status in expired_statuses:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
         return {"ok": True}
