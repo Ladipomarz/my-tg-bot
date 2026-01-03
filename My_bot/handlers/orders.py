@@ -1,10 +1,7 @@
 import datetime
+import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-import logging
-
-logger = logging.getLogger(__name__)
-
 
 from menus.orders_menu import (
     get_orders_menu,
@@ -22,6 +19,8 @@ from utils.db import (
     update_order_status,
     get_orders_for_user,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def _pending_text(order: dict) -> str:
@@ -50,7 +49,6 @@ def open_invoice_kb(url: str) -> InlineKeyboardMarkup:
 
 # ---------- GLOBAL CONFIRM HELPER ----------
 
-
 async def ask_order_confirmation(
     update_or_query,
     context: ContextTypes.DEFAULT_TYPE,
@@ -69,13 +67,11 @@ async def ask_order_confirmation(
 
 # ---------- ORDERS MENU ----------
 
-
 async def open_orders_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_send(update, context, "Orders:", reply_markup=get_orders_menu())
 
 
 # ---------- ORDERS CALLBACK ----------
-
 
 async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -193,44 +189,41 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_order_status(pending["id"], "cancelled")
         await safe_send(query, context, f"❌ Order {pending['order_code']} cancelled.")
         return
-    
+
     # ✅ Proceed (Create new order)
-if data == "orders_proceed":
-    desc = context.user_data.get("order_pending_description")
+    if data == "orders_proceed":
+        desc = context.user_data.get("order_pending_description")
 
-    if not desc:
-        logger.warning(
-            "orders_proceed missing order_pending_description; defaulting to SSN Service"
+        if not desc:
+            logger.warning(
+                "orders_proceed missing order_pending_description; defaulting to SSN Service"
+            )
+            desc = "SSN Service"
+
+        logger.info(
+            "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
+            user_id,
+            desc,
+            context.user_data.get("custom_price_usd"),
+            context.user_data.get("esim_email"),
         )
-        desc = "SSN Service"   # ✅ move this inside the if
 
-    logger.info(
-        "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
-        user_id,
-        desc,
-        context.user_data.get("custom_price_usd"),
-        context.user_data.get("esim_email"),
-    )
+        order_id, order_code = create_order(
+            user_id=user_id,
+            description=desc,
+            ttl_seconds=3600,  # 1 hour
+        )
 
-    order_id, order_code = create_order(
-        user_id=user_id,
-        description=desc,
-        ttl_seconds=3600,  # 1 hour
-    )
+        context.user_data["orders_order_id"] = order_id
+        context.user_data["orders_order_code"] = order_code
 
-    context.user_data["orders_order_id"] = order_id
-    context.user_data["orders_order_code"] = order_code
+        # Better UX: edit the same message
+        await show_make_payment(query, context, order_code)
 
-    await show_make_payment(update, context, order_code)
-
-    context.user_data.pop("order_pending_description", None)
-    return
-    
-    
-
+        context.user_data.pop("order_pending_description", None)
+        return
 
     # ❌ Cancel create
-
     if data == "orders_cancel":
         context.user_data.pop("order_pending_description", None)
         await safe_send(query, context, "Order not created.")
@@ -245,13 +238,12 @@ if data == "orders_proceed":
 async def debug_last_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # pull last orders
     orders = get_orders_for_user(user_id)
     if not orders:
         await update.message.reply_text("No orders found for you.")
         return
 
-    o = orders[0]  # assuming get_orders_for_user returns newest first
+    o = orders[0]  # newest first
     msg = (
         "🧾 Last order:\n"
         f"Code: {o.get('order_code')}\n"
