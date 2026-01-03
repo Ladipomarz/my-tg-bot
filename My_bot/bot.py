@@ -698,8 +698,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Unhandled callback data: %s", data)
     
     
-    async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-     await safe_delete_user_message(update)
+async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await safe_delete_user_message(update)
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
@@ -754,9 +754,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await handle_main_menu(update, context)
+
+
 tg_app.add_handler(CommandHandler("start", start))
-
-
+tg_app.add_handler(CommandHandler("admin", admin_command))
 
 @app.on_event("startup")
 async def on_startup():
