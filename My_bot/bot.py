@@ -517,8 +517,6 @@ async def media_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # CALLBACK ROUTER (INLINE BUTTONS)
 # ------------------------------
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # ✅ Admin delivery reply handler (must be first)
-
     q = update.callback_query
     if not q or not q.data:
         return
@@ -533,7 +531,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     logger.info("callback_router got data=%r", data)
 
-    # Back to main
+    # ------------------------------
+    # Back to main (everyone)
+    # ------------------------------
     if data == "back_main":
         try:
             await q.edit_message_text("Back to main menu...")
@@ -544,16 +544,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
-    
-    if data.startswith("admin_"):
-     return await admin_callback(update, context, ADMIN_IDS)
 
+    # ------------------------------
+    # ✅ ADMIN ROUTES (must come BEFORE user routes)
+    # ------------------------------
 
-    # ✅ Admin dashboard callbacks (menu / paging) handled by handlers.admin
+    # Admin menu + paging lists
     if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:"):
         return await admin_callback(update, context, ADMIN_IDS)
 
-    # ✅ Admin Deliver wizard start
+    # Admin deliver wizard start
     if data.startswith("admin_deliver:"):
         if not _is_admin(user_id):
             try:
@@ -565,17 +565,27 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order_code = data.split(":", 1)[1].strip()
         order = get_order_by_code(order_code)
         if not order:
-            await q.edit_message_text("❌ Order not found.")
+            try:
+                await q.edit_message_text("❌ Order not found.")
+            except Exception:
+                pass
             return
 
         pay_status = (order.get("pay_status") or "").lower().strip()
         delivery_status = (order.get("delivery_status") or "").lower().strip()
 
         if pay_status not in {"detected", "paid"}:
-            await q.edit_message_text(f"❌ Order {order_code} is not paid/detected yet.")
+            try:
+                await q.edit_message_text(f"❌ Order {order_code} is not paid/detected yet.")
+            except Exception:
+                pass
             return
+
         if delivery_status == "delivered":
-            await q.edit_message_text(f"✅ Order {order_code} already delivered.")
+            try:
+                await q.edit_message_text(f"✅ Order {order_code} already delivered.")
+            except Exception:
+                pass
             return
 
         desc = (order.get("description") or "").strip()
@@ -589,7 +599,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ("activation_code", "🟡 Activation Code"),
                 ("iccid", "🟡 ICCID"),
                 ("qr_link", "🟡 QR Code Link (optional) — type 'skip' if none"),
-                ("qr_image", "🟡 Upload QR Image (optional) — send photo/document OR type 'skip'"),
+                ("qr_image", "🟡 Upload QR Image (optional) — reply with photo/document OR type 'skip'"),
             ]
         else:
             steps = [
@@ -609,41 +619,50 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "qr_image_file_id": None,
         }
 
-        # Tell admin wizard started
+        # Edit the list message (nice UX)
         try:
-            await q.edit_message_text(f"✅ Deliver wizard started for {order_code}. Check below for prompts.")
+            await q.edit_message_text(
+                f"✅ Deliver wizard started for {order_code}\n\n"
+                "I will ask you for fields one-by-one.\n"
+                "Reply to each prompt message."
+            )
         except Exception:
             pass
 
-        # First prompt
+        # Send first prompt using your helper
         try:
-            dummy_update = Update(update.update_id, message=q.message)
-            # We'll send prompts by replying to the same chat (admin chat)
-            await q.message.reply_text("Starting wizard…")
+            await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
         except Exception:
-            pass
-
-        # Send first real prompt
-        # (We need a real Update with message for _admin_send_next_prompt; easiest: call directly using a crafted object)
-        # We'll just send it manually here:
-        key, label = steps[0]
-        prompt = await q.message.reply_text(
-            f"✅ Deliver wizard for {order_code}\n\nReply to THIS message with:\n{label}"
-        )
-        context.user_data["admin_wizard"]["prompt_msg_id"] = prompt.message_id
+            logger.exception("Failed to send first admin wizard prompt")
+            try:
+                await q.message.reply_text("❌ Failed to start wizard. Try again.")
+            except Exception:
+                pass
         return
 
-    # ✅ Admin should not use user UI
+    # If admin clicks user UI buttons, block and send them to admin menu
     if _is_admin(user_id):
-        if data.startswith("tool_") or data.startswith("orders_") or data.startswith("pay_") or data in {"esim_services"}:
-            # redirect admin to admin menu
+        if (
+            data.startswith("tool_")
+            or data.startswith("orders_")
+            or data.startswith("pay_")
+            or data in {"esim_services"}
+            or data.startswith("esim_duration:")
+        ):
             try:
-                await q.edit_message_text("Admin menu:", reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("Open Admin Menu", callback_data="admin_menu")]
-                ]))
+                await q.edit_message_text(
+                    "Admin menu:",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("Open Admin Menu", callback_data="admin_menu")]
+                    ])
+                )
             except Exception:
                 pass
             return
+
+    # ------------------------------
+    # ✅ USER ROUTES
+    # ------------------------------
 
     # Tools / SSN / eSIM callbacks (users only)
     is_tools_related = (
@@ -677,28 +696,23 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await payments_callback(update, context)
 
     logger.info("Unhandled callback data: %s", data)
+    
+    
+    async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+     await safe_delete_user_message(update)
 
-
-# ------------------------------
-# TEXT ROUTER (USER MESSAGES)
-# ------------------------------
-async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await safe_delete_user_message(update)
-
-    text = (update.message.text or "").strip()
     user_id = update.effective_user.id
+    text = (update.message.text or "").strip()
+
+    # ✅ Admin wizard capture FIRST (so replies always work)
+    if await _admin_capture_text(update, context):
+        return
 
     # ✅ Admin-only: don't let admin enter user menus
     if _is_admin(user_id) and text in {"🧰 Tools", "🛒 Orders"}:
         context.user_data.pop("admin_wizard", None)
         await update.message.reply_text("Admin menu: use /admin")
         return
-
-    # ✅ Admin wizard capture (per-field)
-    if await _admin_capture_text(update, context):
-        return
-    
-
 
     # User main keyboard -> clear flows
     if text in {"🧰 Tools", "🛒 Orders"}:
@@ -740,27 +754,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await handle_main_menu(update, context)
-
-
-# ------------------------------
-# /admin command handler (async wrapper)
-# ------------------------------
-async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    return await admin_command(update, context, ADMIN_IDS)
-
-
-# ------------------------------
-# HANDLERS REGISTRATION
-# ------------------------------
 tg_app.add_handler(CommandHandler("start", start))
-tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
-tg_app.add_handler(CommandHandler("admin", admin_entry))
-tg_app.add_handler(CallbackQueryHandler(callback_router))
 
-
-# IMPORTANT: media before text (for QR upload wizard)
-tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
 
 @app.on_event("startup")
