@@ -289,8 +289,8 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         desc = context.user_data.get("order_pending_description")
 
         if not desc:
-            logger.warning("orders_proceed missing order_pending_description; defaulting to SSN Service")
-            desc = "SSN Service"
+            logger.warning("orders_proceed missing order_pending_description; defaulting to MSN Service")
+            desc = "MSN Service"
 
         logger.info(
             "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",

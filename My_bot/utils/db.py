@@ -13,6 +13,8 @@ def get_connection():
     return psycopg.connect(DATABASE_URL)
 
 
+# ---------------- MIGRATIONS ----------------
+
 def migrate_users_schema():
     with get_connection() as conn:
         with conn.cursor() as cur:
@@ -48,11 +50,24 @@ def migrate_orders_schema():
             # hide cancelled/expired after 1 minute
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status_updated_at TIMESTAMP;")
 
-            # ✅ NEW: store admin delivery fields as JSON (for view/edit/re-deliver)
+            # ✅ store admin delivery fields as JSON (for view/edit/re-deliver)
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivery_payload_json TEXT;")
 
-            # ✅ NEW: store the message_id of the delivery document sent to user
+            # ✅ store message_id of the delivery doc sent to user (so you can delete it later)
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_message_id BIGINT;")
+
+            # ✅ archive table for old delivery files (soft-delete / audit trail)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS order_delivery_files (
+                    id SERIAL PRIMARY KEY,
+                    order_code TEXT,
+                    file_id TEXT,
+                    filename TEXT,
+                    message_id BIGINT,
+                    created_at TIMESTAMP
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_odf_order_code ON order_delivery_files(order_code);")
 
         conn.commit()
 
@@ -201,6 +216,7 @@ def set_order_status(order_id: int, status: str):
 
 
 def update_order_status(order_id: int, status: str):
+    # backwards compatible alias
     return set_order_status(order_id, status)
 
 
@@ -248,7 +264,9 @@ def get_orders_for_user(
     """
     migrate_orders_schema()
 
-    cutoff = datetime.datetime.utcnow() - datetime.timedelta(seconds=int(hide_cancelled_expired_after_seconds))
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(
+        seconds=int(hide_cancelled_expired_after_seconds)
+    )
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -356,6 +374,8 @@ def mark_order_delivered(order_code: str):
         conn.commit()
 
 
+# ---------------- DELIVERY FILES ----------------
+
 def save_delivery_file_by_code(order_code: str, *, file_id: str, filename: str):
     migrate_orders_schema()
     with get_connection() as conn:
@@ -382,13 +402,69 @@ def get_delivery_file_by_code(order_code: str):
             return cur.fetchone()
 
 
-# ✅ NEW: store admin input payload + delivery message id
+def archive_previous_delivery_file(order_code: str):
+    """
+    Saves current (delivery_file_id, delivery_filename, delivered_message_id) into archive table
+    BEFORE you overwrite it with a corrected delivery.
+    """
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT delivery_file_id, delivery_filename, delivered_message_id
+                FROM orders
+                WHERE order_code = %s
+                LIMIT 1;
+            """, (order_code,))
+            row = cur.fetchone()
+
+            if not row:
+                conn.commit()
+                return
+
+            file_id = (row.get("delivery_file_id") or "").strip()
+            filename = (row.get("delivery_filename") or "").strip()
+            message_id = row.get("delivered_message_id")
+
+            if not file_id:
+                conn.commit()
+                return
+
+            cur.execute("""
+                INSERT INTO order_delivery_files(order_code, file_id, filename, message_id, created_at)
+                VALUES (%s, %s, %s, %s, %s);
+            """, (order_code, file_id, filename or None, message_id, datetime.datetime.utcnow()))
+
+        conn.commit()
+
+
+def get_current_delivery_message_id(order_code: str) -> int | None:
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT delivered_message_id
+                FROM orders
+                WHERE order_code = %s
+                LIMIT 1;
+            """, (order_code,))
+            row = cur.fetchone()
+            if not row:
+                return None
+            return row[0]
+
+
+# ---------------- DELIVERY META (FIELDS) ----------------
+
 def save_delivery_meta_by_code(
     order_code: str,
     *,
     payload: dict,
     delivered_message_id: int | None = None,
 ):
+    """
+    Store admin inputs so you can view/edit/redeliver later.
+    """
     migrate_orders_schema()
     payload_json = json.dumps(payload)
 
@@ -397,7 +473,7 @@ def save_delivery_meta_by_code(
             cur.execute("""
                 UPDATE orders
                 SET delivery_payload_json = %s,
-                    delivered_message_id = %s
+                    delivered_message_id = COALESCE(%s, delivered_message_id)
                 WHERE order_code = %s;
             """, (payload_json, delivered_message_id, order_code))
         conn.commit()
@@ -427,6 +503,8 @@ def get_delivery_payload_by_code(order_code: str) -> dict | None:
     except Exception:
         return None
 
+
+# ---------------- LOOKUPS ----------------
 
 def get_order_by_code(order_code: str):
     migrate_orders_schema()

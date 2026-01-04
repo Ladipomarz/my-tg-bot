@@ -122,13 +122,13 @@ def _fmt_mmddyyyy(dt: datetime.datetime) -> str:
     return dt.strftime("%m/%d/%Y")
 
 
-def _build_ssn_txt(
+def _build_msn_txt(
     *,
     order_code: str,
     delivered_utc: datetime.datetime,
     full_name: str,
     dob: str,
-    ssn: str,
+    msn: str,
     address_history: str,
     warning: str | None,
 ) -> str:
@@ -137,7 +137,7 @@ def _build_ssn_txt(
 
     return (
         "☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️\n"
-        "        SSN DELIVERY\n"
+        "        MSN DELIVERY\n"
         "☠️☠️☠️☠️☠️☠️☠️☠️☠️☠️\n\n"
         f"🔴 Order Code: {order_code}\n"
         "⚫ Country: USA\n"
@@ -149,9 +149,9 @@ def _build_ssn_txt(
         f"⚫ Full Name: {full_name}\n"
         f"⚫ DOB: {dob}\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
-        "💀 SSN INFORMATION\n"
+        "💀 MSN INFORMATION\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
-        f"🔴 SSN: {ssn}\n\n"
+        f"🔴 MSN: {msn}\n\n"
         "━━━━━━━━━━━━━━━━━━━━\n"
         "💀 ADDRESS HISTORY\n"
         "━━━━━━━━━━━━━━━━━━━━\n\n"
@@ -383,12 +383,12 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
                     logger.exception("Failed to send QR image (ignored)")
 
         else:
-            txt = _build_ssn_txt(
+            txt = _build_msn_txt(
                 order_code=order_code,
                 delivered_utc=delivered_utc,
                 full_name=(data.get("full_name") or "").strip(),
                 dob=(data.get("dob") or "").strip(),
-                ssn=(data.get("ssn") or "").strip(),
+                msn=(data.get("msn") or "").strip(),
                 address_history=(data.get("address_history") or "").strip(),
                 warning=(data.get("warning") or "").strip(),
             )
@@ -653,14 +653,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         steps = [
             ("full_name", "🔴 Full Name"),
             ("dob", "🔴 DOB (example: 01/31/1998)"),
-            ("ssn", "🔴 SSN"),
+            ("msn", "🔴 MSN"),
             ("address_history", "⚫ Address History (paste multi-line if needed)"),
             ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip'"),
         ]
         data0 = {
             "full_name": saved.get("full_name") or "",
             "dob": saved.get("dob") or "",
-            "ssn": saved.get("ssn") or "",
+            "msn": saved.get("msn") or "",
             "address_history": saved.get("address_history") or "",
             "warning": saved.get("warning") or "",
         }
@@ -717,7 +717,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             steps = [
                 ("full_name", "🔴 Full Name"),
                 ("dob", "🔴 DOB (example: 01/31/1998)"),
-                ("ssn", "🔴 SSN"),
+                ("msn", "🔴 MSN"),
                 ("address_history", "⚫ Address History (paste multi-line if needed)"),
                 ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip' if none"),
             ]
@@ -781,7 +781,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         data.startswith("tool_")
         or data == "esim_services"
         or data.startswith("esim_duration:")
-        or data in {"ssn_back", "cancel_ssn"}
+        or data in {"msn_back", "cancel_msn"}
     )
     if is_tools_related:
         pending = expire_pending_order_if_needed(user_id)
@@ -834,13 +834,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders"}:
         for key in [
-            "ssn_step",
+            "msn_step",
             "first_name",
             "last_name",
             "type",
             "dob",
             "info",
-            "from_ssn",
+            "from_msn",
             "esim_step",
             "esim_email",
             "esim_duration",
@@ -851,13 +851,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.pop(key, None)
         return await handle_main_menu(update, context)
 
-    # SSN flow
-    if context.user_data.get("ssn_step"):
+    # MSN flow
+    if context.user_data.get("msn_step"):
         try:
             await handle_user_input(update, context)
         except Exception:
-            logger.exception("SSN flow error")
-            for key in ["ssn_step", "first_name", "last_name", "type", "dob", "info", "from_ssn"]:
+            logger.exception("MSN flow error")
+            for key in ["msn_step", "first_name", "last_name", "type", "dob", "info", "from_msn"]:
                 context.user_data.pop(key, None)
             try:
                 await update.message.reply_text("❌ Something went wrong. Please start again.")

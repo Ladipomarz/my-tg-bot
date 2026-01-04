@@ -41,7 +41,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     print("user tapped:", repr(raw_text), "->", repr(key))
 
-    if context.user_data.get("ssn_step"):
+    if context.user_data.get("msn_step"):
         return
 
     # ✅ Tools (ReplyKeyboard)

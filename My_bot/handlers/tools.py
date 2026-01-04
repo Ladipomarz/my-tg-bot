@@ -3,7 +3,7 @@ from telegram.ext import ContextTypes
 
 from menus.tools_menu import (
     get_tools_inline,
-    get_ssn_services_menu,
+    get_msn_services_menu,
     get_esim_duration_menu,
 )
 from menus.orders_menu import get_pending_order_menu
@@ -24,27 +24,27 @@ from utils.validator import (
 # ---------- UI HELPERS ----------
 
 
-def ssn_nav_kb() -> InlineKeyboardMarkup:
+def msn_nav_kb() -> InlineKeyboardMarkup:
     # Back + Cancel (2 buttons)
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("⬅ Back", callback_data="ssn_back"),
-                InlineKeyboardButton("❌ Cancel", callback_data="cancel_ssn"),
+                InlineKeyboardButton("⬅ Back", callback_data="msn_back"),
+                InlineKeyboardButton("❌ Cancel", callback_data="cancel_msn"),
             ]
         ]
     )
 
 
-def _clear_ssn_state(context: ContextTypes.DEFAULT_TYPE) -> None:
+def _clear_msn_state(context: ContextTypes.DEFAULT_TYPE) -> None:
     for key in [
-        "ssn_step",
+        "msn_step",
         "first_name",
         "last_name",
         "type",
         "dob",
         "info",
-        "from_ssn",
+        "from_msn",
     ]:
         context.user_data.pop(key, None)
 
@@ -61,7 +61,7 @@ def _clear_esim_state(context: ContextTypes.DEFAULT_TYPE) -> None:
         context.user_data.pop(key, None)
 
 
-def _ssn_prev_step(curr: str) -> str | None:
+def _msn_prev_step(curr: str) -> str | None:
     order = ["first_name", "last_name", "type", "dob", "info"]
     if curr not in order:
         return None
@@ -102,7 +102,7 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # This is required because handlers/start.py imports it.
-    _clear_ssn_state(context)
+    _clear_msn_state(context)
     _clear_esim_state(context)
     await safe_send(update, context, "Tools:", reply_markup=get_tools_inline())
 
@@ -115,13 +115,13 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (query.data or "").strip()
     user_id = update.effective_user.id
 
-    # Any tools navigation cancels SSN text flow (prevents "Invalid first name" when navigating)
-    if data.startswith("tool_") and data != "tool_ssn_lookup":
-        _clear_ssn_state(context)
+    # Any tools navigation cancels MSN text flow (prevents "Invalid first name" when navigating)
+    if data.startswith("tool_") and data != "tool_msn_lookup":
+        _clear_msn_state(context)
 
     # RDP Service
     if data == "tool_rdp":
-        _clear_ssn_state(context)
+        _clear_msn_state(context)
         _clear_esim_state(context)
         await safe_send(
             query,
@@ -144,36 +144,36 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return
 
-    # ---------- SSN NAV BUTTONS ----------
-    if data == "ssn_back":
-        step = context.user_data.get("ssn_step")
+    # ---------- MSN NAV BUTTONS ----------
+    if data == "msn_back":
+        step = context.user_data.get("msn_step")
         if not step:
             await safe_send(
-                query, context, "SSN Services:", reply_markup=get_ssn_services_menu()
+                query, context, "MSN Services:", reply_markup=get_msn_services_menu()
             )
             return
 
-        prev = _ssn_prev_step(step)
+        prev = _msn_prev_step(step)
         if not prev:
-            _clear_ssn_state(context)
+            _clear_msn_state(context)
             await safe_send(
-                query, context, "SSN Services:", reply_markup=get_ssn_services_menu()
+                query, context, "MSN Services:", reply_markup=get_msn_services_menu()
             )
             return
 
-        context.user_data["ssn_step"] = prev
+        context.user_data["msn_step"] = prev
         lookup_type = context.user_data.get("type")
         await safe_send(
             query,
             context,
             _prompt_for_step(prev, lookup_type),
-            reply_markup=ssn_nav_kb(),
+            reply_markup=msn_nav_kb(),
         )
         return
 
-    if data == "cancel_ssn":
-        _clear_ssn_state(context)
-        await safe_send(query, context, "SSN flow cancelled.")
+    if data == "cancel_msn":
+        _clear_msn_state(context)
+        await safe_send(query, context, "MSN flow cancelled.")
         return
 
     # ---------- eSIM ----------
@@ -214,48 +214,48 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ---------- Tools menus ----------
-    if data == "tool_ssn_services":
-        _clear_ssn_state(context)
+    if data == "tool_msn_services":
+        _clear_msn_state(context)
         await safe_send(
-            query, context, "SSN Services:", reply_markup=get_ssn_services_menu()
+            query, context, "MSN Services:", reply_markup=get_msn_services_menu()
         )
         return
 
     if data == "tool_back_tools":
-        _clear_ssn_state(context)
+        _clear_msn_state(context)
         _clear_esim_state(context)
         await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
         return
 
-    if data == "tool_ssn_lookup":
-        _clear_ssn_state(context)
-        context.user_data["ssn_step"] = "first_name"
+    if data == "tool_msn_lookup":
+        _clear_msn_state(context)
+        context.user_data["msn_step"] = "first_name"
         await safe_send(
-            query, context, _prompt_for_step("first_name"), reply_markup=ssn_nav_kb()
+            query, context, _prompt_for_step("first_name"), reply_markup=msn_nav_kb()
         )
         return
 
-    if data == "tool_ssn_magic":
-        _clear_ssn_state(context)
+    if data == "tool_msn_magic":
+        _clear_msn_state(context)
         await safe_send(
             query,
             context,
-            "SSN Magic Coming Soon...",
-            reply_markup=get_ssn_services_menu(),
+            "MSN Magic Coming Soon...",
+            reply_markup=get_msn_services_menu(),
         )
         return
 
 
-# ---------- SSN USER INPUT FLOW ----------
+# ---------- MSN USER INPUT FLOW ----------
 
 
 async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    step = context.user_data.get("ssn_step")
+    step = context.user_data.get("msn_step")
     if not step:
         return
 
     text = (update.message.text or "").strip()
-    context.user_data["from_ssn"] = True
+    context.user_data["from_msn"] = True
 
     # STEP 1: First Name
     if step == "first_name":
@@ -264,14 +264,14 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update,
                 context,
                 "❌ Invalid first name.\nUse letters only (spaces / - / ' allowed).",
-                reply_markup=ssn_nav_kb(),
+                reply_markup=msn_nav_kb(),
             )
             return
 
         context.user_data["first_name"] = text
-        context.user_data["ssn_step"] = "last_name"
+        context.user_data["msn_step"] = "last_name"
         await safe_send(
-            update, context, _prompt_for_step("last_name"), reply_markup=ssn_nav_kb()
+            update, context, _prompt_for_step("last_name"), reply_markup=msn_nav_kb()
         )
         return
 
@@ -282,14 +282,14 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update,
                 context,
                 "❌ Invalid last name.\nUse letters only (spaces / - / ' allowed).",
-                reply_markup=ssn_nav_kb(),
+                reply_markup=msn_nav_kb(),
             )
             return
 
         context.user_data["last_name"] = text
-        context.user_data["ssn_step"] = "type"
+        context.user_data["msn_step"] = "type"
         await safe_send(
-            update, context, _prompt_for_step("type"), reply_markup=ssn_nav_kb()
+            update, context, _prompt_for_step("type"), reply_markup=msn_nav_kb()
         )
         return
 
@@ -305,22 +305,22 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "2️⃣ DOB\n"
                 "3️⃣ State\n"
                 "4️⃣ ZIP Code",
-                reply_markup=ssn_nav_kb(),
+                reply_markup=msn_nav_kb(),
             )
             return
 
         context.user_data["type"] = text
 
         if text == "2":
-            context.user_data["ssn_step"] = "dob"
+            context.user_data["msn_step"] = "dob"
             await safe_send(
-                update, context, _prompt_for_step("dob"), reply_markup=ssn_nav_kb()
+                update, context, _prompt_for_step("dob"), reply_markup=msn_nav_kb()
             )
             return
 
-        context.user_data["ssn_step"] = "info"
+        context.user_data["msn_step"] = "info"
         await safe_send(
-            update, context, _prompt_for_step("info", text), reply_markup=ssn_nav_kb()
+            update, context, _prompt_for_step("info", text), reply_markup=msn_nav_kb()
         )
         return
 
@@ -332,15 +332,15 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update,
                 context,
                 "❌ Invalid DOB.\nUse YYYY/MM/DD or YYYY-MM-DD (e.g. 1995-08-21).",
-                reply_markup=ssn_nav_kb(),
+                reply_markup=msn_nav_kb(),
             )
             return
 
         context.user_data["dob"] = dob_norm
-        context.user_data.pop("ssn_step", None)
+        context.user_data.pop("msn_step", None)
 
         await ask_order_confirmation(
-            update, context, "Order Almost Done!. 🔍", "SSN Services"
+            update, context, "Order Almost Done!. 🔍", "MSN Services"
         )
         return
 
@@ -354,7 +354,7 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     update,
                     context,
                     "❌ Invalid city.\nUse letters only.",
-                    reply_markup=ssn_nav_kb(),
+                    reply_markup=msn_nav_kb(),
                 )
                 return
             context.user_data["info"] = text
@@ -367,7 +367,7 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 msg = "❌ Invalid state.\nEnter full state name only (e.g. Texas, California, New York)."
                 if extra:
                     msg += "\n\nDid you mean:\n" + extra
-                await safe_send(update, context, msg, reply_markup=ssn_nav_kb())
+                await safe_send(update, context, msg, reply_markup=msn_nav_kb())
                 return
             context.user_data["info"] = canon
 
@@ -377,7 +377,7 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     update,
                     context,
                     "❌ Invalid ZIP code.\nUse 5 digits (e.g. 90210) or ZIP+4 (e.g. 90210-1234).",
-                    reply_markup=ssn_nav_kb(),
+                    reply_markup=msn_nav_kb(),
                 )
                 return
             context.user_data["info"] = text
@@ -385,9 +385,9 @@ async def handle_user_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             context.user_data["info"] = text
 
-        context.user_data.pop("ssn_step", None)
+        context.user_data.pop("msn_step", None)
         await ask_order_confirmation(
-            update, context, "Order Almost Done!. 🔍", "SSN Services"
+            update, context, "Order Almost Done!. 🔍", "MSN Services"
         )
         return
 

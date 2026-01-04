@@ -86,22 +86,22 @@ def _resolve_amount_usd(context: ContextTypes.DEFAULT_TYPE, pending: dict) -> fl
     """
     Priority:
       1) context.user_data['custom_price_usd'] (eSIM flow)
-      2) fallback to SSN default from pricelist
+      2) fallback to MSN default from pricelist
     """
     # 1) eSIM custom override
     custom = _safe_float(context.user_data.get("custom_price_usd"))
     if custom is not None and custom > 0:
         return custom
 
-    # 2) fallback: SSN default
+    # 2) fallback: MSN default
     # (adjust the key below if your pricelist uses a different key)
     try:
-        ssn_price = get_price("ssn")
-        ssn_price = _safe_float(ssn_price)
-        if ssn_price is not None and ssn_price > 0:
-            return ssn_price
+        msn_price = get_price("msn")
+        msn_price = _safe_float(msn_price)
+        if msn_price is not None and msn_price > 0:
+            return msn_price
     except Exception:
-        logger.exception("Failed to get SSN default price via get_price('ssn')")
+        logger.exception("Failed to get MSN default price via get_price('msn')")
 
     # If you store price in DB pending (optional), try these keys too:
     for k in ("amount_usd", "price_usd", "usd_amount"):

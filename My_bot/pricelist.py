@@ -2,7 +2,7 @@
 
 # Service pricing (USD)
 PRICES = {
-    "ssn": 1.00,
+    "msn": 1.00,
 }
 
 ESIM_PRICES_USD = {
