@@ -892,19 +892,24 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("admin_wizard", None)
         await update.message.reply_text("Admin menu: use /admin")
         return
-
-    # User main keyboard
+    
+        # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders"}:
-        if text == "🧰 Tools":          
+
+        pending = None  # ✅ prevent UnboundLocalError no matter what
+
+        # ✅ if Tools clicked and there is a pending order, redirect to pending page
+        if text == "🧰 Tools":
             pending = expire_pending_order_if_needed(user_id)
-    if pending and pending.get("status") == "pending":
-        pay_status = (pending.get("pay_status") or "").lower().strip()
-        if pay_status in {"pending", "", "new"}:
-            await update.message.reply_text(
-                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                reply_markup=get_pending_order_menu(),
-            )
-            return
+
+        if pending and pending.get("status") == "pending":
+            pay_status = (pending.get("pay_status") or "").lower().strip()
+            if pay_status in {"pending", "", "new"}:
+                await update.message.reply_text(
+                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                    reply_markup=get_pending_order_menu(),
+                )
+                return
 
         for key in [
             "msn_step",
@@ -922,9 +927,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "order_pending_description",
         ]:
             context.user_data.pop(key, None)
-            
-            
+
         return await handle_main_menu(update, context)
+
 
     # MSN flow
     if context.user_data.get("msn_step"):
