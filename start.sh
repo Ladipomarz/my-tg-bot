@@ -11,7 +11,7 @@ echo "Files in My_bot:"
 ls -la My_bot
 
 # Make /app/My_bot the import root so "import utils" works
-export PYTHONPATH="$PWD/My_bot:${PYTHONPATH:-}"
+export PYTHONPATH="$PWD:$PWD/My_bot:${PYTHONPATH:-}"
 
 echo "Testing import bot..."
 python -c "import My_bot.bot as b; print('✅ bot imported'); print('Has app:', hasattr(b, 'app'))"
