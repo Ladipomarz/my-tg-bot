@@ -36,6 +36,7 @@ from utils.db import (
 )
 
 from utils.auto_delete import safe_delete_user_message
+from utils.auto_delete import delete_tracked_message
 
 from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
@@ -608,6 +609,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
         return
+    
+    await delete_tracked_message(
+    context,
+    update.callback_query.message.chat_id,
+    "pending_prompt_msg_id",
+)
 
     data = (q.data or "").strip()
     user_id = q.from_user.id
@@ -886,6 +893,16 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
+    
+    
+    # ✅ delete pending warning on ANY new text / keypad press
+    await delete_tracked_message(
+    context,
+    update.effective_chat.id,
+    "pending_prompt_msg_id",
+)
+
+
 
     # Admin-only: no user menus
     if _is_admin(user_id) and text in {"🧰 Tools", "🛒 Orders"}:
@@ -905,12 +922,31 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
             if pay_status in {"pending", "", "new"}:
-                await update.message.reply_text(
+                
+                
+                await delete_tracked_message(
+                  context,
+                  update.effective_chat.id,
+                  "pending_prompt_msg_id",
+                  
+                 )
+                
+
+                msg = await update.message.reply_text(                    
                     f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                     reply_markup=get_pending_order_menu(),
                 )
-                return
+                
+                    
 
+
+                # track this pending warning so it can be deleted later
+                if msg:
+                    
+                    context.user_data["pending_prompt_msg_id"] = msg.message_id
+                return
+                
+                
         for key in [
             "msn_step",
             "first_name",

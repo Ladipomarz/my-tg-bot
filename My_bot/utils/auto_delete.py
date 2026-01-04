@@ -69,3 +69,24 @@ async def safe_delete_user_message(update):
             await update.message.delete()
     except Exception:
         pass
+    
+    
+    from telegram.ext import ContextTypes
+
+async def delete_tracked_message(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    key: str,
+):
+    """
+    Deletes a bot message whose message_id is stored in context.user_data[key]
+    """
+    msg_id = context.user_data.pop(key, None)
+    if not msg_id:
+        return
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=int(msg_id))
+    except Exception:
+        pass
+
+
