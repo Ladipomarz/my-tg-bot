@@ -603,6 +603,7 @@ def _build_msn_steps(saved: dict | None = None):
 # ------------------------------
 # CALLBACK ROUTER
 # ------------------------------
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
@@ -630,11 +631,106 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
-    # ADMIN list/paging menus
+    # ✅ ADMIN list menu + paging
     if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:"):
         return await admin_callback(update, context, ADMIN_IDS)
 
-    # ADMIN deliver wizard start
+    # ✅ ADMIN edit/resend delivered (wizard with saved fields)
+    if data.startswith("admin_edit:"):
+        if not _is_admin(user_id):
+            try:
+                await q.edit_message_text("❌ Not authorized.")
+            except Exception:
+                pass
+            return
+
+        order_code = data.split(":", 1)[1].strip()
+        order = get_order_by_code(order_code)
+        if not order:
+            try:
+                await q.edit_message_text("❌ Order not found.")
+            except Exception:
+                pass
+            return
+
+        prev = get_delivery_payload_by_code(order_code) or {}
+        payload_json = (prev.get("delivery_payload_json") or "").strip()
+
+        try:
+            saved = json.loads(payload_json) if payload_json else {}
+            if not isinstance(saved, dict):
+                saved = {}
+        except Exception:
+            saved = {}
+
+        desc = (order.get("description") or "").strip()
+        is_esim = desc.lower().startswith("esim")
+
+        if is_esim:
+            email_auto = extract_email_from_description(desc).strip()
+            steps = []
+            if not email_auto:
+                steps.append(("email", "🟡 Customer Email (required)", False))
+            steps += [
+                ("phone_last4", "🟡 Phone last 4 digits (example: 0451)", False),
+                ("activation_code", "🟡 Activation Code", False),
+                ("iccid", "🟡 ICCID", False),
+                ("qr_link", "🟡 QR Code Link (optional) — type 'skip'", True),
+                ("qr_image", "🟡 Upload QR Image (optional) — send photo OR type 'skip'", True),
+            ]
+            data0 = {
+                "email": email_auto or (saved.get("email") or ""),
+                "phone_last4": saved.get("phone_last4") or "",
+                "activation_code": saved.get("activation_code") or "",
+                "iccid": saved.get("iccid") or "",
+                "qr_link": saved.get("qr_link") or "",
+            }
+            qr_img = saved.get("qr_image_file_id") or ""
+        else:
+            steps = [
+                ("full_name", "🔴 Full Name", False),
+                ("dob", "🔴 DOB (example: 01/31/1998)", False),
+                ("msn", "🔴 MSN", False),
+                ("address_history", "⚫ Address History (paste multi-line if needed)", False),
+                ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip'", True),
+            ]
+            data0 = {
+                "full_name": saved.get("full_name") or "",
+                "dob": saved.get("dob") or "",
+                "msn": saved.get("msn") or "",
+                "address_history": saved.get("address_history") or "",
+                "warning": saved.get("warning") or "",
+            }
+            qr_img = ""
+
+        context.user_data["admin_wizard"] = {
+            "order_code": order_code,
+            "steps": steps,
+            "idx": 0,
+            "data": data0,
+            "prompt_msg_id": None,
+            "qr_image_file_id": qr_img,
+        }
+
+        try:
+            await q.edit_message_text(
+                f"✏️ Edit & Resend started for {order_code}\n\n"
+                "Send the new values one-by-one.\n"
+                "Type the new value, or type 'skip' for optional fields."
+            )
+        except Exception:
+            pass
+
+        try:
+            await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
+        except Exception:
+            try:
+                await q.message.reply_text("❌ Failed to start edit wizard.")
+            except Exception:
+                pass
+        return
+
+    # ✅ ADMIN deliver wizard start
     if data.startswith("admin_deliver:"):
         if not _is_admin(user_id):
             try:
@@ -673,18 +769,33 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         is_esim = desc.lower().startswith("esim")
 
         if is_esim:
-            steps, data0, qr_img = _build_esim_steps(desc, saved=None)
+            email_auto = extract_email_from_description(desc).strip()
+            steps = []
+            if not email_auto:
+                steps.append(("email", "🟡 Customer Email (required)", False))
+            steps += [
+                ("phone_last4", "🟡 Phone last 4 digits (example: 0451)", False),
+                ("activation_code", "🟡 Activation Code", False),
+                ("iccid", "🟡 ICCID", False),
+                ("qr_link", "🟡 QR Code Link (optional) — type 'skip'", True),
+                ("qr_image", "🟡 Upload QR Image (optional) — send photo OR type 'skip'", True),
+            ]
         else:
-            steps, data0 = _build_msn_steps(saved=None)
-            qr_img = None
+            steps = [
+                ("full_name", "🔴 Full Name", False),
+                ("dob", "🔴 DOB (example: 01/31/1998)", False),
+                ("msn", "🔴 MSN", False),
+                ("address_history", "⚫ Address History (paste multi-line if needed)", False),
+                ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip'", True),
+            ]
 
         context.user_data["admin_wizard"] = {
             "order_code": order_code,
             "steps": steps,
             "idx": 0,
-            "data": data0,
+            "data": {},
             "prompt_msg_id": None,
-            "qr_image_file_id": qr_img,
+            "qr_image_file_id": None,
         }
 
         try:
@@ -705,71 +816,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # ADMIN edit/resend wizard
-    if data.startswith("admin_edit:"):
-        if not _is_admin(user_id):
-            try:
-                await q.edit_message_text("❌ Not authorized.")
-            except Exception:
-                pass
-            return
-
-        order_code = data.split(":", 1)[1].strip()
-        order = get_order_by_code(order_code)
-        if not order:
-            try:
-                await q.edit_message_text("❌ Order not found.")
-            except Exception:
-                pass
-            return
-
-        prev = get_delivery_payload_by_code(order_code) or {}
-        payload_json = (prev.get("delivery_payload_json") or "").strip()
-
-        try:
-            saved = json.loads(payload_json) if payload_json else {}
-            if not isinstance(saved, dict):
-                saved = {}
-        except Exception:
-            saved = {}
-
-        desc = (order.get("description") or "").strip()
-        is_esim = desc.lower().startswith("esim")
-
-        if is_esim:
-            steps, data0, qr_img = _build_esim_steps(desc, saved=saved)
-        else:
-            steps, data0 = _build_msn_steps(saved=saved)
-            qr_img = ""
-
-        context.user_data["admin_wizard"] = {
-            "order_code": order_code,
-            "steps": steps,
-            "idx": 0,
-            "data": data0,
-            "prompt_msg_id": None,
-            "qr_image_file_id": qr_img,
-        }
-
-        try:
-            await q.edit_message_text(
-                f"✏️ Edit & Resend started for {order_code}\n\n"
-                "Send the new values one-by-one.\n"
-                "Type the new value, or type 'skip' for optional fields."
-            )
-        except Exception:
-            pass
-
-        try:
-            await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
-        except Exception:
-            try:
-                await q.message.reply_text("❌ Failed to start edit wizard.")
-            except Exception:
-                pass
-        return
-
-    # BLOCK admin from user UI callbacks
+    # ✅ BLOCK admin from user UI callbacks
     if _is_admin(user_id):
         if (
             data.startswith("tool_")
@@ -848,6 +895,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders"}:
+        if text == "🧰 Tools":          
+            pending = expire_pending_order_if_needed(user_id)
+    if pending and pending.get("status") == "pending":
+        pay_status = (pending.get("pay_status") or "").lower().strip()
+        if pay_status in {"pending", "", "new"}:
+            await update.message.reply_text(
+                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                reply_markup=get_pending_order_menu(),
+            )
+            return
+
         for key in [
             "msn_step",
             "first_name",
@@ -864,6 +922,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "order_pending_description",
         ]:
             context.user_data.pop(key, None)
+            
+            
         return await handle_main_menu(update, context)
 
     # MSN flow
