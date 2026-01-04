@@ -610,11 +610,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not q or not q.data:
         return
     
-    await delete_tracked_message(
-    context,
-    update.callback_query.message.chat_id,
-    "pending_prompt_msg_id",
-)
+    await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
 
     data = (q.data or "").strip()
     user_id = q.from_user.id
@@ -858,10 +854,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pay_status = (pending.get("pay_status") or "").lower().strip()
             if pay_status in {"pending", "", "new"}:
                 try:
+                    await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
+                    
                     await q.edit_message_text(
                         f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                         reply_markup=get_pending_order_menu(),
                     )
+                    
+                    context.user_data["pending_prompt_msg_id"] = q.message.message_id
+                    
                 except Exception:
                     logger.exception("edit_message_text failed (ignored)")
                 return
@@ -893,7 +894,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
-    
     
     # ✅ delete pending warning on ANY new text / keypad press
     await delete_tracked_message(
