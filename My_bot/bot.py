@@ -505,7 +505,6 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
 
         mark_order_delivered(order_code)
         
-        
         # ✅ Save payload for later viewing/editing
         try:
             payload = dict(wiz.get("data") or {})
@@ -566,21 +565,32 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["admin_wizard"] = wiz
         await _admin_send_next_prompt(update, context)
         return True
-
-
-    # Skip handling
+    
+        # Skip handling
     if val.lower() == "skip":
         if optional:
             # qr_image skip: just move on; qr_image_file_id remains as-is
             if key == "qr_image":
                 wiz["idx"] = idx + 1
                 context.user_data["admin_wizard"] = wiz
+
+                # ✅ If editing single field, go straight back to review
+                if (wiz.get("edit_mode") or "").lower() == "single":
+                    await _admin_show_review(update, context)
+                    return True
+
                 await _admin_send_next_prompt(update, context)
                 return True
 
             wiz.setdefault("data", {})[key] = ""
             wiz["idx"] = idx + 1
             context.user_data["admin_wizard"] = wiz
+
+            # ✅ If editing single field, go straight back to review
+            if (wiz.get("edit_mode") or "").lower() == "single":
+                await _admin_show_review(update, context)
+                return True
+
             await _admin_send_next_prompt(update, context)
             return True
 
@@ -600,6 +610,11 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     wiz.setdefault("data", {})[key] = val
     wiz["idx"] = idx + 1
     context.user_data["admin_wizard"] = wiz
+
+    # ✅ If editing single field, go straight back to review
+    if (wiz.get("edit_mode") or "").lower() == "single":
+        await _admin_show_review(update, context)
+        return True
 
     await _admin_send_next_prompt(update, context)
     return True
@@ -927,6 +942,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "data": data0,
             "prompt_msg_id": None,
             "qr_image_file_id": qr_img,
+            "edit_mode": "single",
         }
 
         try:

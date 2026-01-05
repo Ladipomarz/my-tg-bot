@@ -148,7 +148,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
             lines.append(f"• {code} — {desc} (user {user_id})")
 
         # ✅ Option A: go straight to payload view in bot.py
-        open_btns = [InlineKeyboardButton(f"Open {c}", callback_data=f"admin_view:{c}") for c in codes]
+        open_btns = [InlineKeyboardButton(f"Delivered {c}", callback_data=f"admin_view:{c}") for c in codes]
         kb_rows: list[list[InlineKeyboardButton]] = []
         kb_rows.extend(_chunk_buttons(open_btns, per_row=2))
         kb_rows.extend(_admin_list_nav("admin_delivered", page, has_prev, has_next))
