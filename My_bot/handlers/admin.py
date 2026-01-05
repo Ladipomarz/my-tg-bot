@@ -93,14 +93,9 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
             )
             return
 
-        # Save “current list” so Prev/Next works in the order detail screen
         codes = [(o.get("order_code") or "").strip() for o in rows if (o.get("order_code") or "").strip()]
-        context.user_data["admin_paid_list"] = {
-            "page": page,
-            "codes": codes,
-        }
+        context.user_data["admin_paid_list"] = {"page": page, "codes": codes}
 
-        # Text list
         text_lines = ["🟡 Paid / To Deliver"]
         for o in rows:
             code = (o.get("order_code") or "").strip()
@@ -109,7 +104,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
             pay_status = (o.get("pay_status") or "").strip()
             text_lines.append(f"• {code} — {desc} (user {user_id}, {pay_status})")
 
-        # Buttons: OPEN (2 per row)
         open_btns = [InlineKeyboardButton(f"Open {c}", callback_data=f"admin_open_paid:{c}") for c in codes]
         kb_rows: list[list[InlineKeyboardButton]] = []
         kb_rows.extend(_chunk_buttons(open_btns, per_row=2))
@@ -119,7 +113,8 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         return
 
     # -------------------------
-    # DELIVERED LIST (paged) (optional open)
+    # DELIVERED LIST (paged)
+    # Open -> admin_view:<code> (handled in bot.py)
     # -------------------------
     if data.startswith("admin_delivered:"):
         try:
@@ -152,7 +147,8 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
             user_id = o.get("user_id")
             lines.append(f"• {code} — {desc} (user {user_id})")
 
-        open_btns = [InlineKeyboardButton(f"Open {c}", callback_data=f"admin_open_delivered:{c}") for c in codes]
+        # ✅ Option A: go straight to payload view in bot.py
+        open_btns = [InlineKeyboardButton(f"Open {c}", callback_data=f"admin_view:{c}") for c in codes]
         kb_rows: list[list[InlineKeyboardButton]] = []
         kb_rows.extend(_chunk_buttons(open_btns, per_row=2))
         kb_rows.extend(_admin_list_nav("admin_delivered", page, has_prev, has_next))
@@ -173,8 +169,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         except Exception:
             idx = 0
 
-        # You already have get_order_by_code in bot.py; easiest is to import it here if you want.
-        # If you prefer not to import, keep detail view minimal.
         from utils.db import get_order_by_code
         o = get_order_by_code(code) or {}
 
@@ -209,52 +203,5 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb_rows))
         return
 
-    # -------------------------
-    # OPEN ORDER (DELIVERED LIST VIEW) – no deliver button
-    # -------------------------
-    if data.startswith("admin_open_delivered:"):
-        kb_rows.insert(0, [InlineKeyboardButton("✏️ Edit & Resend", callback_data=f"admin_edit:{code}")])
-        code = data.split(":", 1)[1].strip()
-        lst = context.user_data.get("admin_delivered_list") or {}
-        codes = lst.get("codes") or []
-
-        try:
-            idx = codes.index(code)
-        except Exception:
-            idx = 0
-
-        from utils.db import get_order_by_code
-        o = get_order_by_code(code) or {}
-
-        desc = (o.get("description") or "Service").strip()
-        user_id = o.get("user_id")
-        delivered_at = o.get("delivered_at")
-        fname = (o.get("delivery_filename") or "").strip()
-
-        text = (
-            "📦 Delivered Order\n\n"
-            f"Order: {code}\n"
-            f"User: {user_id}\n"
-            f"Service: {desc}\n"
-            f"Delivered at: {delivered_at}\n"
-            f"File: {fname}\n"
-        )
-
-        nav_row = []
-        if idx > 0:
-            nav_row.append(InlineKeyboardButton("◀ Prev", callback_data=f"admin_open_delivered:{codes[idx-1]}"))
-        if idx < len(codes) - 1:
-            nav_row.append(InlineKeyboardButton("Next ▶", callback_data=f"admin_open_delivered:{codes[idx+1]}"))
-
-        kb_rows = []
-        if nav_row:
-            kb_rows.append(nav_row)
-        kb_rows.append([InlineKeyboardButton("⬅ Back to Delivered List", callback_data=f"admin_delivered:{lst.get('page', 0)}")])
-        kb_rows.append([InlineKeyboardButton("⬅ Admin Menu", callback_data="admin_menu")])
-
-        await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb_rows))
-        return
-
-    # Anything else: do nothing here (your bot.py handles admin_deliver wizard)
+    # Anything else: do nothing here (bot.py handles the rest)
     return
-
