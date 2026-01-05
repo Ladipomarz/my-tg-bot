@@ -7,6 +7,8 @@ import io
 import re
 import json
 
+
+
 from fastapi import FastAPI, Request, Response
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -355,13 +357,13 @@ async def _admin_show_review(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
 
 def _admin_edit_picker_kb(order_code: str, steps: list) -> InlineKeyboardMarkup:
-    buttons = []
+    rows = []
     for i, step in enumerate(steps):
         if isinstance(step, (tuple, list)) and len(step) >= 2:
             key = step[0]
-            buttons.append([InlineKeyboardButton(f"✏️ {key}", callback_data=f"admin_editset:{order_code}:{i}")])
-    buttons.append([InlineKeyboardButton("⬅ Back to Review", callback_data=f"admin_review:{order_code}")])
-    return InlineKeyboardMarkup(buttons)
+            rows.append([InlineKeyboardButton(f"✏️ Edit {key}", callback_data=f"admin_editset:{order_code}:{i}")])
+    rows.append([InlineKeyboardButton("⬅ Back", callback_data=f"admin_view:{order_code}")])
+    return InlineKeyboardMarkup(rows)
 
     
     
@@ -859,9 +861,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("✏️ Edit & Resend", callback_data=f"admin_edit:{order_code}")],
-            [InlineKeyboardButton("⬅ Back", callback_data="admin_menu")],
-        ])
+    [InlineKeyboardButton("✏️ Edit one field", callback_data=f"admin_editpick:{order_code}")],
+    [InlineKeyboardButton("✏️ Edit all & Resend", callback_data=f"admin_edit:{order_code}")],
+    [InlineKeyboardButton("⬅ Back", callback_data="admin_menu")],
+])
+
 
         try:
             await q.edit_message_text(summary, reply_markup=kb)
@@ -887,31 +891,57 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await _admin_finish_delivery(Update(update.update_id, message=q.message), context)
         return
+    
 
-    # ✅ ADMIN edit field picker
+      # ✅ Admin: pick a field to edit (single-field edit)
     if data.startswith("admin_editpick:"):
         if not _is_admin(user_id):
             return
         order_code = data.split(":", 1)[1].strip()
-        wiz = context.user_data.get("admin_wizard") or {}
-        if (wiz.get("order_code") or "").strip() != order_code:
-            await q.message.reply_text("❌ No active wizard for this order.")
-            return
 
-        steps = wiz.get("steps") or []
+        # Build steps from saved payload + description
+        order = get_order_by_code(order_code) or {}
+        desc = (order.get("description") or "").strip()
+        is_esim = desc.lower().startswith("esim")
+
+        prev = get_delivery_payload_by_code(order_code) or {}
+        payload_json = (prev.get("delivery_payload_json") or "").strip()
+        try:
+            saved = json.loads(payload_json) if payload_json else {}
+            if not isinstance(saved, dict):
+                saved = {}
+        except Exception:
+            saved = {}
+
+        if is_esim:
+            steps, data0, qr_img = _build_esim_steps(desc, saved)
+        else:
+            steps, data0 = _build_msn_steps(saved)
+            qr_img = ""
+
+        # Store wizard but do NOT start from idx 0 — we will jump on admin_editset
+        context.user_data["admin_wizard"] = {
+            "order_code": order_code,
+            "steps": steps,
+            "idx": 0,
+            "data": data0,
+            "prompt_msg_id": None,
+            "qr_image_file_id": qr_img,
+        }
+
         try:
             await q.edit_message_text(
-                "Select a field to edit:",
+                f"Select a field to edit for {order_code}:",
                 reply_markup=_admin_edit_picker_kb(order_code, steps),
             )
         except Exception:
             await q.message.reply_text(
-                "Select a field to edit:",
+                f"Select a field to edit for {order_code}:",
                 reply_markup=_admin_edit_picker_kb(order_code, steps),
             )
         return
 
-    # ✅ ADMIN edit set field
+    # ✅ Admin: jump to that field index and prompt for new value
     if data.startswith("admin_editset:"):
         if not _is_admin(user_id):
             return
@@ -919,19 +949,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             _pfx, order_code, idx_s = data.split(":", 2)
             new_idx = int(idx_s)
         except Exception:
-            await q.message.reply_text("❌ Invalid edit selection.")
+            await q.message.reply_text("❌ Invalid field selection.")
             return
 
         wiz = context.user_data.get("admin_wizard") or {}
-        if (wiz.get("order_code") or "").strip() != order_code.strip():
-            await q.message.reply_text("❌ No active wizard for this order.")
+        if (wiz.get("order_code") or "").strip() != order_code:
+            await q.message.reply_text("❌ No active wizard for this order. Tap Edit again.")
             return
 
         wiz["idx"] = max(0, new_idx)
-        wiz["stage"] = "input"
         context.user_data["admin_wizard"] = wiz
 
-        await q.message.reply_text("✏️ Send the new value for this field:")
+        await q.message.reply_text("✏️ Send the new value:")
         await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
         return
 
@@ -945,7 +974,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
-
 
     # ✅ ADMIN deliver wizard start
     if data.startswith("admin_deliver:"):
