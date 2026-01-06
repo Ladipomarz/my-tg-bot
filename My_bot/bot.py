@@ -373,6 +373,14 @@ async def _admin_show_review(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     summary = _wizard_build_summary(order_code, is_esim, data, qr_img)
     await update.message.reply_text(summary, reply_markup=_admin_review_kb(order_code))
+    
+    if is_esim:
+       email_auto = extract_email_from_description(desc).strip()
+    if email_auto and not (data.get("email") or "").strip():
+        data["email"] = email_auto
+        wiz["data"] = data
+        context.user_data["admin_wizard"] = wiz
+
 
 
 def _admin_edit_picker_kb(order_code: str, steps: list) -> InlineKeyboardMarkup:
@@ -1053,12 +1061,13 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 ("address_history", "⚫ Address History (paste multi-line if needed)", False),
                 ("warning", "⚠️ Extra Warning/Note (optional) — type 'skip'", True),
             ]
-
+            
+        email_auto = extract_email_from_description(desc).strip()
         context.user_data["admin_wizard"] = {
             "order_code": order_code,
             "steps": steps,
             "idx": 0,
-            "data": {},
+            "data": {"email": email_auto} if (is_esim and email_auto) else {},
             "prompt_msg_id": None,
             "qr_image_file_id": None,
             "edit_mode": "all",
