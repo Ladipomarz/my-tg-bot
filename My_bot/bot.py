@@ -365,6 +365,31 @@ def _admin_edit_picker_kb(order_code: str, steps: list) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton("⬅ Back", callback_data=f"admin_view:{order_code}")])
     return InlineKeyboardMarkup(rows)
 
+#test
+async def push_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if not _is_admin(uid):
+        return
+
+    if not context.args:
+        await update.message.reply_text("Usage: /push_order ORD-XXXXX")
+        return
+
+    order_code = " ".join(context.args).strip()
+    order = get_order_by_code(order_code)
+    if not order:
+        await update.message.reply_text(f"❌ Order not found: {order_code}")
+        return
+
+    # Optional: bypass payment check just for testing
+    try:
+        await _notify_admin_new_paid_order(order)
+        await update.message.reply_text(f"✅ Sent order {order_code} to admin notify flow.")
+    except Exception:
+        logger.exception("push_order failed")
+        await update.message.reply_text("❌ Failed to push order.")
+
+
     
     
     
@@ -509,7 +534,7 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
         try:
             payload = dict(wiz.get("data") or {})
             payload["qr_image_file_id"] = wiz.get("qr_image_file_id") or ""
-            save_delivery_meta_by_code(order_code, delivery_payload_json=json.dumps(payload))
+            save_delivery_meta_by_code(order_code,payload=payload,delivered_message_id=sent.message_id,)
         except Exception:
             logger.exception("Failed to save delivery payload (ignored)")
 
@@ -764,16 +789,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             return
+        
+        saved = get_delivery_payload_by_code(order_code) or {}
 
-        prev = get_delivery_payload_by_code(order_code) or {}
-        payload_json = (prev.get("delivery_payload_json") or "").strip()
 
-        try:
-            saved = json.loads(payload_json) if payload_json else {}
-            if not isinstance(saved, dict):
-                saved = {}
-        except Exception:
-            saved = {}
 
         desc = (order.get("description") or "").strip()
         is_esim = desc.lower().startswith("esim")
@@ -857,16 +876,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order = get_order_by_code(order_code) or {}
         desc = (order.get("description") or "").strip()
         is_esim = desc.lower().startswith("esim")
+        
+        saved = get_delivery_payload_by_code(order_code) or {}
 
-        prev = get_delivery_payload_by_code(order_code) or {}
-        payload_json = (prev.get("delivery_payload_json") or "").strip()
-
-        try:
-            saved = json.loads(payload_json) if payload_json else {}
-            if not isinstance(saved, dict):
-                saved = {}
-        except Exception:
-            saved = {}
 
         summary = _wizard_build_summary(
             order_code=order_code,
@@ -918,16 +930,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         order = get_order_by_code(order_code) or {}
         desc = (order.get("description") or "").strip()
         is_esim = desc.lower().startswith("esim")
-
-        prev = get_delivery_payload_by_code(order_code) or {}
-        payload_json = (prev.get("delivery_payload_json") or "").strip()
-        try:
-            saved = json.loads(payload_json) if payload_json else {}
-            if not isinstance(saved, dict):
-                saved = {}
-        except Exception:
-            saved = {}
-
+        
+        saved = get_delivery_payload_by_code(order_code) or {}
+        
         if is_esim:
             steps, data0, qr_img = _build_esim_steps(desc, saved)
         else:
@@ -1271,6 +1276,8 @@ tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 
 tg_app.add_handler(CallbackQueryHandler(callback_router))
+tg_app.add_handler(CommandHandler("push_order", push_order))
+
 
 # IMPORTANT: media before text (QR upload wizard)
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
