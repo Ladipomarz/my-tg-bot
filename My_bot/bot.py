@@ -712,6 +712,26 @@ def _build_msn_steps(saved: dict | None = None):
 # CALLBACK ROUTER
 # ------------------------------
 
+
+async def debug_payload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not _is_admin(update.effective_user.id):
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /debug_payload ORD-XXXXX")
+        return
+
+    code = context.args[0].strip()
+    payload = get_delivery_payload_by_code(code)
+
+    if not payload:
+        await update.message.reply_text(f"❌ No payload stored for {code}")
+        return
+
+    await update.message.reply_text(
+        f"✅ Payload stored for {code}\nKeys: {list(payload.keys())}\n\n{payload}"
+    )
+
+
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
@@ -833,6 +853,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
         return
+    
+    
+    
+    
         # ✅ ADMIN review stage
     if data.startswith("admin_review:"):
         if not _is_admin(user_id):
@@ -873,27 +897,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.message.reply_text(summary, reply_markup=kb)
         return
     
-    
-    async def debug_payload(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        
-      if not _is_admin(update.effective_user.id):
-        return
-    if not context.args:
-        await update.message.reply_text("Usage: /debug_payload ORD-XXXXX")
-        return
-
-    code = context.args[0].strip()
-    payload = get_delivery_payload_by_code(code)
-
-    if not payload:
-        await update.message.reply_text(f"❌ No payload stored for {code}")
-        return
-
-    await update.message.reply_text(
-        f"✅ Payload stored for {code}\nKeys: {list(payload.keys())}\n\n{payload}"
-    )
-
-
 
     # ✅ ADMIN confirm & deliver
     if data.startswith("admin_confirm:"):
