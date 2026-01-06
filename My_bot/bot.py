@@ -368,11 +368,16 @@ def _admin_edit_picker_kb(order_code: str, steps: list) -> InlineKeyboardMarkup:
 #test
 async def push_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
+
+    # ✅ Always reply so you know it’s running
+    await update.message.reply_text(f"push_order called. uid={uid}")
+
     if not _is_admin(uid):
+        await update.message.reply_text("❌ Not admin. Check ADMIN_IDS env contains your Telegram user id.")
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: /push_order ORD-870795")
+        await update.message.reply_text("Usage: /push_order ORD-XXXXX")
         return
 
     order_code = " ".join(context.args).strip()
@@ -381,17 +386,20 @@ async def push_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Order not found: {order_code}")
         return
 
-    # Optional: bypass payment check just for testing
+    # ✅ Force it to look like paid for testing (optional but recommended)
+    try:
+        update_payment_status_by_order_code(order_code, pay_status="detected", pay_txn_id="TEST")
+    except Exception:
+        logger.exception("Failed to mark detected (ignored)")
+
     try:
         await _notify_admin_new_paid_order(order)
-        await update.message.reply_text(f"✅ Sent order {order_code} to admin notify flow.")
+        await update.message.reply_text(f"✅ Pushed {order_code} to admin(s).")
     except Exception:
         logger.exception("push_order failed")
-        await update.message.reply_text("❌ Failed to push order.")
+        await update.message.reply_text("❌ Failed to push order (see logs).")
 
 
-    
-    
     
 # ------------------------------
 # ADMIN WIZARD HELPERS
