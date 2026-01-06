@@ -365,41 +365,6 @@ def _admin_edit_picker_kb(order_code: str, steps: list) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton("⬅ Back", callback_data=f"admin_view:{order_code}")])
     return InlineKeyboardMarkup(rows)
 
-#test
-async def push_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-
-    # ✅ Always reply so you know it’s running
-    await update.message.reply_text(f"push_order called. uid={uid}")
-
-    if not _is_admin(uid):
-        await update.message.reply_text("❌ Not admin. Check ADMIN_IDS env contains your Telegram user id.")
-        return
-
-    if not context.args:
-        await update.message.reply_text("Usage: /push_order ORD-XXXXX")
-        return
-
-    order_code = " ".join(context.args).strip()
-    order = get_order_by_code(order_code)
-    if not order:
-        await update.message.reply_text(f"❌ Order not found: {order_code}")
-        return
-
-    # ✅ Force it to look like paid for testing (optional but recommended)
-    try:
-        update_payment_status_by_order_code(order_code, pay_status="detected", pay_txn_id="TEST")
-    except Exception:
-        logger.exception("Failed to mark detected (ignored)")
-
-    try:
-        await _notify_admin_new_paid_order(order)
-        await update.message.reply_text(f"✅ Pushed {order_code} to admin(s).")
-    except Exception:
-        logger.exception("push_order failed")
-        await update.message.reply_text("❌ Failed to push order (see logs).")
-
-
     
 # ------------------------------
 # ADMIN WIZARD HELPERS
@@ -907,6 +872,27 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             await q.message.reply_text(summary, reply_markup=kb)
         return
+    
+    
+    async def debug_payload(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        
+      if not _is_admin(update.effective_user.id):
+        return
+    if not context.args:
+        await update.message.reply_text("Usage: /debug_payload ORD-XXXXX")
+        return
+
+    code = context.args[0].strip()
+    payload = get_delivery_payload_by_code(code)
+
+    if not payload:
+        await update.message.reply_text(f"❌ No payload stored for {code}")
+        return
+
+    await update.message.reply_text(
+        f"✅ Payload stored for {code}\nKeys: {list(payload.keys())}\n\n{payload}"
+    )
+
 
 
     # ✅ ADMIN confirm & deliver
@@ -1282,10 +1268,9 @@ async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
+tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 
 tg_app.add_handler(CallbackQueryHandler(callback_router))
-tg_app.add_handler(CommandHandler("push_order", push_order))
-
 
 # IMPORTANT: media before text (QR upload wizard)
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
