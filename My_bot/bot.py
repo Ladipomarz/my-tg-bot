@@ -7,8 +7,6 @@ import io
 import re
 import json
 
-
-
 from fastapi import FastAPI, Request, Response
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -301,7 +299,11 @@ async def send_esim_processing_notice(context: ContextTypes.DEFAULT_TYPE):
         "do not reach out to support until 24 hours is elapsed and package not received"
     )
     await context.bot.send_message(chat_id=chat_id, text=msg)
-    
+
+
+# ------------------------------
+# ADMIN REVIEW / EDIT HELPERS
+# ------------------------------
 def _wizard_build_summary(order_code: str, is_esim: bool, data: dict, qr_image_file_id: str | None) -> str:
     lines = [f"🧾 Review for {order_code}", ""]
     if is_esim:
@@ -328,9 +330,27 @@ def _wizard_build_summary(order_code: str, is_esim: bool, data: dict, qr_image_f
 def _admin_review_kb(order_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("✅ Confirm & Deliver", callback_data=f"admin_confirm:{order_code}")],
-        [InlineKeyboardButton("✏️ Edit a field", callback_data=f"admin_editpick:{order_code}")],
+        [InlineKeyboardButton("✏️ Edit one field", callback_data=f"admin_editpick:{order_code}")],
+        [InlineKeyboardButton("✏️ Edit all & Resend", callback_data=f"admin_edit:{order_code}")],
         [InlineKeyboardButton("❌ Cancel", callback_data=f"admin_cancelwiz:{order_code}")],
     ])
+
+
+async def _admin_save_wiz_payload(context: ContextTypes.DEFAULT_TYPE):
+    """
+    Persist current wizard data to DB so delivered view shows latest values
+    (needed for single-field edit flow).
+    """
+    wiz = context.user_data.get("admin_wizard") or {}
+    order_code = (wiz.get("order_code") or "").strip()
+    if not order_code:
+        return
+    try:
+        payload = dict(wiz.get("data") or {})
+        payload["qr_image_file_id"] = wiz.get("qr_image_file_id") or ""
+        save_delivery_meta_by_code(order_code, payload=payload)
+    except Exception:
+        logger.exception("Failed to save wizard payload (ignored)")
 
 
 async def _admin_show_review(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -348,7 +368,6 @@ async def _admin_show_review(update: Update, context: ContextTypes.DEFAULT_TYPE)
     data = wiz.get("data") or {}
     qr_img = wiz.get("qr_image_file_id") or ""
 
-    # mark wizard stage
     wiz["stage"] = "review"
     context.user_data["admin_wizard"] = wiz
 
@@ -365,7 +384,7 @@ def _admin_edit_picker_kb(order_code: str, steps: list) -> InlineKeyboardMarkup:
     rows.append([InlineKeyboardButton("⬅ Back", callback_data=f"admin_view:{order_code}")])
     return InlineKeyboardMarkup(rows)
 
-    
+
 # ------------------------------
 # ADMIN WIZARD HELPERS
 # ------------------------------
@@ -374,7 +393,7 @@ async def _admin_send_next_prompt(update: Update, context: ContextTypes.DEFAULT_
     steps = wiz.get("steps") or []
     idx = int(wiz.get("idx") or 0)
 
-    # ✅ After last step → REVIEW (NOT deliver immediately)
+    # After last step -> REVIEW (NOT deliver immediately)
     if idx >= len(steps):
         await _admin_show_review(update, context)
         return
@@ -392,7 +411,6 @@ async def _admin_send_next_prompt(update: Update, context: ContextTypes.DEFAULT_
     wiz["prompt_msg_id"] = prompt.message_id
     wiz["stage"] = "input"
     context.user_data["admin_wizard"] = wiz
-
 
 
 async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -426,7 +444,6 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
             plan_name, plan_days = _parse_plan_days(desc)
             expires = delivered_utc + datetime.timedelta(days=plan_days)
 
-            # EMAIL: auto from description, but NOT optional overall
             email = extract_email_from_description(desc).strip() or (data.get("email") or "").strip()
             if not email:
                 raise ValueError("Missing required email for eSIM delivery")
@@ -457,7 +474,6 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
             if file_id:
                 save_delivery_file_by_code(order_code, file_id=file_id, filename="service.pdf")
 
-            # Optional QR image (sent separately)
             qr_img_id = wiz.get("qr_image_file_id")
             if qr_img_id:
                 try:
@@ -502,12 +518,16 @@ async def _admin_finish_delivery(update: Update, context: ContextTypes.DEFAULT_T
                 save_delivery_file_by_code(order_code, file_id=file_id, filename="service.txt")
 
         mark_order_delivered(order_code)
-        
-        # ✅ Save payload for later viewing/editing
+
+        # Save payload for later viewing/editing
         try:
             payload = dict(wiz.get("data") or {})
             payload["qr_image_file_id"] = wiz.get("qr_image_file_id") or ""
-            save_delivery_meta_by_code(order_code,payload=payload,delivered_message_id=sent.message_id,)
+            save_delivery_meta_by_code(
+                order_code,
+                payload=payload,
+                delivered_message_id=sent.message_id,
+            )
         except Exception:
             logger.exception("Failed to save delivery payload (ignored)")
 
@@ -563,17 +583,16 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
         context.user_data["admin_wizard"] = wiz
         await _admin_send_next_prompt(update, context)
         return True
-    
-        # Skip handling
-    if val.lower() == "skip":
+
+    # Skip handling
+    if low == "skip":
         if optional:
-            # qr_image skip: just move on; qr_image_file_id remains as-is
             if key == "qr_image":
                 wiz["idx"] = idx + 1
                 context.user_data["admin_wizard"] = wiz
 
-                # ✅ If editing single field, go straight back to review
                 if (wiz.get("edit_mode") or "").lower() == "single":
+                    await _admin_save_wiz_payload(context)
                     await _admin_show_review(update, context)
                     return True
 
@@ -584,8 +603,8 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
             wiz["idx"] = idx + 1
             context.user_data["admin_wizard"] = wiz
 
-            # ✅ If editing single field, go straight back to review
             if (wiz.get("edit_mode") or "").lower() == "single":
+                await _admin_save_wiz_payload(context)
                 await _admin_show_review(update, context)
                 return True
 
@@ -609,8 +628,9 @@ async def _admin_capture_text(update: Update, context: ContextTypes.DEFAULT_TYPE
     wiz["idx"] = idx + 1
     context.user_data["admin_wizard"] = wiz
 
-    # ✅ If editing single field, go straight back to review
+    # If editing single field, save -> review
     if (wiz.get("edit_mode") or "").lower() == "single":
+        await _admin_save_wiz_payload(context)
         await _admin_show_review(update, context)
         return True
 
@@ -653,16 +673,16 @@ async def media_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     wiz["idx"] = idx + 1
     context.user_data["admin_wizard"] = wiz
 
+    # If single edit, save -> review
+    if (wiz.get("edit_mode") or "").lower() == "single":
+        await _admin_save_wiz_payload(context)
+        await _admin_show_review(update, context)
+        return
+
     await _admin_send_next_prompt(update, context)
 
 
 def _build_esim_steps(desc: str, saved: dict | None = None):
-    """
-    Email is required overall:
-      - auto from description if present
-      - otherwise wizard asks for email (NOT optional)
-    qr_link and qr_image are optional.
-    """
     saved = saved or {}
     email_auto = extract_email_from_description(desc).strip()
 
@@ -711,8 +731,6 @@ def _build_msn_steps(saved: dict | None = None):
 # ------------------------------
 # CALLBACK ROUTER
 # ------------------------------
-
-
 async def debug_payload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _is_admin(update.effective_user.id):
         return
@@ -736,7 +754,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     if not q or not q.data:
         return
-    
+
     await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
 
     data = (q.data or "").strip()
@@ -761,11 +779,134 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
         return
 
-    # ✅ ADMIN list menu + paging
+    # ADMIN list menu + paging (admin.py)
     if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:"):
         return await admin_callback(update, context, ADMIN_IDS)
 
-    # ✅ ADMIN edit/resend delivered (wizard with saved fields)
+    # ✅ Admin view delivered payload (PREVIEW)
+    if data.startswith("admin_view:"):
+        if not _is_admin(user_id):
+            return
+
+        order_code = data.split(":", 1)[1].strip()
+        order = get_order_by_code(order_code) or {}
+        desc = (order.get("description") or "").strip()
+        is_esim = desc.lower().startswith("esim")
+
+        saved = get_delivery_payload_by_code(order_code) or {}
+
+        summary = _wizard_build_summary(
+            order_code=order_code,
+            is_esim=is_esim,
+            data=saved,
+            qr_image_file_id=(saved.get("qr_image_file_id") or ""),
+        )
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✏️ Edit one field", callback_data=f"admin_editpick:{order_code}")],
+            [InlineKeyboardButton("✏️ Edit all & Resend", callback_data=f"admin_edit:{order_code}")],
+            [InlineKeyboardButton("⬅ Back", callback_data="admin_menu")],
+        ])
+
+        try:
+            await q.edit_message_text(summary, reply_markup=kb)
+        except Exception:
+            await q.message.reply_text(summary, reply_markup=kb)
+        return
+
+    # ✅ ADMIN confirm & deliver
+    if data.startswith("admin_confirm:"):
+        if not _is_admin(user_id):
+            return
+        order_code = data.split(":", 1)[1].strip()
+        wiz = context.user_data.get("admin_wizard") or {}
+        if (wiz.get("order_code") or "").strip() != order_code:
+            await q.message.reply_text("❌ No active wizard for this order.")
+            return
+
+        try:
+            await q.edit_message_text(f"✅ Delivering {order_code}…")
+        except Exception:
+            pass
+
+        await _admin_finish_delivery(Update(update.update_id, message=q.message), context)
+        return
+
+    # ✅ Admin: pick a field to edit (single-field edit)
+    if data.startswith("admin_editpick:"):
+        if not _is_admin(user_id):
+            return
+        order_code = data.split(":", 1)[1].strip()
+
+        order = get_order_by_code(order_code) or {}
+        desc = (order.get("description") or "").strip()
+        is_esim = desc.lower().startswith("esim")
+
+        saved = get_delivery_payload_by_code(order_code) or {}
+
+        if is_esim:
+            steps, data0, qr_img = _build_esim_steps(desc, saved)
+        else:
+            steps, data0 = _build_msn_steps(saved)
+            qr_img = ""
+
+        context.user_data["admin_wizard"] = {
+            "order_code": order_code,
+            "steps": steps,
+            "idx": 0,
+            "data": data0,
+            "prompt_msg_id": None,
+            "qr_image_file_id": qr_img,
+            "edit_mode": "single",
+        }
+
+        try:
+            await q.edit_message_text(
+                f"Select a field to edit for {order_code}:",
+                reply_markup=_admin_edit_picker_kb(order_code, steps),
+            )
+        except Exception:
+            await q.message.reply_text(
+                f"Select a field to edit for {order_code}:",
+                reply_markup=_admin_edit_picker_kb(order_code, steps),
+            )
+        return
+
+    # ✅ Admin: jump to that field index and prompt for new value
+    if data.startswith("admin_editset:"):
+        if not _is_admin(user_id):
+            return
+        try:
+            _pfx, order_code, idx_s = data.split(":", 2)
+            new_idx = int(idx_s)
+        except Exception:
+            await q.message.reply_text("❌ Invalid field selection.")
+            return
+
+        wiz = context.user_data.get("admin_wizard") or {}
+        if (wiz.get("order_code") or "").strip() != order_code:
+            await q.message.reply_text("❌ No active wizard for this order. Tap Edit again.")
+            return
+
+        wiz["idx"] = max(0, new_idx)
+        context.user_data["admin_wizard"] = wiz
+
+        # IMPORTANT: only prompt once (no extra "send value" message)
+        await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
+        return
+
+    # ✅ ADMIN cancel wizard
+    if data.startswith("admin_cancelwiz:"):
+        if not _is_admin(user_id):
+            return
+        context.user_data.pop("admin_wizard", None)
+        try:
+            await q.edit_message_text("✅ Wizard cancelled.")
+        except Exception:
+            pass
+        return
+
+    # ✅ ADMIN edit/resend delivered (edit ALL fields)
     if data.startswith("admin_edit:"):
         if not _is_admin(user_id):
             try:
@@ -782,10 +923,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
             return
-        
+
         saved = get_delivery_payload_by_code(order_code) or {}
-
-
 
         desc = (order.get("description") or "").strip()
         is_esim = desc.lower().startswith("esim")
@@ -834,13 +973,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "data": data0,
             "prompt_msg_id": None,
             "qr_image_file_id": qr_img,
+            "edit_mode": "all",
         }
 
         try:
             await q.edit_message_text(
                 f"✏️ Edit & Resend started for {order_code}\n\n"
                 "Send the new values one-by-one.\n"
-                "Type the new value, or type 'skip' for optional fields."
+                "Type the new value, or type 'skip' for optional fields.\n"
+                "Type 'back' to go previous field, 'cancel' to stop."
             )
         except Exception:
             pass
@@ -852,145 +993,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await q.message.reply_text("❌ Failed to start edit wizard.")
             except Exception:
                 pass
-        return
-    
-    
-    
-    
-        # ✅ ADMIN review stage
-    if data.startswith("admin_review:"):
-        if not _is_admin(user_id):
-            return
-        await _admin_show_review(Update(update.update_id, message=q.message), context)
-        return
-    
-        # ✅ Admin view delivered payload
-    if data.startswith("admin_view:"):
-        if not _is_admin(user_id):
-            return
-
-        order_code = data.split(":", 1)[1].strip()
-        order = get_order_by_code(order_code) or {}
-        desc = (order.get("description") or "").strip()
-        is_esim = desc.lower().startswith("esim")
-        
-        saved = get_delivery_payload_by_code(order_code) or {}
-
-
-        summary = _wizard_build_summary(
-            order_code=order_code,
-            is_esim=is_esim,
-            data=saved,
-            qr_image_file_id=(saved.get("qr_image_file_id") or ""),
-        )
-
-        kb = InlineKeyboardMarkup([
-    [InlineKeyboardButton("✏️ Edit one field", callback_data=f"admin_editpick:{order_code}")],
-    [InlineKeyboardButton("✏️ Edit all & Resend", callback_data=f"admin_edit:{order_code}")],
-    [InlineKeyboardButton("⬅ Back", callback_data="admin_menu")],
-])
-
-
-        try:
-            await q.edit_message_text(summary, reply_markup=kb)
-        except Exception:
-            await q.message.reply_text(summary, reply_markup=kb)
-        return
-    
-
-    # ✅ ADMIN confirm & deliver
-    if data.startswith("admin_confirm:"):
-        if not _is_admin(user_id):
-            return
-        order_code = data.split(":", 1)[1].strip()
-        wiz = context.user_data.get("admin_wizard") or {}
-        if (wiz.get("order_code") or "").strip() != order_code:
-            await q.message.reply_text("❌ No active wizard for this order.")
-            return
-
-        try:
-            await q.edit_message_text(f"✅ Delivering {order_code}…")
-        except Exception:
-            pass
-
-        await _admin_finish_delivery(Update(update.update_id, message=q.message), context)
-        return
-    
-
-      # ✅ Admin: pick a field to edit (single-field edit)
-    if data.startswith("admin_editpick:"):
-        if not _is_admin(user_id):
-            return
-        order_code = data.split(":", 1)[1].strip()
-
-        # Build steps from saved payload + description
-        order = get_order_by_code(order_code) or {}
-        desc = (order.get("description") or "").strip()
-        is_esim = desc.lower().startswith("esim")
-        
-        saved = get_delivery_payload_by_code(order_code) or {}
-        
-        if is_esim:
-            steps, data0, qr_img = _build_esim_steps(desc, saved)
-        else:
-            steps, data0 = _build_msn_steps(saved)
-            qr_img = ""
-
-        # Store wizard but do NOT start from idx 0 — we will jump on admin_editset
-        context.user_data["admin_wizard"] = {
-            "order_code": order_code,
-            "steps": steps,
-            "idx": 0,
-            "data": data0,
-            "prompt_msg_id": None,
-            "qr_image_file_id": qr_img,
-            "edit_mode": "single",
-        }
-
-        try:
-            await q.edit_message_text(
-                f"Select a field to edit for {order_code}:",
-                reply_markup=_admin_edit_picker_kb(order_code, steps),
-            )
-        except Exception:
-            await q.message.reply_text(
-                f"Select a field to edit for {order_code}:",
-                reply_markup=_admin_edit_picker_kb(order_code, steps),
-            )
-        return
-
-    # ✅ Admin: jump to that field index and prompt for new value
-    if data.startswith("admin_editset:"):
-        if not _is_admin(user_id):
-            return
-        try:
-            _pfx, order_code, idx_s = data.split(":", 2)
-            new_idx = int(idx_s)
-        except Exception:
-            await q.message.reply_text("❌ Invalid field selection.")
-            return
-
-        wiz = context.user_data.get("admin_wizard") or {}
-        if (wiz.get("order_code") or "").strip() != order_code:
-            await q.message.reply_text("❌ No active wizard for this order. Tap Edit again.")
-            return
-
-        wiz["idx"] = max(0, new_idx)
-        context.user_data["admin_wizard"] = wiz
-
-        await q.message.reply_text("✏️ Send the new value:")
-        await _admin_send_next_prompt(Update(update.update_id, message=q.message), context)
-        return
-
-    # ✅ ADMIN cancel wizard
-    if data.startswith("admin_cancelwiz:"):
-        if not _is_admin(user_id):
-            return
-        context.user_data.pop("admin_wizard", None)
-        try:
-            await q.edit_message_text("✅ Wizard cancelled.")
-        except Exception:
-            pass
         return
 
     # ✅ ADMIN deliver wizard start
@@ -1059,6 +1061,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "data": {},
             "prompt_msg_id": None,
             "qr_image_file_id": None,
+            "edit_mode": "all",
         }
 
         try:
@@ -1115,14 +1118,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if pay_status in {"pending", "", "new"}:
                 try:
                     await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
-                    
+
                     await q.edit_message_text(
                         f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                         reply_markup=get_pending_order_menu(),
                     )
-                    
+
                     context.user_data["pending_prompt_msg_id"] = q.message.message_id
-                    
+
                 except Exception:
                     logger.exception("edit_message_text failed (ignored)")
                 return
@@ -1154,59 +1157,46 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
-    
-    # ✅ delete pending warning on ANY new text / keypad press
+
+    # delete pending warning on ANY new text / keypad press
     await delete_tracked_message(
-    context,
-    update.effective_chat.id,
-    "pending_prompt_msg_id",
-)
-
-
+        context,
+        update.effective_chat.id,
+        "pending_prompt_msg_id",
+    )
 
     # Admin-only: no user menus
     if _is_admin(user_id) and text in {"🧰 Tools", "🛒 Orders"}:
         context.user_data.pop("admin_wizard", None)
         await update.message.reply_text("Admin menu: use /admin")
         return
-    
-        # User main keyboard
+
+    # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders"}:
+        pending = None  # prevent UnboundLocalError no matter what
 
-        pending = None  # ✅ prevent UnboundLocalError no matter what
-
-        # ✅ if Tools clicked and there is a pending order, redirect to pending page
+        # if Tools clicked and there is a pending order, redirect to pending page
         if text == "🧰 Tools":
             pending = expire_pending_order_if_needed(user_id)
 
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
             if pay_status in {"pending", "", "new"}:
-                
-                
                 await delete_tracked_message(
-                  context,
-                  update.effective_chat.id,
-                  "pending_prompt_msg_id",
-                  
-                 )
-                
+                    context,
+                    update.effective_chat.id,
+                    "pending_prompt_msg_id",
+                )
 
-                msg = await update.message.reply_text(                    
+                msg = await update.message.reply_text(
                     f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                     reply_markup=get_pending_order_menu(),
                 )
-                
-                    
 
-
-                # track this pending warning so it can be deleted later
                 if msg:
-                    
                     context.user_data["pending_prompt_msg_id"] = msg.message_id
                 return
-                
-                
+
         for key in [
             "msn_step",
             "first_name",
@@ -1226,7 +1216,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return await handle_main_menu(update, context)
 
-
     # MSN flow
     if context.user_data.get("msn_step"):
         try:
@@ -1241,7 +1230,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # eSIM email flow (user flow) - required by your handlers
+    # eSIM email flow (user flow)
     if context.user_data.get("esim_step") == "email":
         try:
             await handle_esim_email_input(update, context)
