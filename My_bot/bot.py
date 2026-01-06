@@ -372,7 +372,7 @@ async def push_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if not context.args:
-        await update.message.reply_text("Usage: /push_order ORD-XXXXX")
+        await update.message.reply_text("Usage: /push_order ORD-870795")
         return
 
     order_code = " ".join(context.args).strip()
