@@ -13,6 +13,7 @@ from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
 
+
 from utils.validator import (
     is_valid_email,
     is_valid_name,
@@ -283,6 +284,13 @@ async def show_otp_menu(update: Update, context: CallbackContext):
     
     # Send the OTP menu
     update.callback_query.edit_message_text("Please choose the verification type:", reply_markup=reply_markup)
+    
+async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Opens the Tools menu from the ReplyKeyboard 'Tools' button.
+    This is used by handlers/start.py.
+    """
+    await update.message.reply_text("Tools:", reply_markup=get_tools_inline())
 
     
     
