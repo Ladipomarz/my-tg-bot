@@ -1,5 +1,7 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+from telegram.ext import CallbackContext
+from telegram import Update
 
 from menus.tools_menu import (
     get_tools_inline,
@@ -109,6 +111,7 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
+    query.answer()
     if not query or not query.data:
         return
 
@@ -244,6 +247,32 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_msn_services_menu(),
         )
         return
+    
+# Existing callback handler function for tools
+def tools_callback(update: Update, context: CallbackContext):
+    query = update.callback_query
+    query.answer()  # Acknowledge the button click
+
+    if query.data == "tool_otp":
+        # Show OTP verification menu
+        show_otp_menu(update, context)
+    # Add your other tool handlers here...
+        
+def show_otp_menu(update: Update, context: CallbackContext):
+    # Create the OTP Verification menu options
+    keyboard = [
+        [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa")],
+        [InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
+        [InlineKeyboardButton("⬅ Back", callback_data="tool_msn_services")]  # Change back button to the appropriate menu
+    ]
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send the OTP menu
+    update.callback_query.edit_message_text("Please choose the verification type:", reply_markup=reply_markup)
+
+    
+    
 
 
 # ---------- MSN USER INPUT FLOW ----------
