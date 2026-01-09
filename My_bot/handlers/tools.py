@@ -2,6 +2,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.ext import CallbackContext
 from telegram import Update
+from telegram.error import BadRequest
 
 from menus.tools_menu import (
     get_tools_inline,
@@ -161,6 +162,9 @@ async def tools_callback(update: Update, context: CallbackContext):
         await show_otp_menu(update, context)
 
     # Add other tool handlers here...
+    if data == "tool_otp_usa":
+        await show_usa_verification_menu(update, context)
+        return
     
 
     # ---------- MSN NAV BUTTONS ----------
@@ -271,26 +275,52 @@ async def tools_callback(update: Update, context: CallbackContext):
         # Show OTP verification menu
         await show_otp_menu(update, context)
     # Add your other tool handlers here...
-        
-async def show_otp_menu(update: Update, context: CallbackContext):
-    # Create the OTP Verification menu options
+    
+
+async def show_otp_menu(update, context):
     keyboard = [
         [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa")],
         [InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
-        [InlineKeyboardButton("⬅ Back", callback_data="tool_msn_services")]  # Change back button to the appropriate menu
+        [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")],
     ]
-
     reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Send the OTP menu
-    await update.callback_query.edit_message_text("Please choose the verification type:", reply_markup=reply_markup)
-    
+
+    try:
+     await update.callback_query.edit_message_text(
+            "Please choose the verification type:",
+            reply_markup=reply_markup
+        )
+    except BadRequest as e:
+        # Ignore only the "Message is not modified" error
+        if "Message is not modified" in str(e):
+            return
+        raise
+
+        
+
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Opens the Tools menu from the ReplyKeyboard 'Tools' button.
     This is used by handlers/start.py.
     """
     await update.message.reply_text("Tools:", reply_markup=get_tools_inline())
+    
+async def show_usa_verification_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [
+        [
+            InlineKeyboardButton("Text Verification", callback_data="tool_otp_usa_text"),
+            InlineKeyboardButton("Voice Verification (Soon)", callback_data="tool_otp_usa_voice"),
+        ],
+        [InlineKeyboardButton("⬅ Back", callback_data="tool_otp")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # ✅ Must be awaited
+    await update.callback_query.edit_message_text(
+        "Please choose the verification method:",
+        reply_markup=reply_markup
+    )
+
 
     
     
