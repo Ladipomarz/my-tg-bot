@@ -269,7 +269,7 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     if query.data == "tool_otp":
         # Show OTP verification menu
-        show_otp_menu(update, context)
+        await show_otp_menu(update, context)
     # Add your other tool handlers here...
         
 async def show_otp_menu(update: Update, context: CallbackContext):
@@ -283,7 +283,7 @@ async def show_otp_menu(update: Update, context: CallbackContext):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     # Send the OTP menu
-    update.callback_query.edit_message_text("Please choose the verification type:", reply_markup=reply_markup)
+    await update.callback_query.edit_message_text("Please choose the verification type:", reply_markup=reply_markup)
     
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
