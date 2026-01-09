@@ -102,16 +102,11 @@ def _normalize_dob_input(dob_str: str) -> str:
 # ---------- TOOLS MENU + CALLBACKS ----------
 
 
-async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # This is required because handlers/start.py imports it.
-    _clear_msn_state(context)
-    _clear_esim_state(context)
-    await safe_send(update, context, "Tools:", reply_markup=get_tools_inline())
-
-
-async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def tools_callback(update: Update, context: CallbackContext):
     query = update.callback_query
-    query.answer()
+    await query.answer()  # Acknowledge the button click
+
+    # Early exit if there is no query data
     if not query or not query.data:
         return
 
@@ -122,7 +117,7 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("tool_") and data != "tool_msn_lookup":
         _clear_msn_state(context)
 
-    # RDP Service
+    # Handle RDP service
     if data == "tool_rdp":
         _clear_msn_state(context)
         _clear_esim_state(context)
@@ -134,7 +129,7 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Pending-order gate (block only if unpaid)
+    # Pending-order gate (block if unpaid)
     pending = get_pending_order(user_id)
     if pending and pending.get("status") == "pending":
         pay_status = (pending.get("pay_status") or "").lower().strip()
@@ -146,6 +141,26 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=get_pending_order_menu(),
             )
             return
+
+    # Handling eSIM
+    if data == "esim_services":
+        _clear_esim_state(context)
+        context.user_data["esim_country"] = "USA"
+        await safe_send(
+            query,
+            context,
+            "🛜 eSIM Service\nCountry: 🇺🇸 USA (default)\n🔁 Renewable\n\nSelect duration:",
+            reply_markup=get_esim_duration_menu(),
+        )
+        return
+
+    # Handling OTP menu
+    if data == "tool_otp":
+        # Show OTP verification menu
+        await show_otp_menu(update, context)
+
+    # Add other tool handlers here...
+    
 
     # ---------- MSN NAV BUTTONS ----------
     if data == "msn_back":
