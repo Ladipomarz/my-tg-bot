@@ -305,7 +305,8 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     await update.message.reply_text("Tools:", reply_markup=get_tools_inline())
     
-async def show_usa_verification_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+
+async def show_usa_verification_menu(update, context):
     keyboard = [
         [
             InlineKeyboardButton("Text Verification", callback_data="tool_otp_usa_text"),
@@ -315,14 +316,16 @@ async def show_usa_verification_menu(update: Update, context: ContextTypes.DEFAU
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
 
-    # ✅ Must be awaited
-    await update.callback_query.edit_message_text(
-        "Please choose the verification method:",
-        reply_markup=reply_markup
-    )
+    try:
+        await update.callback_query.edit_message_text(
+            "Please choose the verification method:",
+            reply_markup=reply_markup
+        )
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            return
+        raise
 
-
-    
     
 
 
