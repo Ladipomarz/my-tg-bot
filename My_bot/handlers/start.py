@@ -4,7 +4,6 @@ from telegram.ext import ContextTypes
 from utils.db import add_user, expire_pending_order_if_needed
 from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
-
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
 from config import ADMIN_IDS
