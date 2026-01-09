@@ -248,8 +248,6 @@ async def tools_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
     
-# Existing callback handler function for tools
-def tools_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()  # Acknowledge the button click
 
@@ -258,7 +256,7 @@ def tools_callback(update: Update, context: CallbackContext):
         show_otp_menu(update, context)
     # Add your other tool handlers here...
         
-def show_otp_menu(update: Update, context: CallbackContext):
+async def show_otp_menu(update: Update, context: CallbackContext):
     # Create the OTP Verification menu options
     keyboard = [
         [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa")],
