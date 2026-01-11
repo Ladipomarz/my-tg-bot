@@ -159,17 +159,6 @@ async def tools_callback(update: Update, context: CallbackContext):
             f"Reserved number: {number}\nWaiting for OTP..."
         )
 
-        # Wait for OTP
-        otp = await wait_for_otp(timeout=300)  # Set timeout for 5 minutes
-        if otp:
-            await update.callback_query.edit_message_text(
-                f"OTP received: {otp}"
-            )
-        else:
-            await update.callback_query.edit_message_text(
-                "Failed to receive OTP. Please try again or request a refund."
-            )
-        return
 
     # Handling other tools (MSN, eSIM, etc.)
     if data == "tool_msn_services":
