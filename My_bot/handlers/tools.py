@@ -208,11 +208,11 @@ async def tools_callback(update: Update, context: CallbackContext):
 async def show_otp_menu(update, context):
     keyboard = [
        [ 
-        [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa")],
-        [InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
-       ],
+        [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa"),
+          InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
         [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")],
     ]
+       
     reply_markup = InlineKeyboardMarkup(keyboard)
 
     try:
