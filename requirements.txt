@@ -6,4 +6,5 @@ fastapi
 uvicorn
 python-multipart
 reportlab
+requests
 
