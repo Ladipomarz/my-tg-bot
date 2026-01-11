@@ -1,4 +1,4 @@
-from mock_provider import MockProvider
+from .mock_provider import MockProvider
 from textverified_provider import TextVerifiedProvider
 from config import OTP_PROVIDER_MODE
 
