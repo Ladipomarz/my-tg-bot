@@ -6,9 +6,11 @@ app = FastAPI()
 
 # Get the API Key from environment variables
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
+API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
+
 
 # Initialize TextVerified client
-provider = TextVerified(api_key=API_KEY)
+provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
 @app.post("/webhook")
 async def webhook_listener(request: Request):
