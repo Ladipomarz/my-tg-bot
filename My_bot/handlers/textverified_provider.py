@@ -6,37 +6,45 @@ class TextVerifiedProvider:
         self.number = None
         self.otp = None
 
-    def reserve_number(self):
-        # Example call to TextVerified API to reserve a number
+    def reserve_number(self, country="USA"):
+        """Reserve a number through TextVerified's API."""
         response = requests.post(
-            'https://api.textverified.com/v1/requests',
-            data={"api_key": self.api_key, "service": "gmail"}
+            "https://api.textverified.com/v1/requests",
+            data={"api_key": self.api_key, "service": "gmail", "country": country}
         )
-        # Example response format from TextVerified API
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to reserve number: {response.text}")
+
         data = response.json()
-        self.number = data['number']
+        self.number = data['number']  # Extracting the reserved number
         print(f"Reserved number: {self.number}")
         return self.number
 
     def check_sms(self):
-        # Call the TextVerified API to get the OTP
+        """Check for the OTP sent to the reserved number."""
+        if not self.number:
+            raise ValueError("No number reserved yet!")
+
         response = requests.get(
             f'https://api.textverified.com/v1/requests/{self.number}',
             params={"api_key": self.api_key}
         )
+
+        if response.status_code != 200:
+            raise ValueError(f"Failed to retrieve OTP: {response.text}")
+
         data = response.json()
-        self.otp = data.get('otp')
-        print(f"Received OTP: {self.otp}")
-        return self.otp
+        self.otp = data.get('otp')  # Extract OTP from the response
+        if self.otp:
+            print(f"Received OTP: {self.otp}")
+            return self.otp
+        else:
+            print("OTP not yet received.")
+            return None
 
     def cancel(self):
-        # Call the API to cancel the number (if needed)
+        """Cancel the reserved number if needed."""
         self.number = None
         self.otp = None
-        print("Number and OTP cancelled.")
-
-    def get_number(self):
-        return self.number
-
-    def get_otp(self):
-        return self.otp
+        print("Reservation cancelled.")

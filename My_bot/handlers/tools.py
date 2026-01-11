@@ -104,6 +104,9 @@ def _normalize_dob_input(dob_str: str) -> str:
 # ---------- TOOLS MENU + CALLBACKS ----------
 
 
+from handlers.provider_factory import get_otp_provider
+from config import API_KEY  # Your real TextVerified API key (provided by TextVerified)
+
 async def tools_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()  # Acknowledge the button click
@@ -144,99 +147,36 @@ async def tools_callback(update: Update, context: CallbackContext):
             )
             return
 
-    # Handling eSIM
-    if data == "esim_services":
-        _clear_esim_state(context)
-        context.user_data["esim_country"] = "USA"
-        await safe_send(
-            query,
-            context,
-            "🛜 eSIM Service\nCountry: 🇺🇸 USA (default)\n🔁 Renewable\n\nSelect duration:",
-            reply_markup=get_esim_duration_menu(),
-        )
-        return
-
-    # Handling OTP menu
+    # Handling OTP menu (added integration for TextVerified)
     if data == "tool_otp":
-        # Show OTP verification menu
-        await show_otp_menu(update, context)
+        # Use TextVerified API to reserve a number (this will reserve a real number for you)
+        provider = get_otp_provider(api_key=API_KEY)  # Pass your API key here
+        number = provider.reserve_number(country="USA")  # Optionally pass country from user selection
+        
+        # Show the OTP verification menu to the user
+        await update.callback_query.edit_message_text(
+            f"Reserved number: {number}\nWaiting for OTP..."
+        )
+        return
 
-    # Add other tool handlers here...
     if data == "tool_otp_usa":
-        await show_usa_verification_menu(update, context)
-        return
-    
+        # Use TextVerified API to check for OTP
+        provider = get_otp_provider(api_key=API_KEY)  # Pass your API key here
+        otp = provider.check_sms()  # Fetch OTP after waiting for it
 
-    # ---------- MSN NAV BUTTONS ----------
-    if data == "msn_back":
-        step = context.user_data.get("msn_step")
-        if not step:
-            await safe_send(
-                query, context, "MSN Services:", reply_markup=get_msn_services_menu()
+        if otp:
+            # Successfully received OTP
+            await update.callback_query.edit_message_text(
+                f"OTP received: {otp}"
             )
-            return
-
-        prev = _msn_prev_step(step)
-        if not prev:
-            _clear_msn_state(context)
-            await safe_send(
-                query, context, "MSN Services:", reply_markup=get_msn_services_menu()
+        else:
+            # OTP failed or timeout
+            await update.callback_query.edit_message_text(
+                "Failed to receive OTP. Please try again or request a refund."
             )
-            return
-
-        context.user_data["msn_step"] = prev
-        lookup_type = context.user_data.get("type")
-        await safe_send(
-            query,
-            context,
-            _prompt_for_step(prev, lookup_type),
-            reply_markup=msn_nav_kb(),
-        )
         return
 
-    if data == "cancel_msn":
-        _clear_msn_state(context)
-        await safe_send(query, context, "MSN flow cancelled.")
-        return
-
-    # ---------- eSIM ----------
-    if data == "esim_services":
-        _clear_esim_state(context)
-        context.user_data["esim_country"] = "USA"
-        await safe_send(
-            query,
-            context,
-            "🛜 eSIM Service\nCountry: 🇺🇸 USA (default)\n🔁 Renewable\n\nSelect duration:",
-            reply_markup=get_esim_duration_menu(),
-        )
-        return
-
-    # eSIM duration selection -> ask for email before order confirm
-    if data.startswith("esim_duration:"):
-        duration = data.split(":", 1)[1].strip()  # 1m / 3m / 1y
-        context.user_data["esim_duration"] = duration
-        context.user_data["esim_country"] = "USA"
-
-        from pricelist import ESIM_PRICES_USD
-
-        if duration not in ESIM_PRICES_USD:
-            await safe_send(
-                query,
-                context,
-                "❌ Invalid duration. Please choose again:",
-                reply_markup=get_esim_duration_menu(),
-            )
-            return
-
-        amount_usd = ESIM_PRICES_USD[duration]
-        context.user_data["custom_price_usd"] = amount_usd
-
-        # ✅ ask for email next
-        context.user_data["esim_step"] = "email"
-        await safe_send(query, context, "📧 Enter the email to send your eSIM to:")
-        return
-
-    # ---------- Tools menus ----------
+    # Handling other tools (MSN, eSIM, etc.)
     if data == "tool_msn_services":
         _clear_msn_state(context)
         await safe_send(
@@ -267,14 +207,7 @@ async def tools_callback(update: Update, context: CallbackContext):
             reply_markup=get_msn_services_menu(),
         )
         return
-    
-    query = update.callback_query
-    query.answer()  # Acknowledge the button click
 
-    if query.data == "tool_otp":
-        # Show OTP verification menu
-        await show_otp_menu(update, context)
-    # Add your other tool handlers here...
     
 
 async def show_otp_menu(update, context):
@@ -512,33 +445,3 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
 
 from .provider_factory import get_otp_provider
 from config import API_KEY  # Your real TextVerified API key
-
-async def tools_callback(update, context):
-    query = update.callback_query
-    await query.answer()  # Acknowledge button press
-    
-    # Get the correct provider based on the current mode (mock or live)
-    provider = get_otp_provider(api_key=API_KEY)  # Pass in real API key for live mode
-
-    data = (query.data or "").strip()
-
-    if data == "tool_otp":
-        # Reserve number
-        number = provider.reserve_number()
-        await update.callback_query.edit_message_text(
-            f"Reserved number: {number}\nWaiting for OTP..."
-        )
-        return
-
-    if data == "tool_otp_usa":
-        # Check for OTP (will simulate for mock mode)
-        otp = provider.simulate_error() or provider.check_sms()
-        if otp:
-            await update.callback_query.edit_message_text(
-                f"OTP received: {otp}"
-            )
-        else:
-            await update.callback_query.edit_message_text(
-                "Failed to receive OTP. Please try again or request a refund."
-            )
-        return
