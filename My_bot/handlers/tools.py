@@ -510,7 +510,7 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
     await ask_order_confirmation(update, context, display_text, order_description)
 
 
-from provider_factory import get_otp_provider
+from .provider_factory import get_otp_provider
 from config import API_KEY  # Your real TextVerified API key
 
 async def tools_callback(update, context):
