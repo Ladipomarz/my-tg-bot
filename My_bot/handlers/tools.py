@@ -14,7 +14,7 @@ from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
 from config import API_KEY 
-from handlers.otp_handler import reserve_number_for_otp, wait_for_otp
+from handlers.otp_handler import reserve_number_for_otp
 
 
 
