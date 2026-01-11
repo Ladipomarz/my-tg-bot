@@ -12,6 +12,11 @@ API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 # Initialize TextVerified client
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
+# Function to reserve a number
+async def reserve_number_for_otp(country="USA"):
+    number = provider.reserve_number(country=country)
+    return number
+
 @app.post("/webhook")
 async def webhook_listener(request: Request):
     # Receive the webhook data from TextVerified
