@@ -279,8 +279,10 @@ async def tools_callback(update: Update, context: CallbackContext):
 
 async def show_otp_menu(update, context):
     keyboard = [
+       [ 
         [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa")],
         [InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
+       ],
         [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")],
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -506,3 +508,37 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
     )
 
     await ask_order_confirmation(update, context, display_text, order_description)
+
+
+from provider_factory import get_otp_provider
+from config import API_KEY  # Your real TextVerified API key
+
+async def tools_callback(update, context):
+    query = update.callback_query
+    await query.answer()  # Acknowledge button press
+    
+    # Get the correct provider based on the current mode (mock or live)
+    provider = get_otp_provider(api_key=API_KEY)  # Pass in real API key for live mode
+
+    data = (query.data or "").strip()
+
+    if data == "tool_otp":
+        # Reserve number
+        number = provider.reserve_number()
+        await update.callback_query.edit_message_text(
+            f"Reserved number: {number}\nWaiting for OTP..."
+        )
+        return
+
+    if data == "tool_otp_usa":
+        # Check for OTP (will simulate for mock mode)
+        otp = provider.simulate_error() or provider.check_sms()
+        if otp:
+            await update.callback_query.edit_message_text(
+                f"OTP received: {otp}"
+            )
+        else:
+            await update.callback_query.edit_message_text(
+                "Failed to receive OTP. Please try again or request a refund."
+            )
+        return
