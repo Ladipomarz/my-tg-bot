@@ -107,11 +107,6 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 # ---------- TOOLS MENU + CALLBACKS ----------
 
-
-from handlers.provider_factory import get_otp_provider
- # Your real TextVerified API key (provided by TextVerified)
-
-
 async def tools_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()  # Acknowledge the button click
