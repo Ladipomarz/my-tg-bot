@@ -205,18 +205,25 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     
 
-async def show_otp_menu(update, context):
+async def show_otp_menu(update: Update, context: CallbackContext):
+    # Define the keyboard with 2 buttons in the first row and 1 button in the second row
     keyboard = [
-       [ 
         [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa"),
-          InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
-        [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")],
+         InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
+        [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")]
     ]
-       
+    
+    # Create the reply markup for the inline keyboard
     reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # Send the OTP menu with the keyboard
+    await update.callback_query.edit_message_text(
+        "Please choose the verification type:",
+        reply_markup=reply_markup
+    )
 
     try:
-     await update.callback_query.edit_message_text(
+        await update.callback_query.edit_message_text(
             "Please choose the verification type:",
             reply_markup=reply_markup
         )
@@ -227,6 +234,8 @@ async def show_otp_menu(update, context):
         raise
 
         
+
+   
 
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
