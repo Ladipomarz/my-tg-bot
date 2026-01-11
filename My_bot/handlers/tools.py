@@ -13,6 +13,9 @@ from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
+from config import API_KEY 
+from handlers.otp_handler import reserve_number_for_otp, wait_for_otp
+
 
 
 from utils.validator import (
@@ -105,7 +108,8 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 
 from handlers.provider_factory import get_otp_provider
-from config import API_KEY  # Your real TextVerified API key (provided by TextVerified)
+ # Your real TextVerified API key (provided by TextVerified)
+
 
 async def tools_callback(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -118,7 +122,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     data = (query.data or "").strip()
     user_id = update.effective_user.id
 
-    # Any tools navigation cancels MSN text flow (prevents "Invalid first name" when navigating)
+    # Any tools navigation cancels MSN text flow
     if data.startswith("tool_") and data != "tool_msn_lookup":
         _clear_msn_state(context)
 
@@ -147,30 +151,25 @@ async def tools_callback(update: Update, context: CallbackContext):
             )
             return
 
-    # Handling OTP menu (added integration for TextVerified)
+    # Handling OTP menu
     if data == "tool_otp":
-        # Use TextVerified API to reserve a number (this will reserve a real number for you)
-        provider = get_otp_provider(api_key=API_KEY)  # Pass your API key here
-        number = provider.reserve_number(country="USA")  # Optionally pass country from user selection
-        
-        # Show the OTP verification menu to the user
+        # Show OTP verification menu
+        await show_otp_menu(update, context)
+
+    if data == "tool_otp_usa":
+        # Reserve number using TextVerified
+        number = await reserve_number_for_otp(country="USA")  # Reserve the number via TextVerified
         await update.callback_query.edit_message_text(
             f"Reserved number: {number}\nWaiting for OTP..."
         )
-        return
 
-    if data == "tool_otp_usa":
-        # Use TextVerified API to check for OTP
-        provider = get_otp_provider(api_key=API_KEY)  # Pass your API key here
-        otp = provider.check_sms()  # Fetch OTP after waiting for it
-
+        # Wait for OTP
+        otp = await wait_for_otp(timeout=300)  # Set timeout for 5 minutes
         if otp:
-            # Successfully received OTP
             await update.callback_query.edit_message_text(
                 f"OTP received: {otp}"
             )
         else:
-            # OTP failed or timeout
             await update.callback_query.edit_message_text(
                 "Failed to receive OTP. Please try again or request a refund."
             )
