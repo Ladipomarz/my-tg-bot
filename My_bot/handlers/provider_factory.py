@@ -1,5 +1,5 @@
 from .mock_provider import MockProvider
-from textverified_provider import TextVerifiedProvider
+from .textverified_provider import TextVerifiedProvider
 from config import OTP_PROVIDER_MODE
 
 def get_otp_provider(api_key=None):
