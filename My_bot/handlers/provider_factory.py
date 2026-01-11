@@ -1,9 +1,13 @@
+import os
 from handlers.textverified_provider import TextVerifiedProvider
-from config import OTP_PROVIDER_MODE, API_KEY
 
 def get_otp_provider(api_key=None):
-    print(f"OTP_PROVIDER_MODE: {OTP_PROVIDER_MODE}")  # Debugging line
-    if OTP_PROVIDER_MODE == "textverified":
+    # Read OTP_PROVIDER_MODE directly from environment variables
+    otp_provider_mode = os.getenv("OTP_PROVIDER_MODE")
+
+    print(f"OTP_PROVIDER_MODE from environment: {otp_provider_mode}")  # Debugging line
+
+    if otp_provider_mode == "textverified":
         print("Using TextVerifiedProvider for live mode.")  # Debugging line
         return TextVerifiedProvider(api_key)
     else:
