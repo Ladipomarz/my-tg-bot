@@ -213,7 +213,8 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-from handlers.service_fetcher import fetch_available_services  # Import the service fetcher
+from handlers.servicelist import fetch_available_services  # Correct import based on the filename
+
 
 # Show services to the user
 async def show_services(update: Update, context: CallbackContext):
