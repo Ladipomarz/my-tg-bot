@@ -162,12 +162,36 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return   
 
+    # Handle OTP menu selection for USA number
     if data == "tool_otp_usa":
-        # Reserve number using TextVerified
-        number = await reserve_number_for_otp(country="USA")  # Reserve the number via TextVerified
-        await update.callback_query.edit_message_text(
-            f"Reserved number: {number}\nWaiting for OTP..."
-        )
+        
+    # Show verification method options (Text/Voice)
+        await show_usa_verification_menu(update, context)
+        return
+    
+    
+    # Handle Text Verification selection
+    if data == "tool_otp_usa_text":
+        await show_rental_options(update, context, "text")
+        return
+
+# Handle Voice Verification selection
+    if data == "tool_otp_usa_voice":
+        await show_rental_options(update, context, "voice")
+        return
+    
+    if data.startswith("tool_otp_usa_text_one_time"):
+    # Logic for One-Time Text Rental
+        await update.callback_query.edit_message_text("One-Time Rental selected for Text Verification.")
+        return
+
+    if data.startswith("tool_otp_usa_text_forever"):
+    # Logic for Forever Text Rental
+        await update.callback_query.edit_message_text("Forever Rental selected for Text Verification.")
+        return
+
+    
+    
         
     # Handle back button
     if data == "tool_back_tools":
@@ -344,6 +368,30 @@ async def show_usa_verification_menu(update, context):
         if "Message is not modified" in str(e):
             return
         raise
+    
+    
+async def show_rental_options(update, context, verification_type):
+    # Verification type is passed to handle both Text/Voice
+    keyboard = [
+        [
+            InlineKeyboardButton("One-Time Rental", callback_data=f"tool_otp_{verification_type}_one_time"),
+            InlineKeyboardButton("Forever Rental", callback_data=f"tool_otp_{verification_type}_forever"),
+        ],
+        [InlineKeyboardButton("⬅ Back", callback_data="tool_otp_usa")],
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    try:
+        await update.callback_query.edit_message_text(
+            f"Please choose the rental type for {verification_type} verification:\n\n"
+            "Note: Duration options (e.g., 1 Month, 3 Months, etc.) are coming soon!",
+            reply_markup=reply_markup
+        )
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            return
+        raise
+
 
     
 
