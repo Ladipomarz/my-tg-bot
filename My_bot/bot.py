@@ -17,6 +17,7 @@ from telegram.ext import (
     MessageHandler,
     ContextTypes,
     filters,
+    Application,
 )
 from telegram.request import HTTPXRequest
 
@@ -45,6 +46,7 @@ from handlers.start import start, handle_main_menu
 from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
+from handlers.tools import fetch_services  # Import your fetch_services function
 
 from handlers.admin import admin_command, admin_callback
 
@@ -1446,9 +1448,8 @@ async def health():
 async def plisio_webhook_get():
     return {"ok": True}
 
-import os
-from telegram.ext import Application, CommandHandler
-from handlers.tools import fetch_services  # Import your fetch_services function
+
+
 
 # Fetch the Telegram Bot Token from the Railway environment variable
 BOT_TOKEN = os.getenv("BOT_TOKEN")  # Replace with your actual environment variable key
@@ -1461,7 +1462,7 @@ if not BOT_TOKEN:
 application = Application.builder().token(BOT_TOKEN).build()
 # Register the command handler
 fetch_services_handler = CommandHandler("fetch_services", fetch_services)
-application.add_handler(fetch_services_handler)
+
 
 # Run the bot
 application.run_polling()

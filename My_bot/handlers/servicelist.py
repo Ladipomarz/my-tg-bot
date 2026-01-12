@@ -12,11 +12,6 @@ API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
-async def fetch_services(update: Update, context: CallbackContext):
-    services = await fetch_and_save_services()
-    # Your logic to send the services to the user
-
-
 # Function to fetch and save available services to 'services.txt'
 async def fetch_and_save_services():
     # Fetch the available services
