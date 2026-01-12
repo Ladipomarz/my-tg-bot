@@ -1445,17 +1445,22 @@ async def health():
 async def plisio_webhook_get():
     return {"ok": True}
 
-
+import os
 from telegram.ext import Application, CommandHandler
 from handlers.tools import fetch_services  # Import your fetch_services function
 
-# Initialize the Application with your bot token
-application = Application.builder().token("YOUR_BOT_TOKEN").build()
+# Fetch the Telegram Bot Token from the Railway environment variable
+API_KEY = os.getenv("TEXTVERIFIED_API_KEY")  # Replace with your actual environment variable key
 
-# Set up the fetch_services handler
+# Check if the API_KEY is fetched correctly
+if not API_KEY:
+    print("Error: Telegram bot token is missing!")
+
+# Initialize the application with the fetched token
+application = Application.builder().token(API_KEY).build()
+
+# Register the command handler
 fetch_services_handler = CommandHandler("fetch_services", fetch_services)
-
-# Add the handler to the application
 application.add_handler(fetch_services_handler)
 
 # Run the bot
