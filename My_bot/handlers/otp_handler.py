@@ -15,23 +15,15 @@ async def get_available_services(country="USA"):
         number_type=NumberType.MOBILE,  # You can change to other types like LANDLINE if needed
         reservation_type=ReservationType.VERIFICATION
     )
-    print(f"Found {len(services)} available services")
+
+    # Return available services to be shown to the user
     return services
 
 # Function to reserve a number for OTP
-async def reserve_number_for_otp(country="USA"):
-    services = await get_available_services(country)  # Get the available services
-
-    if not services:
-        print("No services available.")
-        return None
-
-    # For simplicity, we just pick the first service (you can let the user select from the list)
-    service_name = services[0].service_name  # This could be dynamic based on user choice
-
+async def reserve_number_for_otp(service_name, country="USA"):
     # Create the verification request with the selected service
     verification = provider.verifications.create(
-        service_name=service_name,  # Use the dynamically selected service name
+        service_name=service_name,  # Use the selected service name
         capability=ReservationCapability.SMS
     )
     return verification.number  # Return the reserved phone number
