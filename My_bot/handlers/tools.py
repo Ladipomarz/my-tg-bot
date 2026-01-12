@@ -13,7 +13,6 @@ from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
-from config import API_KEY 
 from handlers.otp_handler import reserve_number_for_otp
 
 
@@ -249,6 +248,19 @@ async def show_services(update: Update, context: CallbackContext):
             "Failed to fetch services. Please try again later."
         )
         return
+
+    try:
+        services = await fetch_and_save_services()  # Await the asynchronous function
+    except Exception as e:
+        await update.message.reply_text(f"Failed to fetch services: {str(e)}")
+        return
+
+    if not services:
+        await update.message.reply_text("No services available.")
+        return
+
+    # Continue as before with creating the inline keyboard...
+
 
     # Create buttons for each service
     keyboard = []
@@ -511,7 +523,3 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
 
 
 from .provider_factory import get_otp_provider
-from config import API_KEY  # Your real TextVerified API key
-
-
-
