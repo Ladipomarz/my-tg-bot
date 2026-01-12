@@ -213,7 +213,31 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-from handlers.servicelist import fetch_and_save_services  # Correct import based on the filename
+
+
+from handlers.servicelist import fetch_and_save_services  # Ensure correct import path
+
+async def fetch_services(update: Update, context: CallbackContext):
+    services = await fetch_and_save_services()  # Await the asynchronous function
+
+    if not services:
+        await update.message.reply_text("Failed to fetch services.")
+        return
+
+    # Create an inline keyboard with services
+    keyboard = [
+        [InlineKeyboardButton(service['service_name'], callback_data=f"service_{service['service_name']}") for service in services]
+    ]
+
+    keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Send the list of services
+    await update.message.reply_text(
+        "Please choose a service to reserve a number for OTP verification:",
+        reply_markup=reply_markup
+    )
 
 
 # Show services to the user

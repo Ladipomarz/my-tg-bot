@@ -1446,10 +1446,11 @@ async def plisio_webhook_get():
     return {"ok": True}
 
 
+from handlers.tools import fetch_services  # Correct import based on your folder structure
 
-
-# Define your fetch_services command handler
+# Add the command handler to the application
 fetch_services_handler = CommandHandler("fetch_services", fetch_services)
 
-# Add it to the dispatcher
-dispatcher.add_handler(fetch_services_handler)
+# Register the handler
+application.add_handler(fetch_services_handler)
+
