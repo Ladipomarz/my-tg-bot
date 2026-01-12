@@ -1450,7 +1450,7 @@ from telegram.ext import Application, CommandHandler
 from handlers.tools import fetch_services  # Import your fetch_services function
 
 # Fetch the Telegram Bot Token from the Railway environment variable
-API_KEY = os.getenv("TEXTVERIFIED_API_KEY")  # Replace with your actual environment variable key
+API_KEY = os.getenv("BOT_TOKEN")  # Replace with your actual environment variable key
 
 # Check if the API_KEY is fetched correctly
 if not API_KEY:

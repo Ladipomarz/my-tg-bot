@@ -9,5 +9,6 @@ if not BOT_TOKEN:
 
 # config.py
 
-OTP_PROVIDER_MODE = "mock"  # Change to "textverified" when going live
-API_KEY = "your_real_textverified_api_key_here"  # Only needed for live mode
+# TextVerified API credentials
+TEXTVERIFIED_API_KEY = os.getenv("TEXTVERIFIED_API_KEY")  # For TextVerified API
+TEXTVERIFIED_API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")  # For TextVerified API (if needed)
