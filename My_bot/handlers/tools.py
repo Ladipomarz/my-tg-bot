@@ -107,6 +107,7 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 # ---------- TOOLS MENU + CALLBACKS ----------
 
+
 async def tools_callback(update: Update, context: CallbackContext):
     query = update.callback_query
     await query.answer()  # Acknowledge the button click
@@ -159,6 +160,11 @@ async def tools_callback(update: Update, context: CallbackContext):
             f"Reserved number: {number}\nWaiting for OTP..."
         )
 
+    if data == "tool_otp_other":
+        # Implement logic for other countries here if needed
+        await update.callback_query.edit_message_text(
+            "Other countries selected. Coming soon…"
+        )
 
     # Handling other tools (MSN, eSIM, etc.)
     if data == "tool_msn_services":
@@ -192,8 +198,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return
 
-    
-
 async def show_otp_menu(update: Update, context: CallbackContext):
     # Define the keyboard with 2 buttons in the first row and 1 button in the second row
     keyboard = [
@@ -220,9 +224,8 @@ async def show_otp_menu(update: Update, context: CallbackContext):
         # Ignore only the "Message is not modified" error
         if "Message is not modified" in str(e):
             return
-        raise
+        raise e  # Reraise any other exceptions
 
-        
 
    
 
