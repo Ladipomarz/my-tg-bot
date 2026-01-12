@@ -228,7 +228,7 @@ async def fetch_services(update: Update, context: CallbackContext):
 
     # Create an inline keyboard with services
     keyboard = [
-        [InlineKeyboardButton(service['service_name'], callback_data=f"service_{service['service_name']}") for service in services]
+        [InlineKeyboardButton(service.service_name, callback_data=f"service_{service.service_name}") for service in services]
     ]
 
     keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")])
@@ -269,7 +269,7 @@ async def show_services(update: Update, context: CallbackContext):
 
     # Create buttons for each service
     keyboard = []
-    for service in services:
+    for service in services[:50]:
         service_name = service.get("service_name", "")
         if service_name:
             keyboard.append([InlineKeyboardButton(service_name, callback_data=f"service_{service_name}")])
