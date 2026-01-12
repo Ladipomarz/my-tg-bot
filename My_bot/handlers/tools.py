@@ -237,11 +237,13 @@ async def fetch_services(update: Update, context: CallbackContext):
         "Please choose a service to reserve a number for OTP verification:",
         reply_markup=reply_markup
     )
+    return services
+
 
 
 # Show services to the user
 async def show_services(update: Update, context: CallbackContext):
-    services = fetch_and_save_services()  # Fetch services
+    services = await fetch_and_save_services()  # Fetch services
 
     if not services:
         await update.callback_query.edit_message_text(

@@ -1272,6 +1272,7 @@ tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 
 tg_app.add_handler(CallbackQueryHandler(callback_router))
+tg_app.add_handler(CommandHandler("fetch_services", fetch_services))
 
 # IMPORTANT: media before text (QR upload wizard)
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))

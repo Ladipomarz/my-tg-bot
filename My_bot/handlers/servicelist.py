@@ -2,6 +2,9 @@ from textverified import TextVerified, NumberType, ReservationType
 import os
 from telegram import Update
 from telegram.ext import CallbackContext
+BASE_DIR = os.path.dirname(__file__)
+OUT_PATH = os.path.join(BASE_DIR, "services.txt")
+
 
 
 # Initialize TextVerified client
@@ -28,11 +31,12 @@ async def fetch_and_save_services():
         return
 
     # Save services to 'services.txt' file
-    with open("services.txt", "w") as file:
-        file.write("Available Services for OTP Verification:\n\n")
+    with open(OUT_PATH, "w", encoding="utf-8") as f:
+        f.write("Available Services for OTP Verification:\n\n")
         for i, service in enumerate(services[:5], 1):  # Limit to first 5 services
-            file.write(f"{i}. {service.service_name}\n")
+            f.write(f"{i}. {service.service_name}\n")
 
     print("Services saved to 'services.txt'.")
+    return services
     
 
