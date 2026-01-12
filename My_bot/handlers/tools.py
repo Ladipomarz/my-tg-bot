@@ -219,6 +219,8 @@ from handlers.servicelist import fetch_and_save_services  # Ensure correct impor
 
 async def fetch_services(update: Update, context: CallbackContext):
     services = await fetch_and_save_services()  # Await the asynchronous function
+    print("DEBUG services:", services)
+
 
     if not services:
         await update.message.reply_text("Failed to fetch services.")
