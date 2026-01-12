@@ -1446,11 +1446,19 @@ async def plisio_webhook_get():
     return {"ok": True}
 
 
-from handlers.tools import fetch_services  # Correct import based on your folder structure
+from telegram.ext import Application, CommandHandler
+from handlers.tools import fetch_services  # Import your fetch_services function
 
-# Add the command handler to the application
+# Initialize the Application with your bot token
+application = Application.builder().token("YOUR_BOT_TOKEN").build()
+
+# Set up the fetch_services handler
 fetch_services_handler = CommandHandler("fetch_services", fetch_services)
 
-# Register the handler
+# Add the handler to the application
 application.add_handler(fetch_services_handler)
+
+# Run the bot
+application.run_polling()
+
 
