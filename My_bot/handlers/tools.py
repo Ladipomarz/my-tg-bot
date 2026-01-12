@@ -213,12 +213,12 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-from handlers.servicelist import fetch_available_services  # Correct import based on the filename
+from handlers.servicelist import fetch_and_save_services  # Correct import based on the filename
 
 
 # Show services to the user
 async def show_services(update: Update, context: CallbackContext):
-    services = fetch_available_services()  # Fetch services
+    services = fetch_and_save_services()  # Fetch services
 
     if not services:
         await update.callback_query.edit_message_text(
