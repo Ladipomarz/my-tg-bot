@@ -1464,7 +1464,4 @@ application = Application.builder().token(BOT_TOKEN).build()
 fetch_services_handler = CommandHandler("fetch_services", fetch_services)
 
 
-# Run the bot
-application.run_polling()
-
 
