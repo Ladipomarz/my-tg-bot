@@ -1,5 +1,8 @@
 from textverified import TextVerified, NumberType, ReservationType
 import os
+from telegram import Update
+from telegram.ext import CallbackContext
+
 
 # Initialize TextVerified client
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
