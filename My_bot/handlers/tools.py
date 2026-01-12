@@ -2,8 +2,6 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.ext import CallbackContext
 from telegram import Update
-from telegram.error import BadRequest
-
 from menus.tools_menu import (
     get_tools_inline,
     get_msn_services_menu,
@@ -14,6 +12,7 @@ from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
 from handlers.otp_handler import reserve_number_for_otp
+from handlers.otp_handler import show_usa_verification_menu, show_rental_options,show_otp_menu
 
 
 
@@ -164,7 +163,6 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     # Handle OTP menu selection for USA number
     if data == "tool_otp_usa":
-        
     # Show verification method options (Text/Voice)
         await show_usa_verification_menu(update, context)
         return
@@ -236,111 +234,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return
     
-
-
-
-from handlers.servicelist import fetch_and_save_services  # Ensure correct import path
-
-async def fetch_services(update: Update, context: CallbackContext):
-    services = await fetch_and_save_services()  # Await the asynchronous function
-    print("DEBUG services:", services)
-
-
-    if not services:
-        await update.message.reply_text("Failed to fetch services.")
-        return
-
-    # Create an inline keyboard with services
-    keyboard = [
-        [InlineKeyboardButton(service.service_name, callback_data=f"service_{service.service_name}") for service in services]
-    ]
-
-    keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Send the list of services
-    await update.message.reply_text(
-        "Please choose a service to reserve a number for OTP verification:",
-        reply_markup=reply_markup
-    )
-    return services
-
-
-
-# Show services to the user
-async def show_services(update: Update, context: CallbackContext):
-    services = await fetch_and_save_services()  # Fetch services
-
-    if not services:
-        await update.callback_query.edit_message_text(
-            "Failed to fetch services. Please try again later."
-        )
-        return
-
-    try:
-        services = await fetch_and_save_services()  # Await the asynchronous function
-    except Exception as e:
-        await update.message.reply_text(f"Failed to fetch services: {str(e)}")
-        return
-
-    if not services:
-        await update.message.reply_text("No services available.")
-        return
-
-    # Continue as before with creating the inline keyboard...
-
-
-    # Create buttons for each service
-    keyboard = []
-    for service in services[:50]:
-        service_name = service.get("service_name", "")
-        if service_name:
-            keyboard.append([InlineKeyboardButton(service_name, callback_data=f"service_{service_name}")])
-
-    # Add a Back button
-    keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")])
-
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Send the list of services
-    await update.callback_query.edit_message_text(
-        "Please choose a service to reserve a number for OTP verification:",
-        reply_markup=reply_markup
-    )
-    
-
-async def show_otp_menu(update: Update, context: CallbackContext):
-    # Define the keyboard with 2 buttons in the first row and 1 button in the second row
-    keyboard = [
-        [InlineKeyboardButton("USA Number 🇺🇸", callback_data="tool_otp_usa"),
-         InlineKeyboardButton("Other Countries 🌍", callback_data="tool_otp_other")],
-        [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")]
-    ]
-    
-    # Create the reply markup for the inline keyboard
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    # Send the OTP menu with the keyboard
-    await update.callback_query.edit_message_text(
-        "Please choose the verification type:",
-        reply_markup=reply_markup
-    )
-
-    try:
-        await update.callback_query.edit_message_text(
-            "Please choose the verification type:",
-            reply_markup=reply_markup
-        )
-    except BadRequest as e:
-        # Ignore only the "Message is not modified" error
-        if "Message is not modified" in str(e):
-            return
-        raise e  # Reraise any other exceptions
-
-
-   
-
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Opens the Tools menu from the ReplyKeyboard 'Tools' button.
@@ -348,53 +241,6 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     await update.message.reply_text("Tools:", reply_markup=get_tools_inline())
     
-
-async def show_usa_verification_menu(update, context):
-    keyboard = [
-        [
-            InlineKeyboardButton("Text Verification", callback_data="tool_otp_usa_text"),
-            InlineKeyboardButton("Voice Verification (Soon)", callback_data="tool_otp_usa_voice"),
-        ],
-        [InlineKeyboardButton("⬅ Back", callback_data="tool_otp")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    try:
-        await update.callback_query.edit_message_text(
-            "Please choose the verification method:",
-            reply_markup=reply_markup
-        )
-    except BadRequest as e:
-        if "Message is not modified" in str(e):
-            return
-        raise
-    
-    
-async def show_rental_options(update, context, verification_type):
-    # Verification type is passed to handle both Text/Voice
-    keyboard = [
-        [
-            InlineKeyboardButton("One-Time Rental", callback_data=f"tool_otp_{verification_type}_one_time"),
-            InlineKeyboardButton("Forever Rental", callback_data=f"tool_otp_{verification_type}_forever"),
-        ],
-        [InlineKeyboardButton("⬅ Back", callback_data="tool_otp_usa")],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    try:
-        await update.callback_query.edit_message_text(
-            f"Please choose the rental type for {verification_type} verification:\n\n"
-            "Note: Duration options (e.g., 1 Month, 3 Months, etc.) are coming soon!",
-            reply_markup=reply_markup
-        )
-    except BadRequest as e:
-        if "Message is not modified" in str(e):
-            return
-        raise
-
-
-    
-
 
 # ---------- MSN USER INPUT FLOW ----------
 
