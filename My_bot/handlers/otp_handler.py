@@ -19,11 +19,9 @@ async def get_available_services(country="USA"):
     # Return available services to be shown to the user
     return services
 
-# Function to reserve a number for OTP
+# Function to reserve a number for OTP Return the reserved phone number
 async def reserve_number_for_otp(service_name, country="USA"):
-    # Create the verification request with the selected service
-    verification = provider.verifications.create(
-        service_name=service_name,  # Use the selected service name
-        capability=ReservationCapability.SMS
-    )
-    return verification.number  # Return the reserved phone number
+    # Reserve a number for the selected service
+    number = provider.reserve_number(service_name=service_name, country=country)
+    return number
+

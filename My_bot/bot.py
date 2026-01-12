@@ -1444,3 +1444,12 @@ async def health():
 @app.get("/webhooks/plisio")
 async def plisio_webhook_get():
     return {"ok": True}
+
+
+
+
+# Define your fetch_services command handler
+fetch_services_handler = CommandHandler("fetch_services", fetch_services)
+
+# Add it to the dispatcher
+dispatcher.add_handler(fetch_services_handler)

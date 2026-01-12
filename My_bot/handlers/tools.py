@@ -152,6 +152,15 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "tool_otp":
         # Show OTP verification menu
         await show_otp_menu(update, context)
+        
+        
+    if data.startswith("service_"):
+        service_name = data.replace("service_", "")  # Extract the service name
+        number = await reserve_number_for_otp(service_name=service_name, country="USA")
+        await update.callback_query.edit_message_text(
+            f"Reserved number for {service_name}: {number}\nWaiting for OTP..."
+        )
+        return   
 
     if data == "tool_otp_usa":
         # Reserve number using TextVerified
@@ -159,6 +168,11 @@ async def tools_callback(update: Update, context: CallbackContext):
         await update.callback_query.edit_message_text(
             f"Reserved number: {number}\nWaiting for OTP..."
         )
+        
+    # Handle back button
+    if data == "tool_back_tools":
+        await safe_send(query, context, "Returning to tools menu...", reply_markup=get_tools_inline())
+        return    
 
     if data == "tool_otp_other":
         # Implement logic for other countries here if needed
@@ -197,6 +211,38 @@ async def tools_callback(update: Update, context: CallbackContext):
             reply_markup=get_msn_services_menu(),
         )
         return
+    
+
+from handlers.service_fetcher import fetch_available_services  # Import the service fetcher
+
+# Show services to the user
+async def show_services(update: Update, context: CallbackContext):
+    services = fetch_available_services()  # Fetch services
+
+    if not services:
+        await update.callback_query.edit_message_text(
+            "Failed to fetch services. Please try again later."
+        )
+        return
+
+    # Create buttons for each service
+    keyboard = []
+    for service in services:
+        service_name = service.get("service_name", "")
+        if service_name:
+            keyboard.append([InlineKeyboardButton(service_name, callback_data=f"service_{service_name}")])
+
+    # Add a Back button
+    keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")])
+
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # Send the list of services
+    await update.callback_query.edit_message_text(
+        "Please choose a service to reserve a number for OTP verification:",
+        reply_markup=reply_markup
+    )
+    
 
 async def show_otp_menu(update: Update, context: CallbackContext):
     # Define the keyboard with 2 buttons in the first row and 1 button in the second row
@@ -441,3 +487,6 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
 
 from .provider_factory import get_otp_provider
 from config import API_KEY  # Your real TextVerified API key
+
+
+
