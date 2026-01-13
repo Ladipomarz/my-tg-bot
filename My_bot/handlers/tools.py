@@ -163,6 +163,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_usa_":
         await show_usa_verification_menu(update, context)  # Call the function to show the USA verification menu
         return
+    
     if data == "tool_otp_usa_text":
     # Handle the OTP for Text Verification (you can add the logic to handle OTP fetching)
         await update.callback_query.edit_message_text("Text verification is selected. Generating OTP...")
