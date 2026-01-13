@@ -12,9 +12,13 @@ from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
 from handlers.otp_handler import reserve_number_for_otp
-from handlers.otp_handler import show_usa_verification_menu, show_rental_options,show_otp_menu
-
-
+from handlers.otp_handler import(
+    otp_menu,
+    otp_usa_verification_menu,
+    otp_usa_one_time_or_rental_menu,
+    otp_usa_rental_type_menu,
+    otp_usa_monthly_duration_menu,
+)
 
 
 from utils.validator import (
@@ -148,59 +152,66 @@ async def tools_callback(update: Update, context: CallbackContext):
             return
 
     # Handling OTP menu
+    # ---------- OTP ROUTER ----------
+
     if data == "tool_otp":
-        # Show OTP verification menu
-        await show_otp_menu(update, context)
-        
-        
+        await otp_menu(update, context)
+        return
+
+    if data == "otp_country_usa":
+        await otp_usa_verification_menu(update, context)
+        return
+
+    if data == "otp_usa_text":
+        await otp_usa_one_time_or_rental_menu(update, context, "text")
+        return
+
+    if data == "otp_usa_voice":
+        await otp_usa_one_time_or_rental_menu(update, context, "voice")
+        return
+    if data == "otp_usa_text_rental":
+        await otp_usa_rental_type_menu(update, context, "text")
+        return
+
+    if data == "otp_usa_voice_rental":
+        await otp_usa_rental_type_menu(update, context, "voice")
+        return
+    if data == "otp_usa_text_rental_monthly":
+        await otp_usa_monthly_duration_menu(update, context, "text")
+        return
+
+    if data == "otp_usa_voice_rental_monthly":
+        await otp_usa_monthly_duration_menu(update, context, "voice")
+        return
+# BACK NAVIGATION
+    if data == "otp_back_tools":
+        await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
+        return
+    if data == "otp_back_country":
+        await otp_menu(update, context)
+        return
+
+    if data == "otp_back_usa_verif_type":
+        await otp_usa_verification_menu(update, context)
+        return
+    if data == "otp_back_usa_one_time_rental":
+    # default back to text for now
+        await otp_usa_one_time_or_rental_menu(update, context, "text")
+        return
+
+    if data == "otp_back_usa_rental_type":
+        await otp_usa_rental_type_menu(update, context, "text")
+        return
+    
     if data.startswith("service_"):
         service_name = data.replace("service_", "")  # Extract the service name
-        number = await reserve_number_for_otp(service_name=service_name, country="USA")
+        number = await reserve_number_for_otp(service_name=service_name, country="USA")  # Correct invocation
         await update.callback_query.edit_message_text(
             f"Reserved number for {service_name}: {number}\nWaiting for OTP..."
         )
-        return   
-
-    # Handle OTP menu selection for USA number
-    if data == "tool_otp_usa":
-    # Show verification method options (Text/Voice)
-        await show_usa_verification_menu(update, context)
         return
     
     
-    # Handle Text Verification selection
-    if data == "tool_otp_usa_text":
-        await show_rental_options(update, context, "text")
-        return
-
-# Handle Voice Verification selection
-    if data == "tool_otp_usa_voice":
-        await show_rental_options(update, context, "voice")
-        return
-    
-    if data.startswith("tool_otp_usa_text_one_time"):
-    # Logic for One-Time Text Rental
-        await update.callback_query.edit_message_text("One-Time Rental selected for Text Verification.")
-        return
-
-    if data.startswith("tool_otp_usa_text_forever"):
-    # Logic for Forever Text Rental
-        await update.callback_query.edit_message_text("Forever Rental selected for Text Verification.")
-        return
-
-    
-    
-        
-    # Handle back button
-    if data == "tool_back_tools":
-        await safe_send(query, context, "Returning to tools menu...", reply_markup=get_tools_inline())
-        return    
-
-    if data == "tool_otp_other":
-        # Implement logic for other countries here if needed
-        await update.callback_query.edit_message_text(
-            "Other countries selected. Coming soon…"
-        )
 
     # Handling other tools (MSN, eSIM, etc.)
     if data == "tool_msn_services":
