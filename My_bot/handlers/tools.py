@@ -155,9 +155,6 @@ async def tools_callback(update: Update, context: CallbackContext):
     # Handling OTP menu
     # ---------- OTP ROUTER ----------
 
-    if data == "tool_otp":
-        await otp_menu(update, context)
-        return
 
     if data == "otp_country_usa":
         await otp_usa_verification_menu(update, context)
@@ -196,7 +193,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
         return
     if data == "otp_back_country":
-        await otp_menu(update, context)
+        await show_usa_verification_menu(update, context)
         return
 
     if data == "otp_back_usa_verif_type":
