@@ -1458,7 +1458,6 @@ if not BOT_TOKEN:
 # Initialize the application with the fetched token
 application = Application.builder().token(BOT_TOKEN).build()
 # Register the command handler
-fetch_services_handler = CommandHandler("fetch_services", fetch_services)
 
 
 
