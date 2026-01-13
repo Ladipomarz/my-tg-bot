@@ -11,7 +11,7 @@ def get_tools_inline():
         ],
 
         [   InlineKeyboardButton("🖥️RDP", callback_data="tool_rdp"),
-            InlineKeyboardButton("OTP Verification", callback_data="tool_otp"),
+            InlineKeyboardButton("OTP Verification", callback_data="tool_otp_usa"),
             ],
         
         [InlineKeyboardButton("⬅ Back", callback_data="back_main")],
