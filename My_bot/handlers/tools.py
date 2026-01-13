@@ -13,11 +13,11 @@ from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
 from handlers.otp_handler import reserve_number_for_otp
 from handlers.otp_handler import(
-    otp_usa_verification_menu,
+    otp_verification_handler,
     otp_usa_one_time_or_rental_menu,
     otp_usa_rental_type_menu,
     otp_usa_monthly_duration_menu,
-    show_usa_verification_menu,
+    show_usa_verification_menu
 )
 
 
@@ -155,14 +155,13 @@ async def tools_callback(update: Update, context: CallbackContext):
     # Handling OTP menu
     # ---------- OTP ROUTER ----------
 
-
-    if data == "otp_country_usa":
-        await otp_usa_verification_menu(update, context)
+    if data == "tool_otp_usa_":
+        await otp_verification_handler(update, context,)
         return
     
     # Handling the case where USA number is clicked
     if data == "tool_otp_usa":
-        await otp_usa_one_time_or_rental_menu(update, context)  # Call the function to show the USA verification menu
+        await show_usa_verification_menu(update, context)  # Call the function to show the USA verification menu
         return
     if data == "tool_otp_usa_text":
     # Handle the OTP for Text Verification (you can add the logic to handle OTP fetching)

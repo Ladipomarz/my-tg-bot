@@ -4,6 +4,23 @@ from handlers.provider_factory import get_otp_provider
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
 from telegram.error import BadRequest
+API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
+API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
+
+
+
+
+async def otp_verification_handler(update: Update, context: CallbackContext, method: str):
+    # Show buttons for choosing between USA and Other Countries
+    keyboard = [
+        [
+            InlineKeyboardButton("🇺🇸 USA", callback_data=f"otp_usa_{method}"),
+            InlineKeyboardButton("🌍 Other Countries", callback_data=f"otp_other_country_{method}")
+        ],
+        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")]
+    ]
+    await _edit(update, "Please choose your region:", keyboard)
+
 
 
 async def show_usa_verification_menu(update: Update, context: CallbackContext):
@@ -30,9 +47,6 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext):
             return
         raise  # Reraise if any other error happens  
 
-# Get API credentials from environment variables
-API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
-API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
 # Initialize TextVerified client
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
@@ -48,20 +62,6 @@ async def reserve_number_for_otp(service_name: str, country="USA"):
 from handlers.servicelist import fetch_and_save_services  # Ensure correct import path
 
 # ---------- OTP MENUS ----------
-
-
-
-
-async def otp_usa_verification_menu(update, context):
-    keyboard = [
-        [
-            InlineKeyboardButton("Text Verification 📩", callback_data="otp_usa_text"),
-            InlineKeyboardButton("Voice Verification 📞", callback_data="otp_usa_voice"),
-        ],
-        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_country")],
-    ]
-    await _edit(update, "Choose verification method:", keyboard)
-
 
 async def otp_usa_one_time_or_rental_menu(update, context, method: str):
     keyboard = [
