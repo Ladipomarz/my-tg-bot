@@ -6,7 +6,29 @@ from telegram.ext import CallbackContext
 from telegram.error import BadRequest
 
 
+async def show_usa_verification_menu(update: Update, context: CallbackContext):
+    """
+    This function sends a menu for USA verification options after the user clicks 'USA Number 🇺🇸'
+    It gives options for Text and Voice Verification.
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("Text Verification", callback_data="tool_otp_usa_text"),
+            InlineKeyboardButton("Voice Verification (Coming Soon)", callback_data="tool_otp_usa_voice")
+        ],
+        [InlineKeyboardButton("⬅ Back", callback_data="tool_otp")],  # Back button to the OTP menu
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
 
+    try:
+        await update.callback_query.edit_message_text(
+            "Please choose the verification method:", 
+            reply_markup=reply_markup
+        )
+    except BadRequest as e:
+        if "Message is not modified" in str(e):
+            return
+        raise  # Reraise if any other error happens  
 
 # Get API credentials from environment variables
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
@@ -27,15 +49,7 @@ from handlers.servicelist import fetch_and_save_services  # Ensure correct impor
 
 # ---------- OTP MENUS ----------
 
-async def otp_menu(update, context):
-    keyboard = [
-        [
-            InlineKeyboardButton("USA Number 🇺🇸", callback_data="otp_country_usa"),
-            InlineKeyboardButton("Other Countries 🌍", callback_data="otp_country_other"),
-        ],
-        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_tools")],
-    ]
-    await _edit(update, "Choose country:", keyboard)
+
 
 
 async def otp_usa_verification_menu(update, context):
@@ -101,8 +115,8 @@ async def otp_usa_monthly_duration_menu(update, context, method: str):
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_rental_type")],
     ]
     await _edit(update, "Select duration:", keyboard)
-
-
+    
+  
 # ---------- INTERNAL HELPER ----------
 
 async def _edit(update, text, keyboard):
@@ -115,3 +129,4 @@ async def _edit(update, text, keyboard):
         if "Message is not modified" in str(e):
             return
         raise
+
