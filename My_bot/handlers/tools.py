@@ -160,7 +160,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     # Handling the case where USA number is clicked
-    if data == "tool_otp_usa":
+    if data == "otp_usa":
         await show_usa_verification_menu(update, context)  # Call the function to show the USA verification menu
         return
     if data == "tool_otp_usa_text":
