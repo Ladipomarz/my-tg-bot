@@ -46,8 +46,6 @@ from handlers.start import start, handle_main_menu
 from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
-from handlers.otp_handler import fetch_services  # Import your fetch_services function
-
 from handlers.admin import admin_command, admin_callback
 
 logging.basicConfig(level=logging.INFO)
@@ -1274,7 +1272,6 @@ tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 
 tg_app.add_handler(CallbackQueryHandler(callback_router))
-tg_app.add_handler(CommandHandler("fetch_services", fetch_services))
 
 # IMPORTANT: media before text (QR upload wizard)
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))

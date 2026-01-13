@@ -25,10 +25,6 @@ async def reserve_number_for_otp(service_name: str, country="USA"):
 
 from handlers.servicelist import fetch_and_save_services  # Ensure correct import path
 
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton
-from telegram.error import BadRequest
-
-
 # ---------- OTP MENUS ----------
 
 async def otp_menu(update, context):
