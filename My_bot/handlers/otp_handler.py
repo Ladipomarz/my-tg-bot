@@ -67,7 +67,7 @@ async def otp_usa_one_time_or_rental_menu(update, context, method: str):
     keyboard = [
         [
             InlineKeyboardButton(
-                "One-Time Rental",
+                "One-Time",
                 callback_data=f"otp_usa_{method}_one_time",
             ),
             InlineKeyboardButton(
