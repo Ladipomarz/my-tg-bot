@@ -112,7 +112,7 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 
 async def tools_callback(update: Update, context: CallbackContext):
-    print("Received callback:", update)  # Check if update is received
+    print("Callback received for:", update.callback_query.data)
     query = update.callback_query
     await query.answer()  # Acknowledge the button click
 
