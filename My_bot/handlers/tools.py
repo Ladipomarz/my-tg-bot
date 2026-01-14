@@ -121,6 +121,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
 
     data = (query.data or "").strip()
+    print(f"Received callback data: {data}")  # Debug log to ensure data is being captured
     user_id = update.effective_user.id
 
     # Any tools navigation cancels MSN text flow
@@ -161,6 +162,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     # Handling the case where USA number is clicked
     if data == "otp_usa":
+        print("Handling otp_usa callback data...")  # Debug log to ensure data is being handled
         await show_usa_verification_menu(update, context)  # Call the function to show the USA verification menu
         return
     
