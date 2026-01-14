@@ -190,6 +190,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_usa_voice_rental_monthly":
         await otp_usa_monthly_duration_menu(update, context, "voice")
         return
+    
 # BACK NAVIGATION
     if data == "otp_back_tools":
         await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
@@ -218,9 +219,9 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return
     
+    
     # If unhandled data, log it
     print(f"Unhandled callback data: {data}")
-    return
     
     
 
