@@ -218,6 +218,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return
     
+    # If unhandled data, log it
+    print(f"Unhandled callback data: {data}")
+    return
+    
     
 
     # Handling other tools (MSN, eSIM, etc.)
