@@ -1270,7 +1270,6 @@ tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
-
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 
 # IMPORTANT: media before text (QR upload wizard)

@@ -24,10 +24,7 @@ async def otp_verification_handler(update: Update, context: CallbackContext, met
 
 
 async def show_usa_verification_menu(update: Update, context: CallbackContext):
-    """
-    This function sends a menu for USA verification options after the user clicks 'USA Number 🇺🇸'
-    It gives options for Text and Voice Verification.
-    """
+    # Show buttons for choosing between Text and Voice verification
     keyboard = [
         [
             InlineKeyboardButton("Text Verification", callback_data="tool_otp_usa_text"),
