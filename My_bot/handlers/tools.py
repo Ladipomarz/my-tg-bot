@@ -114,6 +114,7 @@ def _normalize_dob_input(dob_str: str) -> str:
 async def tools_callback(update: Update, context: CallbackContext):
     print("Callback received for:", update.callback_query.data)
     query = update.callback_query
+    data = query.data.strip()
     await query.answer()  # Acknowledge the button click
 
     # Early exit if there is no query data
@@ -160,10 +161,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_verification_handler(update, context, method="text")
         return
     
-    # Handling the case where USA number is clicked
-    if data == "otp_usa":
-        print("Handling otp_usa callback data...")  # Debug log to ensure data is being handled
-        await show_usa_verification_menu(update, context)  # Call the function to show the USA verification menu
+    # Handle the data if it's 'otp_usa'
+    if update.callback_query.data == "otp_usa":
+        print("Handling otp_usa callback data in tools_callback...")  # Debug log
+        await show_usa_verification_menu(update, context)  # Show the USA verification menu
         return
     
     if data == "tool_otp_usa_text":
