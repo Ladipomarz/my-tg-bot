@@ -162,7 +162,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     # Handle the data if it's 'otp_usa'
-    if update.callback_query.data == "otp_usa":
+    if data == "otp_usa":
         print("Handling otp_usa callback data in tools_callback...")  # Debug log
         await show_usa_verification_menu(update, context)  # Show the USA verification menu
         return

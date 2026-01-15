@@ -767,11 +767,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
 
-    # Forward the callback to tools_callback if otp_usa is received
-    if data == "otp_usa":
-        print("Routing to tools_callback for otp_usa...")  # Confirm routing
-        await tools_callback(update, context)  # Forward to tools_callback
-        return
+    # Forward the callba datack to tools_callback 
+    await tools_callback(update, context)  # Forwarding the query to tools_callback
     
     # If data is not 'otp_usa', log it as unhandled
     print(f"Unhandled callback data: {data}")
