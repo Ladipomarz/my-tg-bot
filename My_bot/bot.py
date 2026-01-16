@@ -49,7 +49,6 @@ from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
-#asyncio.run(fetch_and_save_services())  # This ensures the services are fetched and stored
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1475,6 +1474,9 @@ application = Application.builder().token(BOT_TOKEN).build()
 application.add_handler(CommandHandler('start', start))
 
 
+create_service_fetch_status_table()
+asyncio.run(fetch_and_save_services())  # This ensures the services are fetched and stored
+
 # Define the start command
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text('Bot Started!')
@@ -1489,6 +1491,4 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())  # Run the function to fetch and save services
-
-create_service_fetch_status_table()
 
