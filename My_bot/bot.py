@@ -1470,7 +1470,6 @@ async def run_bot():
     create_service_fetch_status_table()  # Ensure this is called to initialize the table
     # Fetch and save services before starting the bot
     await fetch_and_save_services()  # Fetch and store services if not already done
-    asyncio.run(fetch_and_save_services())
 
     # Initialize the application for webhook
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
@@ -1487,3 +1486,4 @@ if __name__ == "__main__":
     
     # Run the bot setup asynchronously
     asyncio.run(run_bot())  # Fetch services and start the bot with webhook or polling
+    asyncio.run(fetch_and_save_services())
