@@ -549,6 +549,32 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
             """, (limit, offset))
             return cur.fetchall()
         
+def create_service_fetch_status_table():
+    """
+    Creates the service_fetch_status table if it doesn't exist.
+    This function ensures that the table is available on deployment.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS service_fetch_status (
+                id SERIAL PRIMARY KEY,
+                fetched BOOLEAN DEFAULT FALSE
+            );
+        """)
+
+        conn.commit()
+        cursor.close()
+        conn.close()
+
+        print("Service fetch status table created successfully (if it didn't exist).")
+    except Exception as e:
+        print(f"Error creating service_fetch_status table: {e}")
+
+# ---------------- FUNCTION TO CHECK FETCH STATUS ----------------        
+        
 def has_services_been_fetched():
     try:
         conn = get_connection()  # Ensure this returns a valid connection
@@ -571,6 +597,9 @@ def has_services_been_fetched():
 
 # Function to store services in the database
 async def store_services_in_db(services):
+    """
+    This function takes the fetched services and stores them in the database.
+    """
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -601,36 +630,47 @@ async def store_services_in_db(services):
     cursor.close()
     conn.close()
     print("Services stored successfully.")
-    
+
+# ---------------- MARK FETCHED STATUS ----------------
 
 # Function to mark the service list as fetched
 def save_service_fetch_status():
-    conn = get_connection()
-    cursor = conn.cursor()
+    """
+    Marks the service list as fetched in the service_fetch_status table.
+    """
+    try:
+        conn = get_connection()
+        cursor = conn.cursor()
 
-    # Insert or update the fetch status to True (we use ON CONFLICT to avoid duplicates)
-    cursor.execute("INSERT INTO service_fetch_status (id, fetched) VALUES (1, TRUE) ON CONFLICT (id) DO UPDATE SET fetched = TRUE;")
+        # Insert or update the fetch status to True (we use ON CONFLICT to avoid duplicates)
+        cursor.execute("INSERT INTO service_fetch_status (id, fetched) VALUES (1, TRUE) ON CONFLICT (id) DO UPDATE SET fetched = TRUE;")
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print("Service fetch status has been updated.")
+        conn.commit()
+        cursor.close()
+        conn.close()
+        print("Service fetch status has been updated.")
+    except Exception as e:
+        print(f"Error saving fetch status: {e}")
     
 # Function to check if the services have already been fetched
 def has_services_been_fetched():
-    conn = psycopg.connect(
-        host="your_host",
-        dbname="your_dbname",
-        user="your_username",
-        password="your_password"
-    )
-    cursor = conn.cursor()
-    
-    # Check if the service list has already been fetched
-    cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
-    
-    # If fetched is True, it means the service list has already been saved
-    return result and result[0]    
+    """
+    Checks if the service list has already been fetched and stored in the database.
+    """
+    try:
+        conn = get_connection()  # Ensure this returns a valid connection
+        cursor = conn.cursor()
+
+        # Check the service_fetch_status table to see if it has already been fetched
+        cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
+        result = cursor.fetchone()
+
+        cursor.close()
+        conn.close()
+
+        return result and result[0]  # Returns True if the service list has been fetched
+    except Exception as e:
+        print(f"Error checking fetch status: {e}")
+        return False  # Return False if any error occurs, so services will be fetched
+
+# ---------------- STORE SERVICES ----------------
