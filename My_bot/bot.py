@@ -7,7 +7,6 @@ import io
 import re
 import json
 
-
 from fastapi import FastAPI, Request, Response
 from handlers.servicelist import fetch_and_save_services
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
