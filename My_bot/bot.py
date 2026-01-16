@@ -18,6 +18,7 @@ from telegram.ext import (
     ContextTypes,
     filters,
     Application,
+    CallbackContext
 )
 from telegram.request import HTTPXRequest
 
@@ -1471,10 +1472,16 @@ if not BOT_TOKEN:
 # Initialize the application with the fetched token
 application = Application.builder().token(BOT_TOKEN).build()
 # Register the command handler
+application.add_handler(CommandHandler('start', start))
 
 
+# Define the start command
+async def start(update: Update, context: CallbackContext):
+    await update.message.reply_text('Bot Started!')
 
-async def main():
+
+async def main(): 
+    print("Bot is starting...")  # Debugging line
     # Fetch and save services to the database only if not done already
     await fetch_and_save_services()  # Fetch and save the service list if not done already
     # Your bot logic here (e.g., start polling, etc.)
