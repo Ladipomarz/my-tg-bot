@@ -1466,6 +1466,8 @@ async def start(update: Update, context: CallbackContext):
 
 # Function to initialize and run the bot with webhook
 async def run_bot():
+    # Create the service fetch status table (if not exists)
+    create_service_fetch_status_table()  # Ensure this is called to initialize the table
     # Fetch and save services before starting the bot
     await fetch_and_save_services()  # Fetch and store services if not already done
 
