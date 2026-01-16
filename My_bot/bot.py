@@ -1483,6 +1483,5 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())  # Run the function to fetch and save services
 
-# Call this function to create the table if it doesn't exist
 create_service_fetch_status_table()
 
