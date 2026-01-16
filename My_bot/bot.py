@@ -1484,3 +1484,6 @@ if __name__ == "__main__":
 
 # Call this function to create the table if it doesn't exist
 create_service_fetch_status_table()
+
+asyncio.run(fetch_and_save_services())  # This ensures the services are fetched and stored
+

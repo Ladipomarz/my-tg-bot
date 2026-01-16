@@ -11,6 +11,17 @@ def get_connection():
         raise RuntimeError("DATABASE_URL not set")
     return psycopg.connect(DATABASE_URL)
 
+def test_connection():
+    try:
+        conn = get_connection()
+        print("Database connection successful!")
+        conn.close()
+    except Exception as e:
+        print(f"Error connecting to database: {e}")
+
+test_connection()
+
+
 
 # ---------------- MIGRATIONS ----------------
 
