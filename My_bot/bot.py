@@ -1475,7 +1475,7 @@ async def run_bot():
     application.add_handler(CommandHandler('start', start))
 
     # Let the platform manage the webhook URL
-    application.run_polling()  # Or run webhook if configured externally
+    application.run_webhook()  # Or run webhook if configured externally
 
 # Start the process
 if __name__ == "__main__":
