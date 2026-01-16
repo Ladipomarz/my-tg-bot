@@ -608,3 +608,22 @@ def save_service_fetch_status():
     cursor.close()
     conn.close()
     print("Service fetch status has been updated.")
+    
+# Function to check if the services have already been fetched
+def has_services_been_fetched():
+    conn = psycopg.connect(
+        host="your_host",
+        dbname="your_dbname",
+        user="your_username",
+        password="your_password"
+    )
+    cursor = conn.cursor()
+    
+    # Check if the service list has already been fetched
+    cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+    
+    # If fetched is True, it means the service list has already been saved
+    return result and result[0]    

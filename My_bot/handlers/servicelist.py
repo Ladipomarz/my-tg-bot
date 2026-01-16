@@ -2,7 +2,7 @@ from textverified import TextVerified, NumberType, ReservationType
 import os
 from telegram import Update
 from telegram.ext import CallbackContext
-from db import store_services_in_db, save_service_fetch_status, has_services_been_fetched
+from utils.db import store_services_in_db, save_service_fetch_status, has_services_been_fetched
 
 
 
