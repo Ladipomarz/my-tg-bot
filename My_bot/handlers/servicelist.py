@@ -27,6 +27,12 @@ async def fetch_and_save_services():
         number_type=NumberType.MOBILE,
         reservation_type=ReservationType.VERIFICATION
     )
+    
+    # Print the full output of the services list to understand its structure    
+    if services:
+        for service in services:
+         print(service)  # Print each service object to inspect its attributes
+         print(service.service_name)  # Assuming 'service_name' is an attribute
 
     # Call to store services in DB
     await store_services_in_db(services)
