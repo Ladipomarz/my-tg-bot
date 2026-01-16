@@ -8,7 +8,6 @@ import re
 import json
 
 from fastapi import FastAPI, Request, Response
-from handlers.servicelist import fetch_and_save_services
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
@@ -41,9 +40,11 @@ from utils.db import (
 from utils.auto_delete import safe_delete_user_message
 from utils.auto_delete import delete_tracked_message
 
+
 from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
 
+from handlers.servicelist import fetch_and_save_services
 from handlers.start import start, handle_main_menu
 from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
