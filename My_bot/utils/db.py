@@ -551,7 +551,7 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
         
 # Function to check if the service list has been fetched already
 def has_services_been_fetched():
-    conn = get_db_connection()
+    conn = get_connection()
     cursor = conn.cursor()
 
     # Check the service_fetch_status table to see if it has already been fetched
