@@ -6,7 +6,6 @@ from psycopg.rows import dict_row
 
 from config import DATABASE_URL
 
-
 def get_connection():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
