@@ -18,25 +18,26 @@ async def fetch_and_save_services():
     if has_services_been_fetched():  # This line calls the has_services_been_fetched() function
         print("Service list has already been fetched. Skipping fetch.")
         return  # Skip fetching if services are already saved in DB
-     #Debugging line to check available methods
+
+    # Debugging line to check available methods (limit the log if necessary)
     print("Provider services object members:", dir(provider.services))  # Add this line
 
-    
     # Fetch the available services
     services = provider.services.list(
         number_type=NumberType.MOBILE,
         reservation_type=ReservationType.VERIFICATION
     )
-    
-    # Print the full output of the services list to understand its structure    
-    if services:
-        for service in services:
-         print(service)  # Print each service object to inspect its attributes
-         print(service.service_name)  # Assuming 'service_name' is an attribute
 
+    # Optional: print a small sample or none to avoid log spamming
+    print(f"Total services fetched: {len(services)}")  # Print the total count of services
+    if services:
+        # Only print the first 5 services to avoid spamming logs
+        for i, service in enumerate(services[:5]):  # Limit to first 5 services
+            print(f"Processing service {i + 1}: {service.service_name}")
+        
     # Call to store services in DB
     await store_services_in_db(services)
-    
+
     # Mark the service list as fetched
     save_service_fetch_status()
 
