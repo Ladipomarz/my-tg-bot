@@ -618,36 +618,47 @@ async def store_services_in_db(services):
     cursor = conn.cursor()
 
     # Create the services table if it doesn't exist
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS services (
-            product_id INT PRIMARY KEY,
-            service_name VARCHAR(255)
-        );
-    """)
+    try:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS services (
+                product_id INT PRIMARY KEY,
+                service_name VARCHAR(255)
+            );
+        """)
+    except Exception as e:
+        print(f"Error creating table: {e}")
+        return  # If table creation fails, exit early
 
     used_ids = set()
 
     # Loop through services and assign random 3-digit IDs
     for service in services:
-        while True:
-            product_id = random.randint(100, 999)
-            if product_id not in used_ids:
-                used_ids.add(product_id)
-                break
-            
-            # Access service_name using dot notation (not subscripting)
-        service_name = service.service_name  # Assuming `service_name` is an attribute of the Service object
+        try:
+            while True:
+                product_id = random.randint(100, 999)
+                if product_id not in used_ids:
+                    used_ids.add(product_id)
+                    break
 
+            service_name = service.service_name  # Assuming `service_name` is an attribute of the Service object
 
-        cursor.execute(
-            "INSERT INTO services (product_id, service_name) VALUES (%s, %s) ON CONFLICT (product_id) DO NOTHING",
-            (product_id, service_name)  # Adjust if necessary based on how `service` is structured
-        )
+            cursor.execute(
+                "INSERT INTO services (product_id, service_name) VALUES (%s, %s) ON CONFLICT (product_id) DO NOTHING",
+                (product_id, service_name)
+            )
 
-    conn.commit()
-    cursor.close()
-    conn.close()
-    print("Services stored successfully.")
+        except Exception as e:
+            print(f"Error inserting service {service_name}: {e}")
+            continue  # If one service insertion fails, continue with the next service
+
+    try:
+        conn.commit()
+        print("Services stored successfully.")
+    except Exception as e:
+        print(f"Error committing transaction: {e}")
+    finally:
+        cursor.close()
+        conn.close()
 
 # ---------------- MARK FETCHED STATUS ----------------
 
