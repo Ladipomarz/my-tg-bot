@@ -548,3 +548,63 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
                 LIMIT %s OFFSET %s;
             """, (limit, offset))
             return cur.fetchall()
+        
+# Function to check if the service list has been fetched already
+def has_services_been_fetched():
+    conn = get_db_connection()
+    cursor = conn.cursor()
+
+    # Check the service_fetch_status table to see if it has already been fetched
+    cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
+    result = cursor.fetchone()
+    cursor.close()
+    conn.close()
+
+    # If fetched is True, the service list has been saved
+    return result and result[0]
+
+# Function to store services in the database
+async def store_services_in_db(services):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Create the services table if it doesn't exist
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS services (
+            product_id INT PRIMARY KEY,
+            service_name VARCHAR(255)
+        );
+    """)
+
+    used_ids = set()
+
+    # Loop through services and assign random 3-digit IDs
+    for service in services:
+        while True:
+            product_id = random.randint(100, 999)
+            if product_id not in used_ids:
+                used_ids.add(product_id)
+                break
+
+        cursor.execute(
+            "INSERT INTO services (product_id, service_name) VALUES (%s, %s) ON CONFLICT (product_id) DO NOTHING",
+            (product_id, service['service_name'])  # Adjust if necessary based on how `service` is structured
+        )
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Services stored successfully.")
+
+# Function to mark the service list as fetched
+def save_service_fetch_status():
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    # Insert or update the fetch status to True (we use ON CONFLICT to avoid duplicates)
+    cursor.execute("INSERT INTO service_fetch_status (id, fetched) VALUES (1, TRUE) ON CONFLICT (id) DO UPDATE SET fetched = TRUE;")
+
+    conn.commit()
+    cursor.close()
+    conn.close()
+    print("Service fetch status has been updated.")

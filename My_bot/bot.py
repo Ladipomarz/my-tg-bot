@@ -7,8 +7,9 @@ import io
 import re
 import json
 
-from fastapi import FastAPI, Request, Response
 
+from fastapi import FastAPI, Request, Response
+from handlers.servicelist import fetch_and_save_services
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import (
     ApplicationBuilder,
@@ -1471,4 +1472,13 @@ application = Application.builder().token(BOT_TOKEN).build()
 # Register the command handler
 
 
+
+async def main():
+    # Fetch and save services to the database only if not done already
+    await fetch_and_save_services()  # Fetch and save the service list if not done already
+    # Your bot logic here (e.g., start polling, etc.)
+    # updater.start_polling() or dispatcher.start_polling()
+
+if __name__ == "__main__":
+    asyncio.run(main())  # Run the function to fetch and save services
 
