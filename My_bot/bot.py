@@ -24,6 +24,7 @@ from telegram.request import HTTPXRequest
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
+from utils.db import create_service_fetch_status_table
 
 from utils.db import (
     create_tables,
@@ -1482,3 +1483,5 @@ async def main():
 if __name__ == "__main__":
     asyncio.run(main())  # Run the function to fetch and save services
 
+# Call this function to create the table if it doesn't exist
+create_service_fetch_status_table()
