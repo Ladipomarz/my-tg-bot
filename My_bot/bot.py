@@ -49,7 +49,7 @@ from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
-asyncio.run(fetch_and_save_services())  # This ensures the services are fetched and stored
+#asyncio.run(fetch_and_save_services())  # This ensures the services are fetched and stored
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
