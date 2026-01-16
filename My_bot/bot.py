@@ -1459,36 +1459,27 @@ async def plisio_webhook_get():
     return {"ok": True}
 
 
-
-
-# Fetch the Telegram Bot Token from the Railway environment variable
-BOT_TOKEN = os.getenv("BOT_TOKEN")  # Replace with your actual environment variable key
-
-# Check if the API_KEY is fetched correctly
-if not BOT_TOKEN:
-    print("Error: Telegram bot token is missing!")
-
-# Initialize the application with the fetched token
-application = Application.builder().token(BOT_TOKEN).build()
-# Register the command handler
-application.add_handler(CommandHandler('start', start))
-
-
-create_service_fetch_status_table()
-asyncio.run(fetch_and_save_services())  # This ensures the services are fetched and stored
-
 # Define the start command
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text('Bot Started!')
 
+# Function to initialize and run the bot with webhook
+async def run_bot():
+    # Fetch and save services before starting the bot
+    await fetch_and_save_services()  # Fetch and store services if not already done
 
-async def main(): 
-    print("Bot is starting...")  # Debugging line
-    # Fetch and save services to the database only if not done already
-    await fetch_and_save_services()  # Fetch and save the service list if not done already
-    # Your bot logic here (e.g., start polling, etc.)
-    # updater.start_polling() or dispatcher.start_polling()
+    # Initialize the application for webhook
+    application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
 
+    # Add the command handler for the '/start' command
+    application.add_handler(CommandHandler('start', start))
+
+    # Let the platform manage the webhook URL
+    application.run_polling()  # Or run webhook if configured externally
+
+# Start the process
 if __name__ == "__main__":
-    asyncio.run(main())  # Run the function to fetch and save services
-
+    print("Bot is starting...")  # Debugging line
+    
+    # Run the bot setup asynchronously
+    asyncio.run(run_bot())  # Fetch services and start the bot with webhook or polling
