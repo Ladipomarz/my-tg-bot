@@ -575,25 +575,29 @@ def create_service_fetch_status_table():
 
 # ---------------- FUNCTION TO CHECK FETCH STATUS ----------------        
         
-def has_services_been_fetched():
+# Function to check if the services have already been fetched
+# type: ignore
+def has_services_been_fetched() -> bool:
+    """
+    Checks if the service list has already been fetched and stored in the database.
+    """
     try:
         conn = get_connection()  # Ensure this returns a valid connection
         cursor = conn.cursor()
 
-        # Check if the service_fetch_status table exists and has been updated
+        # Check the service_fetch_status table to see if it has already been fetched
         cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
         result = cursor.fetchone()
-        
+
         cursor.close()
         conn.close()
 
-        # If result is None, it means the table hasn't been populated yet
-        return result and result[0]
-
+        return result and result[0]  # Returns True if the service list has been fetched
     except Exception as e:
         print(f"Error checking fetch status: {e}")
-        return False  # Return False if any error occurs (so that services will be fetched)
+        return False  # Return False if any error occurs, so services will be fetched
 
+# ---------------- STORE SERVICES ----------------
 
 # Function to store services in the database
 async def store_services_in_db(services):
@@ -652,25 +656,3 @@ def save_service_fetch_status():
     except Exception as e:
         print(f"Error saving fetch status: {e}")
     
-# Function to check if the services have already been fetched
-def has_services_been_fetched():
-    """
-    Checks if the service list has already been fetched and stored in the database.
-    """
-    try:
-        conn = get_connection()  # Ensure this returns a valid connection
-        cursor = conn.cursor()
-
-        # Check the service_fetch_status table to see if it has already been fetched
-        cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
-        result = cursor.fetchone()
-
-        cursor.close()
-        conn.close()
-
-        return result and result[0]  # Returns True if the service list has been fetched
-    except Exception as e:
-        print(f"Error checking fetch status: {e}")
-        return False  # Return False if any error occurs, so services will be fetched
-
-# ---------------- STORE SERVICES ----------------
