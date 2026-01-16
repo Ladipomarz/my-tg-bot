@@ -16,6 +16,9 @@ async def fetch_and_save_services():
     if has_services_been_fetched():  # This line calls the has_services_been_fetched() function
         print("Service list has already been fetched. Skipping fetch.")
         return  # Skip fetching if services are already saved in DB
+     #Debugging line to check available methods
+    print("Provider services object members:", dir(provider.services))  # Add this line
+
     
     # Fetch the available services
     services = provider.services.list(
