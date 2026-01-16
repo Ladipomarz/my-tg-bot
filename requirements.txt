@@ -8,4 +8,6 @@ python-multipart
 reportlab
 requests
 textverified
+textverified==<version_number>
+
 
