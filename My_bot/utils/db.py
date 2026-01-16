@@ -549,19 +549,25 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
             """, (limit, offset))
             return cur.fetchall()
         
-# Function to check if the service list has been fetched already
 def has_services_been_fetched():
-    conn = get_connection()
-    cursor = conn.cursor()
+    try:
+        conn = get_connection()  # Ensure this returns a valid connection
+        cursor = conn.cursor()
 
-    # Check the service_fetch_status table to see if it has already been fetched
-    cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
-    result = cursor.fetchone()
-    cursor.close()
-    conn.close()
+        # Check if the service_fetch_status table exists and has been updated
+        cursor.execute("SELECT fetched FROM service_fetch_status WHERE id = 1;")
+        result = cursor.fetchone()
+        
+        cursor.close()
+        conn.close()
 
-    # If fetched is True, the service list has been saved
-    return result and result[0]
+        # If result is None, it means the table hasn't been populated yet
+        return result and result[0]
+
+    except Exception as e:
+        print(f"Error checking fetch status: {e}")
+        return False  # Return False if any error occurs (so that services will be fetched)
+
 
 # Function to store services in the database
 async def store_services_in_db(services):
@@ -595,6 +601,7 @@ async def store_services_in_db(services):
     cursor.close()
     conn.close()
     print("Services stored successfully.")
+    
 
 # Function to mark the service list as fetched
 def save_service_fetch_status():
