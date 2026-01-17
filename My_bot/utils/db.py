@@ -590,6 +590,8 @@ def create_service_fetch_status_table():
 # Function to check if the services have already been fetched
 # type: ignore
 def has_services_been_fetched() -> bool:
+    print("Checking if services have been fetched...")  # Debugging line
+
     """
     Checks if the service list has already been fetched and stored in the database.
     """
@@ -614,6 +616,9 @@ def has_services_been_fetched() -> bool:
 
 # Function to store services in the database
 async def store_services_in_db(services):
+    print(f"Storing {len(services)} services to the database...")  # Debugging line
+
+    
     """
     This function takes the fetched services and stores them in the database.
     """

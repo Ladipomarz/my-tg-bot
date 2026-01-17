@@ -14,6 +14,8 @@ provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
 
 async def fetch_and_save_services():
+    print("Starting to fetch services...")  # Add this line to debug
+
     logging.debug("Checking if services have been fetched already...")
     if has_services_been_fetched():
         logging.debug("Service list has already been fetched. Skipping fetch.")
