@@ -9,7 +9,8 @@ from config import DATABASE_URL
 def get_connection():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(DATABASE_URL)
+    return psycopg.connect(DATABASE_URL)        
+        
 
 def test_connection():
     try:
@@ -559,6 +560,7 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
             """, (limit, offset))
             return cur.fetchall()
         
+
 def create_service_fetch_status_table():
     """
     Creates the service_fetch_status table if it doesn't exist.
@@ -608,6 +610,7 @@ def has_services_been_fetched() -> bool:
         return False  # Return False if any error occurs, so services will be fetched
 
 # ---------------- STORE SERVICES ----------------
+
 
 # Function to store services in the database
 async def store_services_in_db(services):

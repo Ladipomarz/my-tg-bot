@@ -2,7 +2,8 @@ from textverified import TextVerified, NumberType, ReservationType
 import os
 from telegram import Update
 from telegram.ext import CallbackContext
-from utils.db import has_services_been_fetched, store_services_in_db, save_service_fetch_status,get_connection
+from utils.db import has_services_been_fetched, store_services_in_db, save_service_fetch_status
+
 import logging
 logging.basicConfig(level=logging.DEBUG)
 
@@ -10,10 +11,6 @@ logging.basicConfig(level=logging.DEBUG)
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
-
-
-
-
 
 
 async def fetch_and_save_services():
