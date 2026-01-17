@@ -14,31 +14,25 @@ provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
 
 async def fetch_and_save_services():
-    print("Starting to fetch services...")  # Add this line to debug
-
-    logging.debug("Checking if services have been fetched already...")
+    print("Starting service fetch process...")  # Debugging line
     if has_services_been_fetched():
-        logging.debug("Service list has already been fetched. Skipping fetch.")
-        return  # Skip fetching if services are already saved in DB
-
-    logging.debug("Provider services object members: %s", dir(provider.services))
-
+        print("Service list has already been fetched. Skipping fetch.")
+        return
+    
+    print("Fetching services...")  # Debugging line
     try:
         services = provider.services.list(
             number_type=NumberType.MOBILE,
             reservation_type=ReservationType.VERIFICATION
         )
-        logging.debug(f"Total services fetched: {len(services)}")
+        print(f"Fetched {len(services)} services.")  # Debugging line
+
+        if services:
+            for i, service in enumerate(services[:5]):  # Only print first 5 to avoid spam
+                print(f"Processing service {i + 1}: {service.service_name}")
     except Exception as e:
-        logging.error(f"Error fetching services: {str(e)}")
-        return
+        print(f"Error fetching services: {e}")
 
-    if services:
-        for i, service in enumerate(services[:5]):  # Limit to first 5
-            logging.debug(f"Processing service {i + 1}: {service.service_name}")
-
-    await store_services_in_db(services)
-
+    await store_services_in_db(services)  # Store services in the database
     save_service_fetch_status()
-
-    logging.debug("Services have been successfully fetched and stored in the database.")
+    print("Services have been successfully fetched and stored in the database.")

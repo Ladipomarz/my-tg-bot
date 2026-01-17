@@ -616,16 +616,10 @@ def has_services_been_fetched() -> bool:
 
 # Function to store services in the database
 async def store_services_in_db(services):
-    print(f"Storing {len(services)} services to the database...")  # Debugging line
-
-    
-    """
-    This function takes the fetched services and stores them in the database.
-    """
+    print(f"Storing {len(services)} services in the database...")  # Debugging line
     conn = get_connection()
     cursor = conn.cursor()
 
-    # Create the services table if it doesn't exist
     try:
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS services (
@@ -635,11 +629,10 @@ async def store_services_in_db(services):
         """)
     except Exception as e:
         print(f"Error creating table: {e}")
-        return  # If table creation fails, exit early
+        return
 
     used_ids = set()
 
-    # Loop through services and assign random 3-digit IDs
     for service in services:
         try:
             while True:
@@ -649,6 +642,7 @@ async def store_services_in_db(services):
                     break
 
             service_name = service.service_name  # Assuming `service_name` is an attribute of the Service object
+            print(f"Inserting service: {service_name}")  # Debugging line
 
             cursor.execute(
                 "INSERT INTO services (product_id, service_name) VALUES (%s, %s) ON CONFLICT (product_id) DO NOTHING",
@@ -657,11 +651,11 @@ async def store_services_in_db(services):
 
         except Exception as e:
             print(f"Error inserting service {service_name}: {e}")
-            continue  # If one service insertion fails, continue with the next service
+            continue
 
     try:
         conn.commit()
-        print("Services stored successfully.")
+        print("Services stored successfully.")  # Debugging line
     except Exception as e:
         print(f"Error committing transaction: {e}")
     finally:

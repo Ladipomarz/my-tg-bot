@@ -1463,21 +1463,12 @@ async def plisio_webhook_get():
 # Define the start command
 async def start(update: Update, context: CallbackContext):
     await update.message.reply_text('Bot Started!')
-
 # Function to initialize and run the bot with webhook
 async def run_bot():
-    print("Running the bot...")  # Debugging line
+    print("Starting the bot...")
 
-    # Create the service fetch status table (if not exists)
-    create_service_fetch_status_table()  # Ensure this is called to initialize the table
     # Fetch and save services before starting the bot
-    await fetch_and_save_services()  # Fetch and store services if not already done
-    
-     # Now, start the bot after services have been fetched
-    BOT_TOKEN = os.getenv("BOT_TOKEN")  # Replace with your actual environment variable key
-    if not BOT_TOKEN:
-        print("Error: Telegram bot token is missing!")
-        return
+    await fetch_and_save_services()
 
     # Initialize the application for webhook
     application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
@@ -1486,11 +1477,11 @@ async def run_bot():
     application.add_handler(CommandHandler('start', start))
 
     # Let the platform manage the webhook URL
-    application.run_webhook()  # Or run webhook if configured externally
+    application.run_webhook()
 
-# Start the process
+async def main():
+    print("Bot is starting...")
+    await run_bot()
+
 if __name__ == "__main__":
-    print("Bot is starting...")  # Debugging line
-    
-    # Run the bot setup asynchronously
-    asyncio.run(run_bot())  # Fetch services and start the bot with webhook or poll
+    asyncio.run(main())
