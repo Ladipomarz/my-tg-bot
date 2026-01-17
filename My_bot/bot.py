@@ -1491,4 +1491,4 @@ if __name__ == "__main__":
     print("Bot is starting...")  # Debugging line
     
     # Run the bot setup asynchronously
-    asyncio.run(run_bot())  # Fetch services and start the bot with webhook or pol
+    asyncio.run(run_bot())  # Fetch services and start the bot with webhook or poll
