@@ -1476,3 +1476,6 @@ async def on_startup():
     # ✅ Your existing telegram bootstrap (KEEP THIS)
     # If your function name is slightly different, keep your existing name here.
     asyncio.create_task(_background_telegram_bootstrap())
+    
+    application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
+    application.add_handler(CommandHandler('start', start))
