@@ -770,9 +770,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     
     # Route OTP/tools/service callbacks into tools_callback
-    if data.startswith("tool_") or data.startswith("otp_") or data.startswith("service_"):
+    if data.startswith(("tool_", "otp_", "service_", "esim_")):
         await tools_callback(update, context)
         return
+
     
     await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
 
@@ -1457,19 +1458,14 @@ async def plisio_webhook_get():
     return {"ok": True}
 
 
-# Define the start command
 @app.on_event("startup")
 async def on_startup():
-    # Your existing DB setup
+    # DB schema setup
     create_tables()
-
-    # Ensure the fetch-status table exists
     create_service_fetch_status_table()
 
-    # ✅ Fetch + store TextVerified services ONCE (non-blocking)
-    # (It will skip if has_services_been_fetched() == True)
-    asyncio.create_task(fetch_and_save_services())
+    # ✅ Run fetch+save in a background THREAD so webhook stays responsive
+    asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
 
-    # ✅ Your existing telegram bootstrap (KEEP THIS)
-    # If your function name is slightly different, keep your existing name here.
+    # ✅ Keep your Telegram bootstrap
     asyncio.create_task(_background_telegram_bootstrap())

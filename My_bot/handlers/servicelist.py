@@ -1,33 +1,35 @@
 from textverified import TextVerified, NumberType, ReservationType
 import os
-from telegram import Update
-from telegram.ext import CallbackContext
-from utils.db import has_services_been_fetched, store_services_in_db, save_service_fetch_status
 
-import logging
-logging.basicConfig(level=logging.DEBUG)
+from utils.db import (
+    create_service_fetch_status_table,
+    has_services_been_fetched,
+    store_services_in_db,
+    save_service_fetch_status,
+)
 
-# Initialize TextVerified client
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
+
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
+def fetch_and_save_services_sync():
+    create_service_fetch_status_table()
 
-async def fetch_and_save_services():
-    print("Starting service fetch process...")  # Debugging line
+    print("Starting service fetch process...")
+    print("Checking if services have been fetched...")
+
     if has_services_been_fetched():
-        print("Service list has already been fetched. Skipping fetch.")
+        print("Service list already fetched. Skipping.")
         return
-    
-    print("Fetching services...")  # Debugging line
-    try:
-        services = provider.services.list(
-            number_type=NumberType.MOBILE,
-            reservation_type=ReservationType.VERIFICATION
-        )
-    except Exception as e:
-        print(f"Error fetching services: {e}")
 
-    await store_services_in_db(services)  # Store services in the database
+    print("Fetching services...")
+    services = provider.services.list(
+        number_type=NumberType.MOBILE,
+        reservation_type=ReservationType.VERIFICATION,
+    )
+
+    print(f"Storing {len(services)} services in the database...")
+    store_services_in_db(services)
     save_service_fetch_status()
-    print("Services have been successfully fetched and stored in the database.")
+    print("✅ Services fetched + stored.")
