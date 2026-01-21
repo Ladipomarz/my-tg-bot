@@ -1290,9 +1290,6 @@ tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filt
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 
 
-# ------------------------------
-# WEBHOOK BOOTSTRAP
-# ------------------------------
 
 async def _background_telegram_bootstrap():
     webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
@@ -1455,10 +1452,12 @@ async def plisio_webhook_get():
 
 @app.on_event("startup")
 async def on_startup():
+    print("Fast APi up")
+    
     create_tables()
     create_service_fetch_status_table()
 
-    task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services_sync))
+    task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
 
     def _log_task_result(t: asyncio.Task):
         exc = t.exception()

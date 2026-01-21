@@ -615,7 +615,7 @@ def has_services_been_fetched() -> bool:
 
 
 # Function to store services in the database
-async def store_services_in_db(services):
+def store_services_in_db(services):
     print(f"Storing {len(services)} services in the database...")  # Debugging line
     conn = get_connection()
     cursor = conn.cursor()
