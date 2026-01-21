@@ -1285,9 +1285,6 @@ tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
-tg_app.add_handler(CallbackQueryHandler(tools_callback))
-tg_app = Application.builder().token(os.getenv("BOT_TOKEN")).build()
-
 
 
 # IMPORTANT: media before text (QR upload wizard)
