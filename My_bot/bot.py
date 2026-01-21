@@ -1461,27 +1461,18 @@ async def plisio_webhook_get():
 
 
 # Define the start command
-async def start(update: Update, context: CallbackContext):
-    await update.message.reply_text('Bot Started!')
-# Function to initialize and run the bot with webhook
-async def run_bot():
-    print("Starting the bot...")
+@app.on_event("startup")
+async def on_startup():
+    # Your existing DB setup
+    create_tables()
 
-    # Fetch and save services before starting the bot
-    await fetch_and_save_services()
+    # Ensure the fetch-status table exists
+    create_service_fetch_status_table()
 
-    # Initialize the application for webhook
-    application = Application.builder().token(os.getenv("BOT_TOKEN")).build()
+    # ✅ Fetch + store TextVerified services ONCE (non-blocking)
+    # (It will skip if has_services_been_fetched() == True)
+    asyncio.create_task(fetch_and_save_services())
 
-    # Add the command handler for the '/start' command
-    application.add_handler(CommandHandler('start', start))
-
-    # Let the platform manage the webhook URL
-    application.run_webhook()
-
-async def main():
-    print("Bot is starting...")
-    await run_bot()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    # ✅ Your existing telegram bootstrap (KEEP THIS)
+    # If your function name is slightly different, keep your existing name here.
+    asyncio.create_task(_background_telegram_bootstrap())
