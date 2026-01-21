@@ -13,7 +13,7 @@ API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
-def fetch_and_save_services_sync():
+def fetch_and_save_services():
     create_service_fetch_status_table()
 
     print("Starting service fetch process...")
