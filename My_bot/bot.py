@@ -1293,11 +1293,6 @@ tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
 # ------------------------------
 # WEBHOOK BOOTSTRAP
 # ------------------------------
-@app.on_event("startup")
-async def on_startup():
-    create_tables()
-    asyncio.create_task(_background_telegram_bootstrap())
-
 
 async def _background_telegram_bootstrap():
     webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
@@ -1460,12 +1455,17 @@ async def plisio_webhook_get():
 
 @app.on_event("startup")
 async def on_startup():
-    # DB schema setup
     create_tables()
     create_service_fetch_status_table()
 
-    # ✅ Run fetch+save in a background THREAD so webhook stays responsive
-    asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
+    task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services_sync))
 
-    # ✅ Keep your Telegram bootstrap
+    def _log_task_result(t: asyncio.Task):
+        exc = t.exception()
+        if exc:
+            import logging
+            logging.getLogger("servicelist").exception("Background service task crashed", exc_info=exc)
+
+    task.add_done_callback(_log_task_result)
+
     asyncio.create_task(_background_telegram_bootstrap())
