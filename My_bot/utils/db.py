@@ -642,7 +642,6 @@ async def store_services_in_db(services):
                     break
 
             service_name = service.service_name  # Assuming `service_name` is an attribute of the Service object
-            print(f"Inserting service: {service_name}")  # Debugging line
 
             cursor.execute(
                 "INSERT INTO services (product_id, service_name) VALUES (%s, %s) ON CONFLICT (product_id) DO NOTHING",

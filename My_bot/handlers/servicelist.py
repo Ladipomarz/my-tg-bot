@@ -25,11 +25,6 @@ async def fetch_and_save_services():
             number_type=NumberType.MOBILE,
             reservation_type=ReservationType.VERIFICATION
         )
-        print(f"Fetched {len(services)} services.")  # Debugging line
-
-        if services:
-            for i, service in enumerate(services[:5]):  # Only print first 5 to avoid spam
-                print(f"Processing service {i + 1}: {service.service_name}")
     except Exception as e:
         print(f"Error fetching services: {e}")
 
