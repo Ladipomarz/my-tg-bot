@@ -562,28 +562,29 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
         
 
 def create_service_fetch_status_table():
-    """
-    Creates the service_fetch_status table if it doesn't exist.
-    This function ensures that the table is available on deployment.
-    """
-    try:
-        conn = get_connection()
-        cursor = conn.cursor()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # status table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS service_fetch_status (
+                    id INT PRIMARY KEY,
+                    fetched BOOLEAN NOT NULL DEFAULT FALSE
+                );
+            """)
+            cur.execute("INSERT INTO service_fetch_status (id, fetched) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING;")
 
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS service_fetch_status (
-                id SERIAL PRIMARY KEY,
-                fetched BOOLEAN DEFAULT FALSE
-            );
-        """)
-
+            # services table (NEW)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS services (
+                    local_code INT UNIQUE NOT NULL,
+                    service_name TEXT UNIQUE NOT NULL,
+                    capability TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_services_local_code ON services(local_code);")
         conn.commit()
-        cursor.close()
-        conn.close()
 
-        print("Service fetch status table created successfully (if it didn't exist).")
-    except Exception as e:
-        print(f"Error creating service_fetch_status table: {e}")
 
 # ---------------- FUNCTION TO CHECK FETCH STATUS ----------------        
         
@@ -616,50 +617,61 @@ def has_services_been_fetched() -> bool:
 
 # Function to store services in the database
 def store_services_in_db(services):
-    print(f"Storing {len(services)} services in the database...")  # Debugging line
-    conn = get_connection()
-    cursor = conn.cursor()
+    """
+    Assigns stable sequential codes:
+    - If service_name already exists: keep its local_code, just update capability.
+    - If new service_name: assign next local_code = max(local_code)+1
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Ensure table exists
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS services (
+                    local_code INT UNIQUE NOT NULL,
+                    service_name TEXT UNIQUE NOT NULL,
+                    capability TEXT,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
 
-    try:
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS services (
-                product_id INT PRIMARY KEY,
-                service_name VARCHAR(255)
-            );
-        """)
-    except Exception as e:
-        print(f"Error creating table: {e}")
-        return
+            # Start from current max
+            cur.execute("SELECT COALESCE(MAX(local_code), 0) FROM services;")
+            next_code = int(cur.fetchone()[0]) + 1
 
-    used_ids = set()
+            # Deterministic order (optional but recommended)
+            services_sorted = sorted(services, key=lambda s: (s.service_name or "").lower())
 
-    for service in services:
-        try:
-            while True:
-                product_id = random.randint(100, 999)
-                if product_id not in used_ids:
-                    used_ids.add(product_id)
-                    break
+            inserted = 0
+            for s in services_sorted:
+                name = s.service_name
+                cap = getattr(s, "capability", None)
+                cap_val = cap.value if hasattr(cap, "value") else (str(cap) if cap else None)
 
-            service_name = service.service_name  # Assuming `service_name` is an attribute of the Service object
+                # Already exists?
+                cur.execute("SELECT local_code FROM services WHERE service_name = %s;", (name,))
+                row = cur.fetchone()
+                if row:
+                    # keep local_code stable; update capability
+                    cur.execute(
+                        "UPDATE services SET capability = %s WHERE service_name = %s;",
+                        (cap_val, name),
+                    )
+                    continue
 
-            cursor.execute(
-                "INSERT INTO services (product_id, service_name) VALUES (%s, %s) ON CONFLICT (product_id) DO NOTHING",
-                (product_id, service_name)
-            )
+                # New service -> assign next sequential code
+                cur.execute(
+                    """
+                    INSERT INTO services (local_code, service_name, capability)
+                    VALUES (%s, %s, %s);
+                    """,
+                    (next_code, name, cap_val),
+                )
+                next_code += 1
+                inserted += 1
 
-        except Exception as e:
-            print(f"Error inserting service {service_name}: {e}")
-            continue
-
-    try:
         conn.commit()
-        print("Services stored successfully.")  # Debugging line
-    except Exception as e:
-        print(f"Error committing transaction: {e}")
-    finally:
-        cursor.close()
-        conn.close()
+    print(f"✅ Services saved/updated. New inserted: {inserted}")
+
 
 # ---------------- MARK FETCHED STATUS ----------------
 
