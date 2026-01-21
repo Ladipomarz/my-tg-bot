@@ -764,19 +764,16 @@ async def debug_payload(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     data = q.data.strip()  # Clean up the data
-    print(f"Received callback data: {data}")  # Log the callback data
 
     if not q or not q.data:
         return
     
-
-    # Forward the callba datack to tools_callback 
-    await tools_callback(update, context)  # Forwarding the query to tools_callback
     
-    # If data is not 'otp_usa', log it as unhandled
-    print(f"Unhandled callback data: {data}")
-
-
+    # Route OTP/tools/service callbacks into tools_callback
+    if data.startswith("tool_") or data.startswith("otp_") or data.startswith("service_"):
+        await tools_callback(update, context)
+        return
+    
     await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
 
     data = (q.data or "").strip()
