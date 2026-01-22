@@ -562,27 +562,59 @@ def get_delivered_orders_for_admin(limit: int = 10, offset: int = 0):
         
 
 def create_service_fetch_status_table():
+    """
+    Ensures:
+      - service_fetch_status table exists and has row id=1
+      - services table exists with the RIGHT constraints to store BOTH sms and voice
+    """
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # status table
+            # ---- status table ----
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS service_fetch_status (
                     id INT PRIMARY KEY,
                     fetched BOOLEAN NOT NULL DEFAULT FALSE
                 );
             """)
-            cur.execute("INSERT INTO service_fetch_status (id, fetched) VALUES (1, FALSE) ON CONFLICT (id) DO NOTHING;")
+            cur.execute("""
+                INSERT INTO service_fetch_status (id, fetched)
+                VALUES (1, FALSE)
+                ON CONFLICT (id) DO NOTHING;
+            """)
 
-            # services table (NEW)
+            # ---- services table ----
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS services (
                     local_code INT UNIQUE NOT NULL,
-                    service_name TEXT UNIQUE NOT NULL,
-                    capability TEXT,
+                    service_name TEXT NOT NULL,
+                    capability TEXT NOT NULL,
                     created_at TIMESTAMP DEFAULT NOW()
                 );
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_services_local_code ON services(local_code);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_services_capability ON services(capability);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_services_name ON services(service_name);")
+
+            # IMPORTANT: enforce per-capability uniqueness
+            # Drop the old unique constraint on service_name if it exists (common auto-name: services_service_name_key)
+            cur.execute("ALTER TABLE services DROP CONSTRAINT IF EXISTS services_service_name_key;")
+
+            # Add composite unique constraint (service_name, capability) if not already there
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'services_service_name_capability_key'
+                    ) THEN
+                        ALTER TABLE services
+                        ADD CONSTRAINT services_service_name_capability_key
+                        UNIQUE (service_name, capability);
+                    END IF;
+                END$$;
+            """)
+
         conn.commit()
 
 
@@ -618,47 +650,66 @@ def has_services_been_fetched() -> bool:
 # Function to store services in the database
 def store_services_in_db(services):
     """
-    Assigns stable sequential codes:
-    - If service_name already exists: keep its local_code, just update capability.
-    - If new service_name: assign next local_code = max(local_code)+1
+    Stores BOTH SMS + VOICE as separate rows:
+      UNIQUE(service_name, capability)
+
+    Code rules:
+      - Existing rows keep their local_code
+      - New (service_name, capability) rows get next local_code (sequential)
     """
+    if not services:
+        print("No services provided to store_services_in_db().")
+        return
+
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Ensure table exists
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS services (
-                    local_code INT UNIQUE NOT NULL,
-                    service_name TEXT UNIQUE NOT NULL,
-                    capability TEXT,
-                    created_at TIMESTAMP DEFAULT NOW()
-                );
-            """)
+            # Ensure schema exists + constraints are correct
+            create_service_fetch_status_table()
 
-            # Start from current max
+            # Start from current max local_code
             cur.execute("SELECT COALESCE(MAX(local_code), 0) FROM services;")
             next_code = int(cur.fetchone()[0]) + 1
 
-            # Deterministic order (optional but recommended)
-            services_sorted = sorted(services, key=lambda s: (s.service_name or "").lower())
+            # Deterministic order helps stability (same insert order every run)
+            def _cap_value(s):
+                cap = getattr(s, "capability", None)
+                return cap.value if hasattr(cap, "value") else (str(cap) if cap else "")
+
+            services_sorted = sorted(
+                services,
+                key=lambda s: ((getattr(s, "service_name", "") or "").lower(), (_cap_value(s) or "").lower()),
+            )
 
             inserted = 0
-            for s in services_sorted:
-                name = s.service_name
-                cap = getattr(s, "capability", None)
-                cap_val = cap.value if hasattr(cap, "value") else (str(cap) if cap else None)
+            updated = 0
 
-                # Already exists?
-                cur.execute("SELECT local_code FROM services WHERE service_name = %s;", (name,))
-                row = cur.fetchone()
-                if row:
-                    # keep local_code stable; update capability
-                    cur.execute(
-                        "UPDATE services SET capability = %s WHERE service_name = %s;",
-                        (cap_val, name),
-                    )
+            for s in services_sorted:
+                name = (getattr(s, "service_name", None) or "").strip()
+                if not name:
                     continue
 
-                # New service -> assign next sequential code
+                cap_val = _cap_value(s).strip().lower()
+                if not cap_val:
+                    # If TextVerified ever returns empty, skip (or you can default to 'sms')
+                    continue
+
+                # If row exists for (name, cap) -> keep local_code; update capability text (safe)
+                cur.execute(
+                    "SELECT local_code FROM services WHERE service_name = %s AND capability = %s;",
+                    (name, cap_val),
+                )
+                row = cur.fetchone()
+
+                if row:
+                    # Nothing really to update except being safe
+                    cur.execute(
+                        "UPDATE services SET capability = %s WHERE service_name = %s AND capability = %s;",
+                        (cap_val, name, cap_val),
+                    )
+                    updated += 1
+                    continue
+
+                # Insert new pair (name, cap)
                 cur.execute(
                     """
                     INSERT INTO services (local_code, service_name, capability)
@@ -670,7 +721,8 @@ def store_services_in_db(services):
                 inserted += 1
 
         conn.commit()
-    print(f"✅ Services saved/updated. New inserted: {inserted}")
+
+    print(f"✅ Services saved. Inserted new rows: {inserted} | Existing rows seen: {updated}")
 
 
 # ---------------- MARK FETCHED STATUS ----------------
