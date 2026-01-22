@@ -21,6 +21,8 @@ from handlers.otp_handler import(
 )
 
 from handlers.otp_handler import send_services_txt
+from handlers.service_list_flow import start_service_list_flow
+
 
 from utils.validator import (
     is_valid_email,
@@ -175,7 +177,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     if data == "otp_usa_text_one_time":
-        await send_services_txt(update, context, capability="sms")
+        await start_service_list_flow(update, context, plan="one_time", capability="sms")
         return
     
     if data == "tool_otp_usa_voice":

@@ -4,6 +4,7 @@ import json
 import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
+from psycopg.errors import UndefinedColumn, UndefinedTable
 
 from config import DATABASE_URL
 
@@ -787,6 +788,85 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
     content = "\n".join(lines) + "\n"
     filename = f"services_{capability.lower()}.txt"
     return content.encode("utf-8"), filename
+
+
+
+def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str, str]]:
+    """
+    Returns list of (code, service_name) from DB.
+    Tries (local_code, capability) schema first, falls back to (product_id) schema.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Try new schema: local_code + capability
+            try:
+                if capability:
+                    cur.execute(
+                        """
+                        SELECT local_code, service_name
+                        FROM services
+                        WHERE capability = %s
+                        ORDER BY local_code ASC;
+                        """,
+                        (capability,),
+                    )
+                else:
+                    cur.execute(
+                        """
+                        SELECT local_code, service_name
+                        FROM services
+                        ORDER BY local_code ASC;
+                        """
+                    )
+                rows = cur.fetchall()
+                return [(str(r[0]).zfill(4), r[1]) for r in rows]
+            except (UndefinedColumn, UndefinedTable):
+                pass
+
+            # Fallback old schema: product_id + service_name
+            cur.execute(
+                """
+                SELECT product_id, service_name
+                FROM services
+                ORDER BY product_id ASC;
+                """
+            )
+            rows = cur.fetchall()
+            # old codes are ints; still format as 4-digit for display consistency
+            return [(str(r[0]).zfill(4), r[1]) for r in rows]
+
+
+def get_service_name_by_code(code: str) -> str | None:
+    """
+    Looks up service_name from DB by code.
+    Tries local_code first, falls back to product_id.
+    """
+    code = (code or "").strip()
+    if not code.isdigit():
+        return None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Try new schema
+            try:
+                cur.execute(
+                    "SELECT service_name FROM services WHERE local_code = %s LIMIT 1;",
+                    (int(code),),
+                )
+                row = cur.fetchone()
+                if row:
+                    return row[0]
+            except (UndefinedColumn, UndefinedTable):
+                pass
+
+            # Fallback old schema
+            cur.execute(
+                "SELECT service_name FROM services WHERE product_id = %s LIMIT 1;",
+                (int(code),),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+
         
         
         

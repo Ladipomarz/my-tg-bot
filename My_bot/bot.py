@@ -25,6 +25,8 @@ from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
 from utils.db import reset_services_fetch_state
+from handlers.otp_handler import handle_otp_text_input
+
 
 from utils.db import (
     create_tables,
@@ -1170,6 +1172,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # TEXT ROUTER
 # ------------------------------
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # inside text_router, very early:
+    if await handle_otp_text_input(update, context):
+        return
+
     # Admin wizard capture FIRST
     if await _admin_capture_text(update, context):
         return

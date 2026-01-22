@@ -7,6 +7,9 @@ from telegram.error import BadRequest
 from io import BytesIO
 from telegram import InputFile
 from utils.db import build_services_txt_bytes
+from utils.db import get_services_for_export, get_service_name_by_code
+from utils.validator import normalize_us_state_full_name
+
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
@@ -143,3 +146,155 @@ async def send_services_txt(update, context, capability: str = "sms"):
         document=InputFile(bio, filename=filename),
         caption="✅ Here’s the service list.\nReply with the CODE you want.",
     )
+
+
+# handlers/otp_handler.py
+
+async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms") -> None:
+    """
+    Builds a txt file from DB in-memory and sends it to the user.
+    """
+    rows = get_services_for_export(capability=capability)
+
+    # Build text content
+    lines = []
+    for code, name in rows:
+        lines.append(f"Product ID: {code}\nService: {name}\n" + ("_" * 22) + "\n")
+
+    content = "\n".join(lines) if lines else "No services found in DB."
+
+    bio = BytesIO(content.encode("utf-8"))
+    bio.name = f"services_{capability}.txt"
+    bio.seek(0)
+
+    chat_id = update.effective_chat.id
+    await context.bot.send_document(
+        chat_id=chat_id,
+        document=InputFile(bio, filename=bio.name),
+        caption="✅ TextVerified service list (from DB).",
+    )
+
+
+async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
+    """
+    Handles OTP flow replies (product id / yes-no / state name / final confirm).
+    Returns True if message was handled (so your text_router should stop).
+    """
+    step = context.user_data.get("otp_step")
+    if not step:
+        return False
+
+    text = (update.message.text or "").strip()
+    low = text.lower()
+
+    # ---- step: waiting for product id (4 digits) ----
+    if step == "await_product_id":
+        if not text.isdigit() or len(text) not in (3, 4):  # support old 3-digit and new 4-digit
+            await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
+            return True
+
+        service_name = get_service_name_by_code(text)
+        if not service_name:
+            await update.message.reply_text("❌ I couldn't find that Product ID in the DB. Try again or press Skip.")
+            return True
+
+        context.user_data["otp_service_name"] = service_name
+
+        # Ask state preference
+        context.user_data["otp_step"] = "ask_specific_state"
+        await update.message.reply_text(
+            "If you've got the 4-digit Product ID, we can proceed.\n\n"
+            "⚠️Please make sure the service is not listed before using the universal phone number.\n\n"
+            "Do you want the number to be generated from a specific US state?\n"
+            "Reply with: yes / no"
+        )
+        return True
+
+    # ---- step: ask specific state yes/no ----
+    if step == "ask_specific_state":
+        if low not in ("yes", "no"):
+            await update.message.reply_text("Please reply with: yes or no")
+            return True
+
+        # Prices placeholder (you said you'll set later)
+        specific_price = context.user_data.get("otp_specific_price", "$x")
+        random_price = context.user_data.get("otp_random_price", "$y")
+
+        if low == "yes":
+            context.user_data["otp_step"] = "await_state_name"
+            await update.message.reply_text(
+                f"Specific State Price: {specific_price}\n"
+                f"Random State Price: {random_price}\n\n"
+                "🇺🇸 Which US state do you want the phone number to be generated from?\n"
+                "✅ Example: California"
+            )
+            return True
+
+        # no => go to final confirm w/ random state
+        context.user_data["otp_state"] = None
+        context.user_data["otp_step"] = "final_confirm"
+        await _send_final_confirmation(update, context)
+        return True
+
+    # ---- step: waiting for state name ----
+    if step == "await_state_name":
+        ok, canon = normalize_us_state_full_name(text)
+        if not ok:
+            await update.message.reply_text("❌ Invalid state. Please enter full state name (e.g. California).")
+            return True
+
+        context.user_data["otp_state"] = canon
+        context.user_data["otp_step"] = "final_confirm"
+        await _send_final_confirmation(update, context)
+        return True
+
+    # ---- step: final confirm yes/no ----
+    if step == "final_confirm":
+        if low not in ("yes", "no"):
+            await update.message.reply_text("Please reply with: yes or no")
+            return True
+
+        if low == "no":
+            # cancel/reset and send them back (you can change where)
+            context.user_data.pop("otp_step", None)
+            context.user_data.pop("otp_service_name", None)
+            context.user_data.pop("otp_state", None)
+            await update.message.reply_text("✅ Cancelled.")
+            return True
+
+        # YES => reserve number hook
+        service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
+        state = context.user_data.get("otp_state")
+
+        # ✅ CALL YOUR RESERVE FUNCTION HERE
+        # Example:
+        # number = await reserve_number_for_otp(service_name=service_name, country="USA", state=state)
+        # await update.message.reply_text(f"Reserved number for {service_name}: {number}\nWaiting for OTP...")
+
+        await update.message.reply_text(
+            f"✅ Confirmed.\n\nService: {service_name}\nState: {state or 'Random'}\n\n"
+            "Now reserve the number (hook is ready in code)."
+        )
+
+        # clear flow
+        context.user_data.pop("otp_step", None)
+        context.user_data.pop("otp_service_name", None)
+        context.user_data.pop("otp_state", None)
+        return True
+
+    return False
+
+
+async def _send_final_confirmation(update: Update, context: CallbackContext) -> None:
+    service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
+    state = context.user_data.get("otp_state")
+
+    price = context.user_data.get("otp_price", "$x")  # placeholder
+    msg = (
+        "FINAL CONFIRMATION\n\n"
+        f"Service: {service_name}\n"
+        f"State: {state or 'Random'}\n"
+        f"Price: {price}\n\n"
+        "⚠️Please reply with either yes or no to confirm."
+    )
+    await update.message.reply_text(msg)
