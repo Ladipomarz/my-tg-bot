@@ -1,6 +1,7 @@
 from textverified import TextVerified, NumberType, ReservationType, ReservationCapability
 import os
 import re
+import asyncio
 from handlers.provider_factory import get_otp_provider
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
