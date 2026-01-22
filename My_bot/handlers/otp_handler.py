@@ -267,25 +267,46 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         # YES => reserve number hook
         service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
         state = context.user_data.get("otp_state")
+        
 
         # ✅ CALL YOUR RESERVE FUNCTION HERE
-        # Example:
-        # number = await reserve_number_for_otp(service_name=service_name, country="USA", state=state)
-        # await update.message.reply_text(f"Reserved number for {service_name}: {number}\nWaiting for OTP...")
+    try:
+        ver = await reserve_sms_verification(service_name=service_name, state=state)
 
-        await update.message.reply_text(
-            f"✅ Confirmed.\n\nService: {service_name}\nState: {state or 'Random'}\n\n"
-            "Now reserve the number (hook is ready in code)."
+        # SDKs vary slightly; grab number/id safely
+        number = (
+            getattr(ver, "number", None)
+            or getattr(ver, "phone_number", None)
+            or getattr(ver, "to_value", None)
+        )
+        verification_id = (
+            getattr(ver, "id", None)
+            or getattr(ver, "verification_id", None)
+            or getattr(ver, "reservation_id", None)
         )
 
-        # clear flow
-        context.user_data.pop("otp_step", None)
-        context.user_data.pop("otp_service_name", None)
-        context.user_data.pop("otp_state", None)
+        # Save for the next step (OTP polling, etc.)
+        context.user_data["otp_verification_id"] = verification_id
+        context.user_data["otp_reserved_number"] = number
+
+        await update.message.reply_text(
+            "✅ Reserved number!\n\n"
+            f"Service: {service_name}\n"
+            f"State: {state or 'Random'}\n"
+            f"Number: {number}\n"
+            f"Verification ID: {verification_id}\n\n"
+            "Now wait for OTP (next step is polling SMS)."
+        )
+
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to reserve number: {e}")
         return True
 
-    return False
-
+    # clear flow step (keep reservation info so you can poll OTP)
+    context.user_data.pop("otp_step", None)
+    context.user_data.pop("otp_service_name", None)
+    context.user_data.pop("otp_state", None)
+    return True
 
 US_STATES_EXAMPLE = "California"
 
@@ -302,3 +323,38 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
         "⚠️Please reply with either yes or no to confirm."
     )
     await update.message.reply_text(msg)
+
+
+
+def _area_codes_for_state(state_full: str) -> list[str]:
+    # TextVerified SDK exposes services.area_codes
+    # We keep it simple: match by full name (case-insensitive)
+    state_full = (state_full or "").strip().lower()
+    codes = []
+    for ac in provider.services.area_codes():
+        # Many SDKs return AreaCode objects; safest is getattr
+        st = (getattr(ac, "state", "") or "").strip().lower()
+        if st == state_full:
+            codes.append(str(getattr(ac, "area_code", "")).strip())
+    return [c for c in codes if c.isdigit()]
+
+async def reserve_sms_verification(service_name: str, state: str | None = None):
+    """
+    Creates an SMS verification and returns the verification object.
+    Runs in a thread because the SDK calls are sync.
+    """
+    def _do():
+        kwargs = {
+            "service_name": service_name,
+            "capability": ReservationCapability.SMS,
+        }
+
+        if state:
+            acs = _area_codes_for_state(state)
+            if acs:
+                # pass a short list to avoid massive payloads
+                kwargs["area_code_select_option"] = acs[:15]
+
+        return provider.verifications.create(**kwargs)
+
+    return await asyncio.to_thread(_do)
