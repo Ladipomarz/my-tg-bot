@@ -190,7 +190,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     low = text.lower()
 
     # ---- step: waiting for product id (4 digits) ----
-    if step == "await_product_id":
+    if step == "awaiting_product_id":
         if not text.isdigit() or len(text) not in (3, 4):  # support old 3-digit and new 4-digit
             await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
             return True
@@ -287,104 +287,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     return False
 
 
-
-
 US_STATES_EXAMPLE = "California"
-
-async def otp_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Only handle normal user messages
-    if not update.message or not update.message.text:
-        return
-
-    step = context.user_data.get("otp_step")
-    if not step:
-        return  # not in OTP flow, let other handlers process
-
-    text = (update.message.text or "").strip().lower()
-
-    # Step: expecting 4-digit Product ID
-    if step == "awaiting_product_id":
-        raw = (update.message.text or "").strip()
-        if not re.fullmatch(r"\d{4}", raw):
-            await update.message.reply_text("❌ Invalid. Please reply with exactly 4 digits (example: 0042).")
-            return
-
-        context.user_data["otp_product_id"] = raw
-        context.user_data["otp_step"] = "universal_state_question"
-
-        await update.message.reply_text(
-            "If you've got the 4-digit Product ID, we’ll continue.\n\n"
-            "Do you want the number to be generated from a specific US state?\n\n"
-            "✅ Reply with: yes or no"
-        )
-        return
-
-    # Step: yes/no for specific state
-    if step == "universal_state_question":
-        if text not in ("yes", "no"):
-            await update.message.reply_text("❌ Please reply with: yes or no")
-            return
-
-        if text == "yes":
-            context.user_data["otp_step"] = "awaiting_state_name"
-            await update.message.reply_text(
-                f"🇺🇸 Which US state do you want?\n\n✅ Example: {US_STATES_EXAMPLE}"
-            )
-            return
-
-        # no -> random state
-        context.user_data["otp_state"] = None
-        context.user_data["otp_step"] = "final_confirmation"
-
-        await update.message.reply_text(
-            "✅ Random state selected.\n\n"
-            "⚠️ Please reply with: yes or no to confirm."
-        )
-        return
-
-    # Step: expecting a state name
-    if step == "awaiting_state_name":
-        state = (update.message.text or "").strip()
-        if len(state) < 3:
-            await update.message.reply_text("❌ Please type a valid US state name (example: California).")
-            return
-
-        context.user_data["otp_state"] = state
-        context.user_data["otp_step"] = "final_confirmation"
-
-        await update.message.reply_text(
-            f"✅ State selected: {state}\n\n"
-            "⚠️ Please reply with: yes or no to confirm."
-        )
-        return
-
-    # Step: final confirmation
-    if step == "final_confirmation":
-        if text not in ("yes", "no"):
-            await update.message.reply_text("❌ Please reply with: yes or no")
-            return
-
-        if text == "no":
-            # reset just OTP flow bits
-            context.user_data.pop("otp_step", None)
-            context.user_data.pop("otp_product_id", None)
-            context.user_data.pop("otp_state", None)
-            await update.message.reply_text("❌ Cancelled.")
-            return
-
-        # yes -> proceed (you’ll plug your reserve-number logic here)
-        product_id = context.user_data.get("otp_product_id")
-        state = context.user_data.get("otp_state")
-
-        await update.message.reply_text(
-            f"✅ Confirmed.\n\nProduct ID: {product_id}\nState: {state or 'Random'}\n\nGenerating number..."
-        )
-
-        # TODO: call your reserve function next
-
-        return
-
-
 
 async def _send_final_confirmation(update: Update, context: CallbackContext) -> None:
     service_name = context.user_data.get("otp_service_name") or "servicenotlisted"

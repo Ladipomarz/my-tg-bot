@@ -838,17 +838,19 @@ def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str
 
 def get_service_name_by_code(code: str) -> str | None:
     """
-    Looks up service_name from DB by code.
-    Tries local_code first, falls back to product_id.
+    Looks up service_name from DB by 4-digit code.
+    Converts 4-digit code to int and queries the local_code in the services table.
     """
     code = (code or "").strip()
-    if not code.isdigit():
+
+    # Ensure the code is valid (either 3 or 4 digits)
+    if not code.isdigit() or len(code) not in (3, 4):
         return None
 
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Try new schema
             try:
+                # Query by local_code (after converting to int)
                 cur.execute(
                     "SELECT service_name FROM services WHERE local_code = %s LIMIT 1;",
                     (int(code),),
@@ -856,19 +858,12 @@ def get_service_name_by_code(code: str) -> str | None:
                 row = cur.fetchone()
                 if row:
                     return row[0]
-            except (UndefinedColumn, UndefinedTable):
-                pass
+            except Exception as e:
+                print(f"Error querying database: {e}")
+                return None
+    return None
 
-            # Fallback old schema
-            cur.execute(
-                "SELECT service_name FROM services WHERE product_id = %s LIMIT 1;",
-                (int(code),),
-            )
-            row = cur.fetchone()
-            return row[0] if row else None
-
-        
-        
+               
         
 def reset_services_fetch_state(*, clear_services: bool = False):
     """
