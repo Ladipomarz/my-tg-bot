@@ -694,3 +694,24 @@ def save_service_fetch_status():
     except Exception as e:
         print(f"Error saving fetch status: {e}")
     
+
+def debug_db_snapshot(tag: str = ""):
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT current_database(), current_user, inet_server_addr(), inet_server_port();")
+                db, user, addr, port = cur.fetchone()
+
+                cur.execute("SELECT COUNT(*) FROM service_fetch_status;")
+                status_count = cur.fetchone()[0]
+
+                cur.execute("SELECT COUNT(*) FROM services;")
+                services_count = cur.fetchone()[0]
+
+        print(f"[DB SNAPSHOT {tag}] db={db} user={user} host={addr}:{port} "
+              f"service_fetch_status_rows={status_count} services_rows={services_count}")
+    except Exception as e:
+        print(f"[DB SNAPSHOT {tag}] ERROR: {e}")
+
+save_service_fetch_status()
+debug_db_snapshot("after_fetch")
