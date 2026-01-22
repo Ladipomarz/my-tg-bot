@@ -169,7 +169,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     if data == "tool_otp_usa_text":
     # Handle the OTP for Text Verification (you can add the logic to handle OTP fetching)
-        await otp_usa_one_time_or_rental_menu(update, context) # Show one time and rental
+        await otp_usa_one_time_or_rental_menu(update, context, method="text") # Show one time and rental
     # (You can call the OTP provider's functions here to reserve a number and send OTP)
         return
     
