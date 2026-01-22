@@ -3,6 +3,7 @@ import random
 import json
 import psycopg
 from psycopg.rows import dict_row
+from io import BytesIO
 
 from config import DATABASE_URL
 
@@ -745,6 +746,48 @@ def save_service_fetch_status():
         print("Service fetch status has been updated.")
     except Exception as e:
         print(f"Error saving fetch status: {e}")
+        
+        
+        
+
+
+def get_services_rows(*, capability: str = "sms"):
+    """
+    Returns list of dicts: [{local_code, service_name, capability}, ...]
+    """
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT local_code, service_name, capability
+                FROM services
+                WHERE LOWER(COALESCE(capability,'')) = LOWER(%s)
+                ORDER BY local_code ASC;
+                """,
+                (capability,),
+            )
+            return cur.fetchall()
+
+def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
+    """
+    Builds a text file content from DB services, returns (bytes, filename)
+    """
+    rows = get_services_rows(capability=capability)
+
+    lines = []
+    lines.append(f"TextVerified Services ({capability.upper()})")
+    lines.append("Reply with the CODE to choose a service.")
+    lines.append("")
+    lines.append("CODE\tSERVICE")
+    lines.append("----\t-------")
+
+    for r in rows:
+        lines.append(f"{r['local_code']}\t{r['service_name']}")
+
+    content = "\n".join(lines) + "\n"
+    filename = f"services_{capability.lower()}.txt"
+    return content.encode("utf-8"), filename
+        
         
         
 def reset_services_fetch_state(*, clear_services: bool = False):

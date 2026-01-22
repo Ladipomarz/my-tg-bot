@@ -4,6 +4,9 @@ from handlers.provider_factory import get_otp_provider
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
 from telegram.error import BadRequest
+from io import BytesIO
+from telegram import InputFile
+from utils.db import build_services_txt_bytes
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
@@ -127,3 +130,16 @@ async def _edit(update, text, keyboard):
             return
         raise
 
+
+
+async def send_services_txt(update, context, capability: str = "sms"):
+    data_bytes, filename = build_services_txt_bytes(capability=capability)
+
+    bio = BytesIO(data_bytes)
+    bio.name = filename  # telegram uses this as filename
+
+    # Send the file (as a document) to the same chat
+    await update.callback_query.message.reply_document(
+        document=InputFile(bio, filename=filename),
+        caption="✅ Here’s the service list.\nReply with the CODE you want.",
+    )
