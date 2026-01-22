@@ -1297,7 +1297,7 @@ tg_app.add_handler(CallbackQueryHandler(callback_router))
 # IMPORTANT: media before text (QR upload wizard)
 # First: OTP text handler
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_otp_text_input), group=0)
-
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router), group=1)
 # Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
 
