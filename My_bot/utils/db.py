@@ -745,6 +745,28 @@ def save_service_fetch_status():
         print("Service fetch status has been updated.")
     except Exception as e:
         print(f"Error saving fetch status: {e}")
+        
+        
+def reset_services_fetch_state(*, clear_services: bool = False):
+    """
+    Forces a re-fetch next startup.
+    Optionally clears services table to rebuild from scratch.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            if clear_services:
+                cur.execute("DELETE FROM services;")
+
+            # mark as not fetched
+            cur.execute("""
+                INSERT INTO service_fetch_status (id, fetched)
+                VALUES (1, FALSE)
+                ON CONFLICT (id) DO UPDATE SET fetched = FALSE;
+            """)
+        conn.commit()
+
+    print(f"✅ reset_services_fetch_state(clear_services={clear_services}) done")
+        
     
 
 def debug_db_snapshot(tag: str = ""):
