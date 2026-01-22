@@ -26,6 +26,7 @@ from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
 from utils.db import reset_services_fetch_state
 from handlers.otp_handler import handle_otp_text_input
+from handlers.otp_handler import otp_text_input
 
 
 from utils.db import (
@@ -1293,8 +1294,12 @@ tg_app.add_handler(CallbackQueryHandler(callback_router))
 
 
 # IMPORTANT: media before text (QR upload wizard)
+# First: OTP text handler
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, otp_text_input), group=0)
+
+# Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router))
+
 
 
 
