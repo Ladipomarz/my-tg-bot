@@ -765,13 +765,13 @@ async def debug_payload(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    print("callback_router hit:", data)
-
     q = update.callback_query
     if not q or not q.data:
         return
     
     data = q.data.strip()  # Clean up the data
+    print("callback_router hit:", data)
+
     
     
     # Route OTP/tools/service callbacks into tools_callback
