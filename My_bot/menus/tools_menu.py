@@ -1,8 +1,5 @@
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
-
-
-
 def get_tools_inline():
     buttons = [
         [
