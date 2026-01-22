@@ -199,6 +199,24 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_usa_monthly_duration_menu(update, context, "voice")
         return
     
+    if data == "otp_have_id":
+    # Next step: ask user to reply with the 4-digit Product ID
+        context.user_data["otp_step"] = "awaiting_product_id"
+        await update.callback_query.edit_message_text(
+        "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
+    )
+        return
+
+    if data == "otp_skip_universal":
+    # Next step: universal number flow
+        context.user_data["otp_step"] = "universal_state_question"
+        await update.callback_query.edit_message_text(
+        "Do you want the number to be generated from a specific US state?\n\n"
+        "✅ Reply with: yes or no"
+    )
+        return
+
+    
 # BACK NAVIGATION
     if data == "otp_back_tools":
         await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())

@@ -5,10 +5,13 @@ from handlers.otp_handler import send_services_txt  # the function that builds/s
 
 def _yes_skip_keyboard(*, back_callback: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_have_id")],
-        [InlineKeyboardButton("⏭ Skip (Universal number)", callback_data="otp_skip_universal")],
+        [
+            InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_have_id"),
+            InlineKeyboardButton("⏭ Skip", callback_data="otp_skip_universal"),
+        ],
         [InlineKeyboardButton("⬅ Back", callback_data=back_callback)],
     ])
+
 
 
 async def start_service_list_flow(update, context, *, plan: str, capability: str = "sms") -> None:
