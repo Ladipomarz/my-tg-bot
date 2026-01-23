@@ -330,7 +330,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 f"State: {state or 'Random'}\n"
                 f"Number: {number}\n"
                 f"Verification ID: {verification_id}\n\n"
-                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes).",
+                reply_markup=refund_kb(),
             )
 
             # ✅ Start auto polling + refund watchdog
@@ -361,6 +362,14 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
         "⚠️Please reply with either yes or no to confirm."
     )
     await update.message.reply_text(msg)
+
+
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+def refund_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Refund number", callback_data="otp_refund_now")]
+    ])
 
 
 
@@ -574,4 +583,43 @@ async def start_otp_auto_poll(update: Update, context: ContextTypes.DEFAULT_TYPE
         name=refund_name,
         data=payload,
     )
+    
+    
+async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    q = update.callback_query
+    await q.answer()
+
+    user_id = q.from_user.id
+    chat_id = q.message.chat_id
+
+    # read state
+    ud = context.application.user_data.get(user_id, {})
+    verification_id = ud.get("otp_verification_id") or context.user_data.get("otp_verification_id")
+    poll_name = ud.get("otp_poll_job_name") or context.user_data.get("otp_poll_job_name")
+    refund_name = ud.get("otp_refund_job_name") or context.user_data.get("otp_refund_job_name")
+
+    if not verification_id:
+        await q.message.reply_text("❌ No active verification to refund.")
+        return
+
+    # stop jobs
+    if poll_name:
+        _remove_jobs_by_name(context.job_queue, poll_name)
+    if refund_name:
+        _remove_jobs_by_name(context.job_queue, refund_name)
+
+    # reuse same refund action
+    try:
+        await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
+    except Exception as e:
+        await q.message.reply_text(f"❌ Refund attempt failed: {e}")
+        await _cleanup_otp_state(context.application, user_id)
+        return
+
+    await q.message.reply_text(
+        "✅ Refund requested: cancelled + reported as 'no SMS'.\n"
+        "Refund/credit depends on TextVerified eligibility."
+    )
+
+    await _cleanup_otp_state(context.application, user_id)
     
