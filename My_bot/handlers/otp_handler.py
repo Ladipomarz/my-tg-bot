@@ -312,25 +312,6 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 
     return False
 
-async def _send_final_confirmation(update: Update, context: CallbackContext) -> None:
-    # Fetch the service name, default to "General Service" if not found
-    service_name = context.user_data.get("otp_service_name") or "General Service"
-    
-    # Get state and price, with defaults
-    state = context.user_data.get("otp_state", "Random")
-    price = context.user_data.get("otp_price", "$x")  # placeholder
-
-    # Prepare the message
-    msg = (
-        "FINAL CONFIRMATION\n\n"
-        f"Service: {service_name}\n"
-        f"State: {state}\n"
-        f"Price: {price}\n\n"
-        "⚠️Please reply with either yes or no to confirm."
-    )
-
-    # Send the final confirmation message to the user
-    await update.message.reply_text(msg)
 
 US_STATES_EXAMPLE = "California"
 
