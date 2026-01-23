@@ -193,6 +193,7 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
     )
 
 
+# ---------- Main OTP Handling Function ----------
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
     """
     Handles OTP flow replies (product id / yes-no / state name / final confirm).
@@ -212,41 +213,55 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             return True
 
         if low == "no":
-            # If "No" is selected, cancel the process and clear data
             context.user_data.pop("otp_step", None)
             context.user_data.pop("otp_service_name", None)
             context.user_data.pop("otp_state", None)
             context.user_data.pop("otp_custom_service", None)
-
-            # Inform the user that the process has been cancelled
             await update.message.reply_text("✅ The process has been cancelled.")
             return True
-        
+
         if low == "yes":
             # Proceed with OTP generation (or any further steps)
             selected = context.user_data.get("otp_service_name")
             service_name = selected if selected else "General Service"
             state = context.user_data.get("otp_state", "Random")
+            
+            try:
+                # Replace with your actual API call
+                api_response = await reserve_sms_verification(service_name=service_name, state=state)
 
-            # Send confirmation with bold formatting for the service name
-            await update.message.reply_text(
-                (
-                    "<b>✅ Reserved number!</b>\n\n"
-                    f"<b>Service:</b> {service_name}\n"
-                    f"<b>State:</b> {state or 'Random'}\n"
-                    f"<b>Number (Intl):</b> {intl_num}\n"
-                    f"<b>Number (Local):</b> {local_num}\n"
-                    f"<b>Verification ID:</b> {verification_id}\n\n"
-                    "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
-                ),
-                parse_mode=ParseMode.HTML,
-                reply_markup=refund_kb(),
-            )
+                number = api_response.get("number")
+                verification_id = api_response.get("verification_id")
 
-            # Proceed with OTP reservation, number generation, etc.
-            await start_otp_auto_poll(update, context)  # Call your OTP polling function
+                if not number or not verification_id:
+                    await update.message.reply_text("❌ Failed to reserve a number. Please try again.")
+                    return True
 
-            return True
+                # Format numbers
+                intl_num = f"+1 {number}"  # International format
+                local_num = f"({number[:3]}) {number[3:6]}-{number[6:]}"  # Local format
+
+                # Send confirmation with bold formatting
+                await update.message.reply_text(
+                    (
+                        "<b>✅ Reserved number!</b>\n\n"
+                        f"<b>Service:</b> {service_name}\n"
+                        f"<b>State:</b> {state or 'Random'}\n"
+                        f"<b>Number (Intl):</b> {intl_num}\n"
+                        f"<b>Number (Local):</b> {local_num}\n"
+                        f"<b>Verification ID:</b> {verification_id}\n\n"
+                        "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+                    ),
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=refund_kb(),
+                )
+                await start_otp_auto_poll(update, context)  # Call your OTP polling function
+                return True
+
+            except Exception as e:
+                await update.message.reply_text(f"❌ Failed to reserve number: {e}")
+                return True
+
 
     # ---- step: awaiting product id (4 digits) ----
     if step == "awaiting_product_id":
