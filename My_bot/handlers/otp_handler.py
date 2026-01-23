@@ -93,12 +93,24 @@ async def _cleanup_otp_state(app, user_id: int) -> None:
         ud.pop(k, None)
 
 
-# Correcting how the reserve_number_for_otp should handle country and service_name
 async def reserve_number_for_otp(service_name: str, country="USA"):
     provider = get_otp_provider(api_key=API_KEY)  # Ensure you're using the correct API key
     # Now reserve the number using both service_name and country if necessary
-    number = provider.reserve_number(service_name=service_name, country=country)
-    return number
+    response = provider.reserve_number(service_name=service_name, country=country)
+    
+    # Check the attributes in the response directly, assuming it's a dictionary-like object
+    # You might want to print the response to inspect it first
+    print(response)  # Debugging to check the response structure
+
+    # Extract the number and verification ID (adjust according to the response structure)
+    number = response.number  # Example: change this according to actual attribute name
+    verification_id = response.verification_id  # Example: change this if the attribute is different
+    
+    if not number or not verification_id:
+        raise Exception("Failed to reserve a number or get verification ID.")
+
+    return number, verification_id
+
 
 
 from handlers.servicelist import fetch_and_save_services  # Ensure correct import path
