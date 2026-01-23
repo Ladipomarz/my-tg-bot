@@ -12,6 +12,9 @@ from telegram import InputFile
 from utils.db import build_services_txt_bytes
 from utils.db import get_services_for_export, get_service_name_by_code
 from utils.validator import normalize_us_state_full_name
+import datetime
+from typing import Optional
+
 
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
@@ -56,6 +59,38 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext):
 
 # Initialize TextVerified client
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
+OTP_POLL_INTERVAL_SEC = 5
+OTP_REFUND_AFTER_SEC = 5 * 60   # 5 minutes
+OTP_INCOMING_TIMEOUT_SEC = 4    # keep < interval to avoid overlap
+
+
+def _job_name(prefix: str, user_id: int) -> str:
+    return f"{prefix}_{user_id}"
+
+
+def _remove_jobs_by_name(job_queue, name: str) -> None:
+    if not job_queue:
+        return
+    for j in job_queue.get_jobs_by_name(name):
+        j.schedule_removal()
+
+
+async def _cleanup_otp_state(app, user_id: int) -> None:
+    ud = app.user_data.get(user_id)
+    if not ud:
+        return
+    for k in (
+        "otp_step",
+        "otp_service_name",
+        "otp_state",
+        "otp_verification_id",
+        "otp_reserved_number",
+        "otp_reserved_at_utc",
+        "otp_poll_job_name",
+        "otp_refund_job_name",
+    ):
+        ud.pop(k, None)
+
 
 # Correcting how the reserve_number_for_otp should handle country and service_name
 async def reserve_number_for_otp(service_name: str, country="USA"):
@@ -272,38 +307,40 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 
         # ✅ CALL YOUR RESERVE FUNCTION HERE
     try:
-        ver = await reserve_sms_verification(service_name=service_name, state=state)
+            ver = await reserve_sms_verification(service_name=service_name, state=state)
 
-        # SDKs vary slightly; grab number/id safely
-        number = (
-            getattr(ver, "number", None)
-            or getattr(ver, "phone_number", None)
-            or getattr(ver, "to_value", None)
-        )
-        verification_id = (
-            getattr(ver, "id", None)
-            or getattr(ver, "verification_id", None)
-            or getattr(ver, "reservation_id", None)
-        )
+            number = (
+                getattr(ver, "number", None)
+                or getattr(ver, "phone_number", None)
+                or getattr(ver, "to_value", None)
+            )
+            verification_id = (
+                getattr(ver, "id", None)
+                or getattr(ver, "verification_id", None)
+                or getattr(ver, "reservation_id", None)
+            )
 
-        # Save for the next step (OTP polling, etc.)
-        context.user_data["otp_verification_id"] = verification_id
-        context.user_data["otp_reserved_number"] = number
+            context.user_data["otp_verification_id"] = verification_id
+            context.user_data["otp_reserved_number"] = number
+            context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-        await update.message.reply_text(
-            "✅ Reserved number!\n\n"
-            f"Service: {service_name}\n"
-            f"State: {state or 'Random'}\n"
-            f"Number: {number}\n"
-            f"Verification ID: {verification_id}\n\n"
-            "Now wait for OTP (next step is polling SMS)."
-        )
+            await update.message.reply_text(
+                "✅ Reserved number!\n\n"
+                f"Service: {service_name}\n"
+                f"State: {state or 'Random'}\n"
+                f"Number: {number}\n"
+                f"Verification ID: {verification_id}\n\n"
+                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+            )
+
+            # ✅ Start auto polling + refund watchdog
+            await start_otp_auto_poll(update, context, verification_id)
 
     except Exception as e:
-        await update.message.reply_text(f"❌ Failed to reserve number: {e}")
-        return True
+            await update.message.reply_text(f"❌ Failed to reserve number: {e}")
+            return True
 
-    # clear flow step (keep reservation info so you can poll OTP)
+        # clear flow step (keep reservation info so you can poll OTP)
     context.user_data.pop("otp_step", None)
     context.user_data.pop("otp_service_name", None)
     context.user_data.pop("otp_state", None)
@@ -359,3 +396,182 @@ async def reserve_sms_verification(service_name: str, state: str | None = None):
         return provider.verifications.create(**kwargs)
 
     return await asyncio.to_thread(_do)
+
+def _poll_textverified_once(verification_id: str, since_dt: datetime.datetime) -> Optional[dict]:
+    """
+    Blocking call. Returns dict with OTP info if found, else None.
+    """
+    # details() gives the Verification object required by sms.incoming()
+    ver = provider.verifications.details(verification_id)
+
+    # sms.incoming() returns a generator of messages (polling internally)
+    msgs = provider.sms.incoming(
+        ver,
+        timeout=OTP_INCOMING_TIMEOUT_SEC,
+        polling_interval=1.0,
+        since=since_dt,
+    )
+
+    try:
+        msg = next(msgs)
+    except StopIteration:
+        return None
+
+    return {
+        "code": getattr(msg, "parsed_code", None),
+        "content": getattr(msg, "sms_content", None),
+        "from": getattr(msg, "from_value", None),
+    }
+
+
+async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = context.job.data or {}
+    chat_id = data["chat_id"]
+    user_id = data["user_id"]
+    verification_id = data["verification_id"]
+    reserved_at_iso = data["reserved_at_utc"]
+
+    # Parse reservation timestamp
+    since_dt = datetime.datetime.fromisoformat(reserved_at_iso)
+    if since_dt.tzinfo is None:
+        since_dt = since_dt.replace(tzinfo=datetime.timezone.utc)
+
+    try:
+        result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
+    except Exception as e:
+        # don’t spam; just stop on hard errors
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ OTP polling error: {e}")
+        # stop jobs
+        poll_name = data.get("poll_job_name")
+        refund_name = data.get("refund_job_name")
+        if poll_name:
+            _remove_jobs_by_name(context.job_queue, poll_name)
+        if refund_name:
+            _remove_jobs_by_name(context.job_queue, refund_name)
+        await _cleanup_otp_state(context.application, user_id)
+        return
+
+    if not result:
+        return  # no OTP yet, next tick will try again
+
+    code = result.get("code") or "N/A"
+    content = (result.get("content") or "").strip()
+    from_ = result.get("from") or "Unknown"
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "✅ OTP received!\n\n"
+            f"Code: {code}\n"
+            f"From: {from_}\n"
+            f"Message: {content}"
+        ),
+    )
+
+    # Stop both jobs and clear state
+    poll_name = data.get("poll_job_name")
+    refund_name = data.get("refund_job_name")
+    if poll_name:
+        _remove_jobs_by_name(context.job_queue, poll_name)
+    if refund_name:
+        _remove_jobs_by_name(context.job_queue, refund_name)
+    await _cleanup_otp_state(context.application, user_id)
+
+
+def _cancel_and_report_blocking(verification_id: str) -> None:
+    # best effort: cancel first
+    if hasattr(provider, "verifications") and hasattr(provider.verifications, "cancel"):
+        provider.verifications.cancel(verification_id)
+
+    # best effort: report issue for “no SMS” if supported by SDK
+    if hasattr(provider, "verifications") and hasattr(provider.verifications, "report"):
+        try:
+            provider.verifications.report(verification_id)
+        except Exception:
+            pass
+
+
+async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
+    data = context.job.data or {}
+    chat_id = data["chat_id"]
+    user_id = data["user_id"]
+    verification_id = data["verification_id"]
+    poll_name = data.get("poll_job_name")
+
+    # If polling job no longer exists, OTP was received/cancelled already
+    if poll_name and context.job_queue.get_jobs_by_name(poll_name) == []:
+        return
+
+    # stop polling
+    if poll_name:
+        _remove_jobs_by_name(context.job_queue, poll_name)
+
+    # refund attempt
+    try:
+        await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
+    except Exception as e:
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ Refund attempt failed: {e}")
+        await _cleanup_otp_state(context.application, user_id)
+        return
+
+    await context.bot.send_message(
+        chat_id=chat_id,
+        text=(
+            "⌛ No OTP received within 5 minutes.\n"
+            "I cancelled the verification and reported it as 'no SMS' (refund/credit depends on TextVerified eligibility)."
+        ),
+    )
+
+    await _cleanup_otp_state(context.application, user_id)
+    
+    
+async def start_otp_auto_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, verification_id: str) -> None:
+    """
+    Starts repeating poll (every 5s) + a 5-minute refund watchdog.
+    """
+    if not context.job_queue:
+        await update.effective_message.reply_text("❌ JobQueue not available; cannot auto-poll OTP.")
+        return
+
+    chat_id = update.effective_chat.id
+    user_id = update.effective_user.id
+
+    reserved_at_iso = context.user_data.get("otp_reserved_at_utc")
+    if not reserved_at_iso:
+        reserved_at_iso = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        context.user_data["otp_reserved_at_utc"] = reserved_at_iso
+
+    poll_name = _job_name("otp_poll", user_id)
+    refund_name = _job_name("otp_refund", user_id)
+
+    # remove any previous jobs for this user
+    _remove_jobs_by_name(context.job_queue, poll_name)
+    _remove_jobs_by_name(context.job_queue, refund_name)
+
+    payload = {
+        "chat_id": chat_id,
+        "user_id": user_id,
+        "verification_id": verification_id,
+        "reserved_at_utc": reserved_at_iso,
+        "poll_job_name": poll_name,
+        "refund_job_name": refund_name,
+    }
+
+    context.user_data["otp_poll_job_name"] = poll_name
+    context.user_data["otp_refund_job_name"] = refund_name
+
+    context.job_queue.run_repeating(
+        _otp_poll_job,
+        interval=OTP_POLL_INTERVAL_SEC,
+        first=0,
+        name=poll_name,
+        data=payload,
+    )
+
+    context.job_queue.run_once(
+        _otp_refund_job,
+        when=OTP_REFUND_AFTER_SEC,
+        name=refund_name,
+        data=payload,
+    )
+    
