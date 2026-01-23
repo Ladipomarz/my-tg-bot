@@ -194,8 +194,6 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
 
 
 
-import random
-
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
     """
     Handles OTP flow replies (product id / yes-no / state name / final confirm).
@@ -251,8 +249,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             )
             return True
 
-        # no => go to final confirm with random state
-        context.user_data["otp_state"] = random.choice(["California", "Texas", "New York", "Florida", "Random"])  # Pick a random state
+        # no => go to final confirm w/ random state
+        context.user_data["otp_state"] = None
         context.user_data["otp_step"] = "final_confirm"
         await _send_final_confirmation(update, context)
         return True
@@ -268,7 +266,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         context.user_data["otp_step"] = "final_confirm"
         await _send_final_confirmation(update, context)
         return True
-
+    
+    
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
         low = update.message.text.lower()  # To handle user input correctly
@@ -276,33 +275,80 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
-
+        
         if low == "no":
-            # Pick a random state when user cancels, and continue
-            context.user_data["otp_state"] = random.choice(["California", "Texas", "New York", "Florida", "Random"])  # Pick a random state
-            
-            # Show confirmation message
-            await update.message.reply_text(
-                f"⚠️ You've chosen 'No'. A random state has been selected: {context.user_data['otp_state']}.\n\nProceeding with OTP generation..."
+            # If "No" is selected, pick a random state and continue
+            random_state = random.choice(["California", "Texas", "New York", "Florida", "Random"])  # Pick a random state
+            context.user_data["otp_state"] = random_state
+
+        
+        # Get the service name (from DB or user input)
+        selected = context.user_data.get("otp_service_name")  # From DB list if chosen
+        custom = context.user_data.get("otp_custom_service")  # If user typed one (optional)
+
+        # Handle "General Service" for unlisted services
+        display_service = "General Service" if selected is None or selected.lower() in ["general", "servicenotlisted"] else selected
+        
+        # Prepare API service to be used in verification (defaults to "servicenotlisted")
+        api_service = selected or "servicenotlisted"
+        
+        # Set the name for unlisted services to be shown in the file/message
+        service_not_listed_name = None if selected else display_service
+
+        # Now proceed with reserving the number using the correct service name
+        service_name = display_service  # This will display General Service if applicable
+        state = context.user_data.get("otp_state")
+
+        try:
+            # Reserve number with the selected service
+            ver = await reserve_sms_verification(
+                service_name=api_service,
+                state=state,
+                service_not_listed_name=service_not_listed_name,
             )
 
-            # Continue with the next step (OTP generation)
-            await _proceed_with_otp(update, context)
+            # Get the reserved number and verification ID
+            number = getattr(ver, "number", None) or getattr(ver, "phone_number", None) or getattr(ver, "to_value", None)
+            verification_id = getattr(ver, "id", None) or getattr(ver, "verification_id", None) or getattr(ver, "reservation_id", None)
+
+            context.user_data["otp_verification_id"] = verification_id
+            context.user_data["otp_reserved_number"] = number
+            context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+            # Format numbers in international and local formats
+            intl_num = format_us_international(number)
+            local_num = format_us_local(number)
+
+            # Send confirmation with bold formatting for the service name
+            await update.message.reply_text(
+                (
+                    "<b>✅ Reserved number!</b>\n\n"
+                    f"<b>Service:</b> {service_name}\n"
+                    f"<b>State:</b> {state or 'Random'}\n"
+                    f"<b>Number (Intl):</b> {intl_num}\n"
+                    f"<b>Number (Local):</b> {local_num}\n"
+                    f"<b>Verification ID:</b> {verification_id}\n\n"
+                    "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=refund_kb(),
+            )
+
+            # Start polling for OTP
+            await start_otp_auto_poll(update, context, verification_id)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Failed to reserve number: {e}")
             return True
-        
-        # Handle "Yes" as normal
-        # Proceed with number reservation, etc.
-        await update.message.reply_text("Proceeding with the selected service...")
+
+        # Clear the flow steps after reservation is completed
+        context.user_data.pop("otp_step", None)
+        context.user_data.pop("otp_service_name", None)
+        context.user_data.pop("otp_state", None)
         return True
+  
 
-
-async def _proceed_with_otp(update: Update, context: CallbackContext) -> None:
-    # Your logic for OTP generation goes here (or the next step in the flow)
-    state = context.user_data.get("otp_state", "Random")
-
-    # Other code for OTP reservation...
-    await update.message.reply_text(f"State selected: {state}\nProceeding with OTP generation...")
-
+     
 
 US_STATES_EXAMPLE = "California"
 
