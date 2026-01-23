@@ -269,18 +269,43 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     
     
     # ---- step: final confirm yes/no ----
+    
+    # ---- step: final confirm yes/no ----
     if step == "final_confirm":
-        low = update.message.text.lower()  # To handle user input correctly
-        
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
-        
-        if low == "no":
-            # If "No" is selected, pick a random state and continue
-            random_state = random.choice(["California", "Texas", "New York", "Florida", "Random"])  # Pick a random state
-            context.user_data["otp_state"] = random_state
 
+        if low == "no":
+            # Clear the user data related to OTP (cancel process)
+            context.user_data.pop("otp_step", None)
+            context.user_data.pop("otp_service_name", None)
+            context.user_data.pop("otp_state", None)
+            context.user_data.pop("otp_custom_service", None)
+
+            # Inform the user that the process is cancelled and return to the main menu
+            await update.message.reply_text(
+                "✅ The process has been cancelled. Returning to the main menu..."
+            )
+
+            # Inform the user that the process has been cancelled
+            await update.message.reply_text("✅ The process has been cancelled.")
+            return True
+
+        if low == "yes":
+            # Proceed with OTP generation (continue with your OTP logic here)
+            selected = context.user_data.get("otp_service_name")
+            service_name = selected if selected else "General Service"
+            state = context.user_data.get("otp_state", "Random")
+
+            # Your OTP generation logic (reserve number, etc.)
+            await update.message.reply_text(f"Proceeding with the selected service: {service_name} in {state}...")
+            # Proceed with OTP reservation, number generation, etc.
+            await start_otp_auto_poll(update, context)  # Call your OTP polling function
+
+            return True
+       
+        
         
         # Get the service name (from DB or user input)
         selected = context.user_data.get("otp_service_name")  # From DB list if chosen
