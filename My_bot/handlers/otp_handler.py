@@ -187,8 +187,8 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
     # Send the file as a document to the user
     await update.callback_query.message.reply_document(
         document=InputFile(bio, filename=filename),
-        caption="✅ Here’s the service list.\nReply with the CODE you want.",
-        parse_mode="HTML"  # Ensures HTML tags like <b> are properly interpreted
+        caption="<b>General service:</b> This service is for cases where the provider is not listed in the TextVerified catalog.\nReply with the CODE you want.",
+         parse_mode="HTML"  # Ensures HTML tags like <b> are properly interpreted
 
     )
 

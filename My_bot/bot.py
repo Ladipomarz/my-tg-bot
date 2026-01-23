@@ -1480,7 +1480,7 @@ async def on_startup():
         reset_services_fetch_state(clear_services=False)  # keep existing, just allow missing inserts
 
     # Run the blocking fetch in a background thread (SAFE)
-    task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
+    #task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
 
     def _log_task_result(t: asyncio.Task):
         exc = t.exception()
@@ -1491,7 +1491,7 @@ async def on_startup():
                 exc_info=exc
             )
 
-    task.add_done_callback(_log_task_result)
+    #task.add_done_callback(_log_task_result)
 
     # Start telegram bootstrap too
     asyncio.create_task(_background_telegram_bootstrap())

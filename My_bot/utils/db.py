@@ -777,8 +777,8 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
 
     lines = []
 
-    # Add "General service" first with bold formatting and a short explanation
-    lines.append("<b>General service:</b> This service is for cases where the provider is not listed in the TextVerified catalog.")
+    # Add "General service" with plain text explanation
+    lines.append("General service: This service is for cases where the provider is not listed in the TextVerified catalog.")
     lines.append("")  # Empty line for spacing
 
     # Loop through all services and display them
@@ -786,6 +786,7 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
         # If service is 'servicenotlisted' or 'general', display it as "General service" in the list
         display_name = "General service" if r['service_name'].strip().lower() in {"servicenotlisted", "general"} else r['service_name']
 
+        # Add the product ID and service, with the separator after each
         lines.append(f"Product ID: {r['local_code']}")
         lines.append(f"Service: {display_name}")
         lines.append(f"______________________\n")
