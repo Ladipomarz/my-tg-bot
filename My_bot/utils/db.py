@@ -777,13 +777,13 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
 
     lines = []
 
-    # Add "General service" with plain text explanation
+    # First, add "General service" as the first line (with bold in the Telegram caption)
     lines.append("General service: This service is for cases where the provider is not listed in the TextVerified catalog.")
     lines.append("")  # Empty line for spacing
 
-    # Loop through all services and display them
+    # Now loop through all the rows and add them to the list
     for r in rows:
-        # If service is 'servicenotlisted' or 'general', display it as "General service" in the list
+        # If service is 'servicenotlisted' or 'general', display it as "General service"
         display_name = "General service" if r['service_name'].strip().lower() in {"servicenotlisted", "general"} else r['service_name']
 
         # Add the product ID and service, with the separator after each
@@ -797,6 +797,7 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
 
     # Return the content as bytes and the filename
     return content.encode("utf-8"), filename
+
 
 
 
