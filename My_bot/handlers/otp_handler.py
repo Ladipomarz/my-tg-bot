@@ -194,6 +194,11 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
 
 
 
+import random
+import datetime
+from telegram import Update, ParseMode
+from telegram.ext import CallbackContext
+
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
     """
     Handles OTP flow replies (product id / yes-no / state name / final confirm).
@@ -229,8 +234,21 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             service_name = selected if selected else "General Service"
             state = context.user_data.get("otp_state", "Random")
 
-            # Your OTP generation logic (reserve number, etc.)
-            await update.message.reply_text(f"Proceeding with the selected service: {service_name} in {state}...")
+            # Send confirmation with bold formatting for the service name
+            await update.message.reply_text(
+                (
+                    "<b>✅ Reserved number!</b>\n\n"
+                    f"<b>Service:</b> {service_name}\n"
+                    f"<b>State:</b> {state or 'Random'}\n"
+                    f"<b>Number (Intl):</b> {intl_num}\n"
+                    f"<b>Number (Local):</b> {local_num}\n"
+                    f"<b>Verification ID:</b> {verification_id}\n\n"
+                    "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=refund_kb(),
+            )
+
             # Proceed with OTP reservation, number generation, etc.
             await start_otp_auto_poll(update, context)  # Call your OTP polling function
 
@@ -320,7 +338,7 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
     # Send the final confirmation message to the user
     await update.message.reply_text(msg)
 
-
+US_STATES_EXAMPLE = "California"
 
 async def _send_final_confirmation(update: Update, context: CallbackContext) -> None:
     # Fetch the service name, default to "General Service" if not found
