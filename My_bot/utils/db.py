@@ -776,17 +776,25 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
     rows = get_services_rows(capability=capability)
 
     lines = []
-    lines.append(f"TextVerified Services ({capability.upper()})")
-    lines.append("Reply with the CODE to choose a service.")
-    lines.append("")
-    lines.append("CODE\tSERVICE")
-    lines.append("----\t-------")
 
+    # Add "General service" first with bold formatting and a short explanation
+    lines.append("<b>General service:</b> This service is for cases where the provider is not listed in the TextVerified catalog.")
+    lines.append("")  # Empty line for spacing
+
+    # Loop through all services and display them
     for r in rows:
-        lines.append(f"{r['local_code']}\t{r['service_name']}")
+        # If service is 'servicenotlisted' or 'general', display it as "General service" in the list
+        display_name = "General service" if r['service_name'].strip().lower() in {"servicenotlisted", "general"} else r['service_name']
 
+        lines.append(f"Product ID: {r['local_code']}")
+        lines.append(f"Service: {display_name}")
+        lines.append(f"______________________\n")
+
+    # Join all the lines into the final content
     content = "\n".join(lines) + "\n"
     filename = f"services_{capability.lower()}.txt"
+
+    # Return the content as bytes and the filename
     return content.encode("utf-8"), filename
 
 

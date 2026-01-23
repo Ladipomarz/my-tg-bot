@@ -173,45 +173,23 @@ async def _edit(update, text, keyboard):
         raise
 
 
-
-async def send_services_txt(update, context, capability: str = "sms"):
+async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms") -> None:
+    """
+    Fetches the service list, builds the .txt in memory, and sends it to the user.
+    """
+    # Call the helper to build the txt content
     data_bytes, filename = build_services_txt_bytes(capability=capability)
 
+    # Create a BytesIO object from the data
     bio = BytesIO(data_bytes)
-    bio.name = filename  # telegram uses this as filename
+    bio.name = filename  # Telegram uses this as filename
 
-    # Send the file (as a document) to the same chat
+    # Send the file as a document to the user
     await update.callback_query.message.reply_document(
         document=InputFile(bio, filename=filename),
         caption="✅ Here’s the service list.\nReply with the CODE you want.",
     )
 
-
-# handlers/otp_handler.py
-
-async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms") -> None:
-    """
-    Builds a txt file from DB in-memory and sends it to the user.
-    """
-    rows = get_services_for_export(capability=capability)
-
-    # Build text content
-    lines = []
-    for code, name in rows:
-        lines.append(f"Product ID: {code}\nService: {name}\n" + ("_" * 22) + "\n")
-
-    content = "\n".join(lines) if lines else "No services found in DB."
-
-    bio = BytesIO(content.encode("utf-8"))
-    bio.name = f"services_{capability}.txt"
-    bio.seek(0)
-
-    chat_id = update.effective_chat.id
-    await context.bot.send_document(
-        chat_id=chat_id,
-        document=InputFile(bio, filename=bio.name),
-        caption="✅ TextVerified service list (from DB).",
-    )
 
 
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
