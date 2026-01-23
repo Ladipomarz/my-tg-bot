@@ -14,6 +14,7 @@ from utils.db import get_services_for_export, get_service_name_by_code
 from utils.validator import normalize_us_state_full_name
 import datetime
 from typing import Optional
+from telegram.constants import ParseMode
 
 
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
@@ -301,7 +302,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             return True
 
     # YES => reserve number hook
-    service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
+    service_name = context.user_data.get("otp_service_name") or "General Service"
     state = context.user_data.get("otp_state")
 
     try:
@@ -322,15 +323,23 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         context.user_data["otp_reserved_number"] = number
         context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
+        intl_num = format_us_international(number)
+        local_num = format_us_local(number)
+
         await update.message.reply_text(
-            "✅ Reserved number!\n\n"
-            f"Service: {service_name}\n"
-            f"State: {state or 'Random'}\n"
-            f"Number: {number}\n"
-            f"Verification ID: {verification_id}\n\n"
-            "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes).",
+            (
+                "<b>✅ Reserved number!</b>\n\n"
+                f"<b>Service:</b> {service_name}\n"
+                f"<b>State:</b> {state or 'Random'}\n"
+                f"<b>Number (Intl):</b> {intl_num}\n"
+                f"<b>Number (Local):</b> {local_num}\n"
+                f"<b>Verification ID:</b> {verification_id}\n\n"
+                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+            ),
+            parse_mode=ParseMode.HTML,
             reply_markup=refund_kb(),
         )
+
 
         await start_otp_auto_poll(update, context, verification_id)
 
@@ -350,7 +359,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 US_STATES_EXAMPLE = "California"
 
 async def _send_final_confirmation(update: Update, context: CallbackContext) -> None:
-    service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
+    service_name = context.user_data.get("otp_service_name") or "General Service"
     state = context.user_data.get("otp_state")
 
     price = context.user_data.get("otp_price", "$x")  # placeholder
@@ -370,6 +379,25 @@ def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Refund number", callback_data="otp_refund_now")]
     ])
+    
+    
+    
+def format_us_international(raw: str) -> str:
+    digits = "".join(ch for ch in str(raw) if ch.isdigit())
+    # keep last 10 in case it already includes country code
+    if len(digits) > 10:
+        digits = digits[-10:]
+    return f"+1 {digits}"
+
+def format_us_local(raw: str) -> str:
+    digits = "".join(ch for ch in str(raw) if ch.isdigit())
+    if len(digits) > 10:
+        digits = digits[-10:]
+    if len(digits) != 10:
+        return str(raw)
+    a, b, c = digits[:3], digits[3:6], digits[6:]
+    return f"({a})\u00A0{b}-{c}"  # NBSP keeps spacing nicer in Telegram
+    
 
 
 
