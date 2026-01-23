@@ -230,8 +230,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 # Replace with your actual API call
                 api_response = await reserve_sms_verification(service_name=service_name, state=state)
 
-                number = api_response.get("number")
-                verification_id = api_response.get("verification_id")
+                number = api_response.number  # Assuming 'number' is an attribute of VerificationExpanded
+                verification_id = api_response.verification_id  # Same for verification_id
 
                 if not number or not verification_id:
                     await update.message.reply_text("❌ Failed to reserve a number. Please try again.")
