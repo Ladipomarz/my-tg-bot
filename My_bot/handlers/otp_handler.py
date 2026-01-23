@@ -188,6 +188,8 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
     await update.callback_query.message.reply_document(
         document=InputFile(bio, filename=filename),
         caption="✅ Here’s the service list.\nReply with the CODE you want.",
+        parse_mode="HTML"  # Ensures HTML tags like <b> are properly interpreted
+
     )
 
 
