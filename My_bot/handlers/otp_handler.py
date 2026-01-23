@@ -173,21 +173,7 @@ async def _edit(update, text, keyboard):
         raise
 
 
-
-async def send_services_txt(update, context, capability: str = "sms"):
-    data_bytes, filename = build_services_txt_bytes(capability=capability)
-
-    bio = BytesIO(data_bytes)
-    bio.name = filename  # telegram uses this as filename
-
-    # Send the file (as a document) to the same chat
-    await update.callback_query.message.reply_document(
-        document=InputFile(bio, filename=filename),
-        caption="✅ Here’s the service list.\nReply with the CODE you want.",
-    )
-
-
-# handlers/otp_handler.py
+# Send Service List file
 
 async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms") -> None:
     """
@@ -198,7 +184,8 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
     # Build text content
     lines = []
     for code, name in rows:
-        lines.append(f"Product ID: {code}\nService: {name}\n" + ("_" * 22) + "\n")
+     display = "General" if (name or "").strip().lower() == "servicenotlisted" else name
+    lines.append(f"Product ID: {code}\nService: {display}\n" + ("_" * 22) + "\n")
 
     content = "\n".join(lines) if lines else "No services found in DB."
 
@@ -300,13 +287,29 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data.pop("otp_state", None)
             await update.message.reply_text("✅ Cancelled.")
             return True
+        
+        
+        selected = context.user_data.get("otp_service_name")  # from DB list if chosen
+        custom  = context.user_data.get("otp_custom_service") # if user typed one (optional)
+
+        # What user sees
+        display_service = selected or custom or "Custom"
+
+        # What API receives
+        api_service = selected or "servicenotlisted"
+        service_not_listed_name = None if selected else display_service
+
 
     # YES => reserve number hook
     service_name = context.user_data.get("otp_service_name") or "General Service"
     state = context.user_data.get("otp_state")
 
     try:
-        ver = await reserve_sms_verification(service_name=service_name, state=state)
+        ver = await reserve_sms_verification(
+    service_name=api_service,
+    state=state,
+    service_not_listed_name=service_not_listed_name,
+)
 
         number = (
             getattr(ver, "number", None)
@@ -413,7 +416,12 @@ def _area_codes_for_state(state_full: str) -> list[str]:
             codes.append(str(getattr(ac, "area_code", "")).strip())
     return [c for c in codes if c.isdigit()]
 
-async def reserve_sms_verification(service_name: str, state: str | None = None):
+async def reserve_sms_verification(service_name: str, state: str | None, service_not_listed_name: str | None = None):
+    kwargs = {"service_name": service_name, "state": state}
+    if service_not_listed_name:
+        kwargs["service_not_listed_name"] = service_not_listed_name
+        return await asyncio.to_thread(lambda: provider.verifications.create(**kwargs))
+
     """
     Creates an SMS verification and returns the verification object.
     Runs in a thread because the SDK calls are sync.
