@@ -285,67 +285,67 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         context.user_data["otp_step"] = "final_confirm"
         await _send_final_confirmation(update, context)
         return True
-
+    
+    
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
         if low not in ("yes", "no"):
-            await update.message.reply_text("Please reply with: yes or no")
-            return True
+           await update.message.reply_text("Please reply with: yes or no")
+           return True
 
         if low == "no":
-            # cancel/reset and send them back (you can change where)
             context.user_data.pop("otp_step", None)
             context.user_data.pop("otp_service_name", None)
             context.user_data.pop("otp_state", None)
             await update.message.reply_text("✅ Cancelled.")
             return True
 
-        # YES => reserve number hook
-        service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
-        state = context.user_data.get("otp_state")
-        
+    # YES => reserve number hook
+    service_name = context.user_data.get("otp_service_name") or "servicenotlisted"
+    state = context.user_data.get("otp_state")
 
-        # ✅ CALL YOUR RESERVE FUNCTION HERE
     try:
-            ver = await reserve_sms_verification(service_name=service_name, state=state)
+        ver = await reserve_sms_verification(service_name=service_name, state=state)
 
-            number = (
-                getattr(ver, "number", None)
-                or getattr(ver, "phone_number", None)
-                or getattr(ver, "to_value", None)
-            )
-            verification_id = (
-                getattr(ver, "id", None)
-                or getattr(ver, "verification_id", None)
-                or getattr(ver, "reservation_id", None)
-            )
+        number = (
+            getattr(ver, "number", None)
+            or getattr(ver, "phone_number", None)
+            or getattr(ver, "to_value", None)
+        )
+        verification_id = (
+            getattr(ver, "id", None)
+            or getattr(ver, "verification_id", None)
+            or getattr(ver, "reservation_id", None)
+        )
 
-            context.user_data["otp_verification_id"] = verification_id
-            context.user_data["otp_reserved_number"] = number
-            context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        context.user_data["otp_verification_id"] = verification_id
+        context.user_data["otp_reserved_number"] = number
+        context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
-            await update.message.reply_text(
-                "✅ Reserved number!\n\n"
-                f"Service: {service_name}\n"
-                f"State: {state or 'Random'}\n"
-                f"Number: {number}\n"
-                f"Verification ID: {verification_id}\n\n"
-                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes).",
-                reply_markup=refund_kb(),
-            )
+        await update.message.reply_text(
+            "✅ Reserved number!\n\n"
+            f"Service: {service_name}\n"
+            f"State: {state or 'Random'}\n"
+            f"Number: {number}\n"
+            f"Verification ID: {verification_id}\n\n"
+            "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes).",
+            reply_markup=refund_kb(),
+        )
 
-            # ✅ Start auto polling + refund watchdog
-            await start_otp_auto_poll(update, context, verification_id)
+        await start_otp_auto_poll(update, context, verification_id)
 
     except Exception as e:
-            await update.message.reply_text(f"❌ Failed to reserve number: {e}")
-            return True
+        await update.message.reply_text(f"❌ Failed to reserve number: {e}")
+        return True
 
-        # clear flow step (keep reservation info so you can poll OTP)
+    # clear flow step (keep reservation info so you can poll OTP)
     context.user_data.pop("otp_step", None)
     context.user_data.pop("otp_service_name", None)
     context.user_data.pop("otp_state", None)
     return True
+
+
+     
 
 US_STATES_EXAMPLE = "California"
 
