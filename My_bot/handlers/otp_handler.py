@@ -194,11 +194,6 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
 
 
 
-import random
-import datetime
-from telegram import ParseMode
-from telegram.ext import Update, CallbackContext
-
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
     """
     Handles OTP flow replies (product id / yes-no / state name / final confirm).
