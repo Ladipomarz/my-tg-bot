@@ -686,15 +686,27 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
 
 async def poll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    # Usage: /poll lr_XXXXXXXXXXXX
+    """
+    Usage:
+      /poll <verification_id>
+      /poll <verification_id> <service_display> <phone_number>
+
+    Examples:
+      /poll lr_01KFRKZGGPV7EM2SJXCY7MSG6P
+      /poll lr_01KFRKZGGPV7EM2SJXCY7MSG6P battle.net 4353145065
+    """
     if not context.args:
-        await update.message.reply_text("Usage: /poll <verification_id>")
+        await update.message.reply_text("Usage: /poll <verification_id> [service] [phone]")
         return
 
     verification_id = context.args[0].strip()
 
-    since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
+    # Optional overrides from command args (useful if user_data was cleaned)
+    service_override = context.args[1].strip() if len(context.args) >= 2 else None
+    phone_override = context.args[2].strip() if len(context.args) >= 3 else None
 
+    # Search window (wide enough to find older messages)
+    since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
 
     try:
         result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
@@ -707,23 +719,30 @@ async def poll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     code = (result.get("code") or "").strip() or "N/A"
-    ud = context.application.user_data.get(update.effective_user.id, {}) or {}
-    
 
+    # Try to pull from current user_data (if reservation happened in this session)
+    ud = context.application.user_data.get(update.effective_user.id, {}) or {}
 
     service_display = (
-    ud.get("otp_service_display")
-    or ud.get("otp_service_name")
-    or ud.get("otp_custom_service")
-    or "Service"
-)
-    
-    reserved_number = ud.get("otp_reserved_number") or "Unknown"
+        service_override
+        or ud.get("otp_service_display")
+        or ud.get("otp_service_name")
+        or ud.get("otp_custom_service")
+        or "Service"
+    )
+
+    reserved_number = (
+        phone_override
+        or ud.get("otp_reserved_number")
+        or "Unknown"
+    )
+
     local_num = format_us_local(reserved_number)
- 
+
     await update.message.reply_text(
-    f"{service_display} — OTP Received — {local_num}\n\n"
-    f"OTP verification code For {service_display} is: <code>{code}</code>",
-    parse_mode="HTML",
-)
-    
+        (
+            f"{service_display} — OTP Received — {local_num}\n\n"
+            f"OTP verification code For {service_display} is: <code>{code}</code>"
+        ),
+        parse_mode="HTML",
+    )
