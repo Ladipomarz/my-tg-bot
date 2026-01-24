@@ -206,6 +206,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 
     # ---- step: awaiting product id (4 digits) ----
     if step == "awaiting_product_id":
+        print(f"User input: {update.message.text}")  # Log the input received
         if not text.isdigit() or len(text) not in (3, 4):  # support old 3-digit and new 4-digit
             await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
             return True
@@ -229,6 +230,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 
     # ---- step: ask specific state yes/no ----
     if step == "ask_specific_state":
+        print(f"User input: {update.message.text}")  # Log the input received
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
@@ -253,25 +255,29 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         await _send_final_confirmation(update, context)  # Send final confirmation message
         return True
     
-        # ---- step: awaiting state name (user types state) ----
+    # ---- step: awaiting state name (user types state) ----
     if step == "await_state_name":
+        print(f"User input: {update.message.text}")  # Log the input received
         state_name = update.message.text.strip()
-        
+
         # Validate and normalize the state name
         ok, canon = normalize_us_state_full_name(state_name)
-        
+
+        if ok:
+            print(f"Valid state: {canon}")  # Log the valid state after validation
+            context.user_data["otp_state"] = canon  # Save the valid state
+
+            # Proceed to final confirmation
+            context.user_data["otp_step"] = "final_confirm"
+            await _send_final_confirmation(update, context)
+            return True
+
         if not ok:
+            print(f"Invalid state: {state_name}")  # Log invalid state
             # If the state is invalid, ask the user to type a valid state
             await update.message.reply_text("❌ Invalid state. Please enter the full state name (e.g. California).")
             return True
 
-        # Set the state
-        context.user_data["otp_state"] = canon
-
-        # Proceed to final confirmation
-        context.user_data["otp_step"] = "final_confirm"
-        await _send_final_confirmation(update, context)
-        return True
 
 
     # ---- step: final confirm yes/no ----
@@ -316,6 +322,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                     or getattr(ver, "verification_id", None)
                     or getattr(ver, "reservation_id", None)
                 )
+                print(f"Reserved number: {number}, Verification ID: {verification_id}")  # Log number and verification ID
+
 
                 context.user_data["otp_verification_id"] = verification_id
                 context.user_data["otp_reserved_number"] = number
