@@ -26,8 +26,7 @@ from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
 from utils.db import reset_services_fetch_state
 from handlers.otp_handler import handle_otp_text_input
-from handlers.otp_handler import poll_cmd
-
+from handlers.wallet import handle_wallet_text_input, wallet_callback
 
 from utils.db import (
     create_tables,
@@ -39,6 +38,9 @@ from utils.db import (
     mark_order_delivered,
     save_delivery_meta_by_code,
     get_delivery_payload_by_code,
+    add_user_balance_usd,
+    get_user_balance_usd,
+    mark_order_wallet_credited
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -804,6 +806,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
+    
+    if data.startswith("wallet_") or data == "back_main":
+        return await wallet_callback(update, context)
+
 
     # ADMIN list menu + paging (admin.py)
     if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:"):
@@ -1182,6 +1188,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Admin wizard capture FIRST
     if await _admin_capture_text(update, context):
         return
+    
+    if await handle_otp_text_input(update, context):
+        return
+
+    if await handle_wallet_text_input(update, context):
+        return
+
 
     # best-effort delete user message
     await safe_delete_user_message(update)
@@ -1203,7 +1216,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # User main keyboard
-    if text in {"🧰 Tools", "🛒 Orders"}:
+    if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet"}:
         pending = None  # prevent UnboundLocalError no matter what
 
         # if Tools clicked and there is a pending order, redirect to pending page
@@ -1293,8 +1306,6 @@ tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
-tg_app.add_handler(CommandHandler("poll", poll_cmd))
-
 
 
 # IMPORTANT: media before text (QR upload wizard)
@@ -1441,6 +1452,20 @@ async def plisio_webhook(req: Request):
         if current_pay_status != "paid":
             update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
         return {"ok": True}
+    
+    if order and (order.get("order_type") == "wallet_topup" or (order.get("description") or "").startswith("WALLET_TOPUP:")):
+        if not order.get("wallet_credited"):
+            amt = order.get("amount_usd") or 0
+            if amt:
+                add_user_balance_usd(order["user_id"], float(amt))
+                mark_order_wallet_credited(order_number)
+
+                new_bal = get_user_balance_usd(order["user_id"])
+                await app.bot.send_message(
+                    chat_id=order["user_id"],
+                    text=f"✅ Wallet topped up: ${float(amt):.2f}\nNew balance: ${new_bal:.2f}",
+                )
+
 
     if status in expired_statuses:
         update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)

@@ -7,6 +7,8 @@ from menus.orders_menu import get_pending_order_menu
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
 from config import ADMIN_IDS
+from handlers.wallet import open_wallet_menu
+
 
 
 def _norm_menu_text(t: str) -> str:
@@ -79,3 +81,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_orders_menu(update, context)
 
     await update.message.reply_text("Unknown command, please use menu buttons.")
+    
+    if key == "wallet":
+        return await open_wallet_menu(update, context)
+

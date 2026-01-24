@@ -264,11 +264,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     # ---- step: awaiting state name (user types state) ----
     # Step: waiting for state name
     if step == "await_state_name":
-        state_name = update.message.text.strip()
-        print(f"[STATE] Step: {step}")
-        print(f"[STATE] User input for state: {state_name!r}")
-        print(f"[STATE] User data before state check: {dict(context.user_data)}")
-        
+        state_name = update.message.text.strip()        
         
         if not state_name:
             await update.message.reply_text("❌ Please enter a valid state name (e.g. California).")
@@ -277,13 +273,11 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         ok, canon = normalize_us_state_full_name(state_name)
         
         if ok:
-            print(f"Valid state: {canon}")  # Log if state is valid
             context.user_data["otp_state"] = canon
             context.user_data["otp_step"] = "final_confirm"
             await _send_final_confirmation(update, context)
             return True
         else:
-            print(f"Invalid state: {state_name}")  # Log invalid state
             await update.message.reply_text("❌ Invalid state. Please enter the full state name (e.g. California).")
             return True
 
@@ -682,67 +676,3 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     )
 
     await _cleanup_otp_state(context.application, user_id)
-    
-
-
-async def poll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """
-    Usage:
-      /poll <verification_id>
-      /poll <verification_id> <service_display> <phone_number>
-
-    Examples:
-      /poll lr_01KFRKZGGPV7EM2SJXCY7MSG6P
-      /poll lr_01KFRKZGGPV7EM2SJXCY7MSG6P battle.net 4353145065
-    """
-    if not context.args:
-        await update.message.reply_text("Usage: /poll <verification_id> [service] [phone]")
-        return
-
-    verification_id = context.args[0].strip()
-
-    # Optional overrides from command args (useful if user_data was cleaned)
-    service_override = context.args[1].strip() if len(context.args) >= 2 else None
-    phone_override = context.args[2].strip() if len(context.args) >= 3 else None
-
-    # Search window (wide enough to find older messages)
-    since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
-
-    try:
-        result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
-    except Exception as e:
-        await update.message.reply_text(f"❌ Polling error: {e}")
-        return
-
-    if not result:
-        await update.message.reply_text("⏳ No OTP found for that verification.")
-        return
-
-    code = (result.get("code") or "").strip() or "N/A"
-
-    # Try to pull from current user_data (if reservation happened in this session)
-    ud = context.application.user_data.get(update.effective_user.id, {}) or {}
-
-    service_display = (
-        service_override
-        or ud.get("otp_service_display")
-        or ud.get("otp_service_name")
-        or ud.get("otp_custom_service")
-        or "Service"
-    )
-
-    reserved_number = (
-        phone_override
-        or ud.get("otp_reserved_number")
-        or "Unknown"
-    )
-
-    local_num = format_us_local(reserved_number)
-
-    await update.message.reply_text(
-        (
-            f"{service_display} — OTP Received — {local_num}\n\n"
-            f"OTP verification code For {service_display} is: <code>{code}</code>"
-        ),
-        parse_mode="HTML",
-    )

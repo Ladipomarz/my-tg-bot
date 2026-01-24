@@ -34,6 +34,8 @@ def migrate_users_schema():
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_usd NUMERIC DEFAULT 0;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_updated_at TIMESTAMPTZ;")
         conn.commit()
 
 
@@ -45,6 +47,10 @@ def migrate_orders_schema():
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS invoice_url TEXT;")
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_currency TEXT;")
+            # wallet stuffs
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_usd NUMERIC;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS order_type TEXT;")
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS wallet_credited BOOLEAN DEFAULT FALSE;")
 
             # payment tracking
             cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS pay_provider TEXT;")
@@ -158,7 +164,7 @@ def _generate_order_code(cur) -> str:
             return code
 
 
-def create_order(user_id: int, description: str, ttl_seconds: int = 3600):
+def create_order(user_id: int, description: str, ttl_seconds: int = 3600, amount_usd=None, order_type=None):
     """
     Returns: (id, order_code)
     """
@@ -873,49 +879,51 @@ def get_service_name_by_code(code: str) -> str | None:
                 return None
     return None
 
-               
-        
-def reset_services_fetch_state(*, clear_services: bool = False):
-    """
-    Forces a re-fetch next startup.
-    Optionally clears services table to rebuild from scratch.
-    """
+                 
+
+def get_user_balance_usd(user_id: int) -> float:
     with get_connection() as conn:
         with conn.cursor() as cur:
-            if clear_services:
-                cur.execute("DELETE FROM services;")
+            cur.execute("SELECT COALESCE(balance_usd, 0) FROM users WHERE user_id=%s", (user_id,))
+            row = cur.fetchone()
+            return float(row[0] if row else 0)
 
-            # mark as not fetched
-            cur.execute("""
-                INSERT INTO service_fetch_status (id, fetched)
-                VALUES (1, FALSE)
-                ON CONFLICT (id) DO UPDATE SET fetched = FALSE;
-            """)
+def add_user_balance_usd(user_id: int, amount_usd: float) -> None:
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE users
+                SET balance_usd = COALESCE(balance_usd, 0) + %s,
+                    balance_updated_at = NOW()
+                WHERE user_id = %s
+                """,
+                (amount_usd, user_id),
+            )
         conn.commit()
 
-    print(f"✅ reset_services_fetch_state(clear_services={clear_services}) done")
-        
-    
+def mark_order_wallet_credited(order_code: str) -> None:
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE orders SET wallet_credited = TRUE WHERE order_code = %s",
+                (order_code,),
+            )
+        conn.commit()
 
-def debug_db_snapshot(tag: str = ""):
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT current_database(), current_user, inet_server_addr(), inet_server_port();")
-                db, user, addr, port = cur.fetchone()
-
-                cur.execute("SELECT COUNT(*) FROM service_fetch_status;")
-                status_count = cur.fetchone()[0]
-
-                cur.execute("SELECT COUNT(*) FROM services;")
-                services_count = cur.fetchone()[0]
-
-        print(f"[DB SNAPSHOT {tag}] db={db} user={user} host={addr}:{port} "
-              f"service_fetch_status_rows={status_count} services_rows={services_count}")
-    except Exception as e:
-        print(f"[DB SNAPSHOT {tag}] ERROR: {e}")
-
-save_service_fetch_status()
-debug_db_snapshot("after_fetch")
-
-
+def get_last_wallet_transactions(user_id: int, limit: int = 5):
+    migrate_orders_schema()
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                SELECT order_code, amount_usd, payment_status, status, created_at
+                FROM orders
+                WHERE user_id=%s AND (order_type='wallet_topup' OR description ILIKE 'WALLET_TOPUP:%')
+                ORDER BY created_at DESC
+                LIMIT %s
+                """,
+                (user_id, limit),
+            )
+            return cur.fetchall()
