@@ -334,6 +334,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data["otp_verification_id"] = verification_id
             context.user_data["otp_reserved_number"] = number
             context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            context.user_data["otp_service_display"] = display_service
+
 
             intl_num = format_us_international(number)
             local_num = format_us_local(number)
@@ -341,10 +343,10 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             await update.message.reply_text(
                 (
                     "<b>✅ Reserved number!</b>\n\n"
-                    f"<b>Service:</b> {display_service}\n"
-                    f"<b>State:</b> {state or 'Random'}\n"
-                    f"<b>Number (Intl):</b> {intl_num}\n"
-                    f"<b>Number (Local):</b> {local_num}\n"
+                    f"<b>Service:</b> {display_service}\n\n"
+                    f"<b>State:</b> {state or 'Random'}\n\n"
+                    f"<b>Number (Intl):</b> {intl_num}\n\n"
+                    f"<b>Number (Local):</b> {local_num}\n\n"
                     f"<b>Verification ID:</b> {verification_id}\n\n"
                     "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
                 ),
@@ -510,18 +512,29 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         return  # no OTP yet, next tick will try again
 
     code = result.get("code") or "N/A"
-    content = (result.get("content") or "").strip()
-    from_ = result.get("from") or "Unknown"
+
+    # Pull display service + reserved number from stored user_data
+    ud = context.application.user_data.get(user_id, {}) or {}
+
+    service_display = (
+        ud.get("otp_service_display")
+        or ud.get("otp_service_name")
+        or ud.get("otp_custom_service")
+        or "Service"
+    )
+
+    reserved_number = ud.get("otp_reserved_number") or "Unknown"
+    local_num = format_us_local(reserved_number)
 
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
-            "✅ OTP received!\n\n"
-            f"Code: {code}\n"
-            f"From: {from_}\n"
-            f"Message: {content}"
+            f"{service_display} — OTP Received — {local_num}\n\n"
+            f"OTP verification code For {service_display} is: <code>{code}</code>"
         ),
+        parse_mode="HTML",
     )
+
 
     # Stop both jobs and clear state
     poll_name = data.get("poll_job_name")
