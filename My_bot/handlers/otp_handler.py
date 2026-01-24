@@ -203,6 +203,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 
     text = (update.message.text or "").strip()
     low = text.lower()
+    
+    print(f"[OTP ENTER] step={step!r} text={text!r} user_id={update.effective_user.id}")
+
 
     # ---- step: awaiting product id (4 digits) ----
     if step == "awaiting_product_id":
@@ -256,25 +259,28 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         return True
     
     # ---- step: awaiting state name (user types state) ----
+    # Step: waiting for state name
     if step == "await_state_name":
-        print(f"User input: {update.message.text}")  # Log the input received
         state_name = update.message.text.strip()
+        print(f"[STATE] Step: {step}")
+        print(f"[STATE] User input for state: {state_name!r}")
+        print(f"[STATE] User data before state check: {dict(context.user_data)}")
+        
+        
+        if not state_name:
+            await update.message.reply_text("❌ Please enter a valid state name (e.g. California).")
+            return True
 
-        # Validate and normalize the state name
         ok, canon = normalize_us_state_full_name(state_name)
-
+        
         if ok:
-            print(f"Valid state: {canon}")  # Log the valid state after validation
-            context.user_data["otp_state"] = canon  # Save the valid state
-
-            # Proceed to final confirmation
+            print(f"Valid state: {canon}")  # Log if state is valid
+            context.user_data["otp_state"] = canon
             context.user_data["otp_step"] = "final_confirm"
             await _send_final_confirmation(update, context)
             return True
-
-        if not ok:
+        else:
             print(f"Invalid state: {state_name}")  # Log invalid state
-            # If the state is invalid, ask the user to type a valid state
             await update.message.reply_text("❌ Invalid state. Please enter the full state name (e.g. California).")
             return True
 
