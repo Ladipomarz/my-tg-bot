@@ -244,6 +244,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         
         if low == "yes":
             context.user_data["otp_step"] = "await_state_name"
+            print(f"[OTP STEP SET] -> await_state_name (text was {text!r}) user_data={dict(context.user_data)}")
+
             await update.message.reply_text(
                 f"Specific State Price: {specific_price}\n"
                 f"Random State Price: {random_price}\n\n"
