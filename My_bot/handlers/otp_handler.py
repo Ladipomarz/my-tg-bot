@@ -271,87 +271,80 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
-        if low not in ("yes", "no"):
-           await update.message.reply_text("Please reply with: yes or no")
-           return True
-
-        if low == "no":
-            context.user_data.pop("otp_step", None)
-            context.user_data.pop("otp_service_name", None)
-            context.user_data.pop("otp_state", None)
-            await update.message.reply_text("✅ Cancelled.")
-            return True
-        
-        
-        selected = context.user_data.get("otp_service_name")  # from DB list if chosen
-        custom  = context.user_data.get("otp_custom_service") # if user typed one (optional)
-
-        # What user sees
-        display_service = selected or custom or "Custom"
-
-        # What API receives
-        api_service = selected or "servicenotlisted"
-        service_not_listed_name = None if selected else display_service
-
-
-    # YES => reserve number hook
-    service_name = context.user_data.get("otp_service_name") or "General Service"
-    state = context.user_data.get("otp_state")
-
-    try:
-        ver = await reserve_sms_verification(
-    service_name=api_service,
-    state=state,
-    service_not_listed_name=service_not_listed_name,
-)
-
-        number = (
-            getattr(ver, "number", None)
-            or getattr(ver, "phone_number", None)
-            or getattr(ver, "to_value", None)
-        )
-        verification_id = (
-            getattr(ver, "id", None)
-            or getattr(ver, "verification_id", None)
-            or getattr(ver, "reservation_id", None)
-        )
-
-        context.user_data["otp_verification_id"] = verification_id
-        context.user_data["otp_reserved_number"] = number
-        context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-        intl_num = format_us_international(number)
-        local_num = format_us_local(number)
-
-        await update.message.reply_text(
-            (
-                "<b>✅ Reserved number!</b>\n\n"
-                f"<b>Service:</b> {service_name}\n"
-                f"<b>State:</b> {state or 'Random'}\n"
-                f"<b>Number (Intl):</b> {intl_num}\n"
-                f"<b>Number (Local):</b> {local_num}\n"
-                f"<b>Verification ID:</b> {verification_id}\n\n"
-                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
-            ),
-            parse_mode=ParseMode.HTML,
-            reply_markup=refund_kb(),
-        )
-
-
-        await start_otp_auto_poll(update, context, verification_id)
-
-    except Exception as e:
-        await update.message.reply_text(f"❌ Failed to reserve number: {e}")
+        low = update.message.text.lower()  # To handle user input correctly
+     
+    if low not in ("yes", "no"):
+        await update.message.reply_text("Please reply with: yes or no")
         return True
 
-    # clear flow step (keep reservation info so you can poll OTP)
-    context.user_data.pop("otp_step", None)
-    context.user_data.pop("otp_service_name", None)
-    context.user_data.pop("otp_state", None)
-    return True
+    if low == "no":
+        # If "No" is selected, reset the process and go back to the main flow.
+        context.user_data.pop("otp_step", None)
+        context.user_data.pop("otp_service_name", None)
+        context.user_data.pop("otp_state", None)
+        context.user_data.pop("otp_custom_service", None)
 
+        # Inform the user that the process has been cancelled
+        await update.message.reply_text("✅ The process has been cancelled.")
+        return True
 
-     
+    if low == "yes":
+        # Proceed with OTP generation (or any further steps)
+        selected = context.user_data.get("otp_service_name")
+        service_name = selected if selected else "General Service"
+        state = context.user_data.get("otp_state", "Random")
+        
+        # Proceed to reserve number and generate OTP
+        try:
+            ver = await reserve_sms_verification(
+                service_name=service_name,
+                state=state,
+            )
+
+            number = (
+                getattr(ver, "number", None)
+                or getattr(ver, "phone_number", None)
+                or getattr(ver, "to_value", None)
+            )
+            verification_id = (
+                getattr(ver, "id", None)
+                or getattr(ver, "verification_id", None)
+                or getattr(ver, "reservation_id", None)
+            )
+
+            context.user_data["otp_verification_id"] = verification_id
+            context.user_data["otp_reserved_number"] = number
+            context.user_data["otp_reserved_at_utc"] = datetime.datetime.now(datetime.timezone.utc).isoformat()
+
+            intl_num = format_us_international(number)
+            local_num = format_us_local(number)
+
+            await update.message.reply_text(
+                (
+                    "<b>✅ Reserved number!</b>\n\n"
+                    f"<b>Service:</b> {service_name}\n"
+                    f"<b>State:</b> {state or 'Random'}\n"
+                    f"<b>Number (Intl):</b> {intl_num}\n"
+                    f"<b>Number (Local):</b> {local_num}\n"
+                    f"<b>Verification ID:</b> {verification_id}\n\n"
+                    "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
+                ),
+                parse_mode=ParseMode.HTML,
+                reply_markup=refund_kb(),
+            )
+
+            await start_otp_auto_poll(update, context, verification_id)
+
+        except Exception as e:
+            await update.message.reply_text(f"❌ Failed to reserve number: {e}")
+            return True
+
+        # clear flow step (keep reservation info so you can poll OTP)
+        context.user_data.pop("otp_step", None)
+        context.user_data.pop("otp_service_name", None)
+        context.user_data.pop("otp_state", None)
+        return True
+
 
 US_STATES_EXAMPLE = "California"
 
@@ -370,7 +363,6 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
     await update.message.reply_text(msg)
 
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
 def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
