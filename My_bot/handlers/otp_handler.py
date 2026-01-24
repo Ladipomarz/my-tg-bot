@@ -262,7 +262,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             return True
 
         if low == "no":
-            # If "No" is selected, cancel the process and clear data
+            # If "No" is selected in final confirmation, cancel the process and clear data
             context.user_data.pop("otp_step", None)
             context.user_data.pop("otp_service_name", None)
             context.user_data.pop("otp_state", None)
@@ -350,7 +350,6 @@ def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Refund number", callback_data="otp_refund_now")]
     ])
-
     
     
     
