@@ -918,7 +918,7 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """
-                SELECT order_code, amount_usd, payment_status, status, created_at
+                SELECT order_code, amount_usd, pay_status, status, created_at
                 FROM orders
                 WHERE user_id=%s
                   AND (order_type='wallet_topup' OR LEFT(description, 12) = 'WALLET_TOPUP:')

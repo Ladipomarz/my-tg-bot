@@ -29,7 +29,7 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     lines = []
     for t in txs:
         amt = t.get("amount_usd")
-        status = (t.get("payment_status") or t.get("status") or "unknown").lower()
+        status = (t.get("pay_status") or t.get("status") or "unknown").lower()
         if status in ("paid", "confirmed", "completed"):
             status = "Completed"
         elif status in ("detected", "processing"):
