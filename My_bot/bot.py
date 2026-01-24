@@ -55,6 +55,7 @@ from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
+from handlers.wallet import open_wallet_menu
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1213,10 +1214,18 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("admin_wizard", None)
         await update.message.reply_text("Admin menu: use /admin")
         return
+    
+    
 
     # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet"}:
         pending = None  # prevent UnboundLocalError no matter what
+            
+    if text == "💰 Wallet":
+        await open_wallet_menu(update, context)
+        return
+
+
 
         # if Tools clicked and there is a pending order, redirect to pending page
         if text == "🧰 Tools":
