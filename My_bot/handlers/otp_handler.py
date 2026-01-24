@@ -373,6 +373,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data.pop("otp_step", None)
             context.user_data.pop("otp_service_name", None)
             context.user_data.pop("otp_state", None)
+            context.user_data.pop("otp_api_service_name", None)
             return True
 
 
