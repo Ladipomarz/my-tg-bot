@@ -1301,8 +1301,6 @@ tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router),
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
 
 
-
-
 async def _background_telegram_bootstrap():
     webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
     while True:
