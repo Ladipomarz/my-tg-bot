@@ -230,16 +230,17 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         )
         return True
 
-    # ---- step: ask specific state yes/no ----
+     # ---- step: ask specific state yes/no ----
     if step == "ask_specific_state":
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
 
-        # Prices placeholder (you said you'll set later)
+    # Prices placeholder (you said you'll set later)
         specific_price = context.user_data.get("otp_specific_price", "$x")
         random_price = context.user_data.get("otp_random_price", "$y")
-
+        
+    
         if low == "yes":
             context.user_data["otp_step"] = "await_state_name"
             await update.message.reply_text(
@@ -249,50 +250,39 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 "✅ Example: California"
             )
             return True
-
-        # no => go to final confirm w/ random state
-        context.user_data["otp_state"] = None
-        context.user_data["otp_step"] = "final_confirm"
-        await _send_final_confirmation(update, context)
+        
+        # If "no" is selected => Set random state and proceed to final confirmation
+        context.user_data["otp_state"] = "Random"  # Random state set
+        context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
+        await _send_final_confirmation(update, context)  # Send final confirmation message
         return True
-
-    # ---- step: waiting for state name ----
-    if step == "await_state_name":
-        ok, canon = normalize_us_state_full_name(text)
-        if not ok:
-            await update.message.reply_text("❌ Invalid state. Please enter full state name (e.g. California).")
-            return True
-
-        context.user_data["otp_state"] = canon
-        context.user_data["otp_step"] = "final_confirm"
-        await _send_final_confirmation(update, context)
-        return True
-    
     
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
         low = update.message.text.lower()  # To handle user input correctly
-     
-    if low not in ("yes", "no"):
-        await update.message.reply_text("Please reply with: yes or no")
-        return True
+        
+        if low not in ("yes", "no"):
+            await update.message.reply_text("Please reply with: yes or no")
+            return True
 
-    if low == "no":
-        # If "No" is selected, reset the process and go back to the main flow.
-        context.user_data.pop("otp_step", None)
-        context.user_data.pop("otp_service_name", None)
-        context.user_data.pop("otp_state", None)
-        context.user_data.pop("otp_custom_service", None)
+        if low == "no":
+            # If "No" is selected, cancel the process and clear data
+            context.user_data.pop("otp_step", None)
+            context.user_data.pop("otp_service_name", None)
+            context.user_data.pop("otp_state", None)
+            context.user_data.pop("otp_custom_service", None)
 
         # Inform the user that the process has been cancelled
         await update.message.reply_text("✅ The process has been cancelled.")
         return True
-
+    
+        
     if low == "yes":
         # Proceed with OTP generation (or any further steps)
         selected = context.user_data.get("otp_service_name")
         service_name = selected if selected else "General Service"
         state = context.user_data.get("otp_state", "Random")
+        
         
         # Proceed to reserve number and generate OTP
         try:
@@ -338,12 +328,14 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         except Exception as e:
             await update.message.reply_text(f"❌ Failed to reserve number: {e}")
             return True
+        
 
         # clear flow step (keep reservation info so you can poll OTP)
         context.user_data.pop("otp_step", None)
         context.user_data.pop("otp_service_name", None)
         context.user_data.pop("otp_state", None)
         return True
+
 
 
 US_STATES_EXAMPLE = "California"
