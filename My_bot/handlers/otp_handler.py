@@ -236,7 +236,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         # Prices placeholder (you said you'll set later)
         specific_price = context.user_data.get("otp_specific_price", "$x")
         random_price = context.user_data.get("otp_random_price", "$y")
-
+        
         if low == "yes":
             context.user_data["otp_step"] = "await_state_name"
             await update.message.reply_text(
@@ -246,7 +246,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 "✅ Example: California"
             )
             return True
-
+        
         # If "no" is selected => Set random state and proceed to final confirmation
         context.user_data["otp_state"] = "Random"  # Random state set
         context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
@@ -256,13 +256,13 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
         low = update.message.text.lower()  # To handle user input correctly
-
+        
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
 
         if low == "no":
-            # If "No" is selected in final confirmation, cancel the process and clear data
+            # If "No" is selected, cancel the process and clear data
             context.user_data.pop("otp_step", None)
             context.user_data.pop("otp_service_name", None)
             context.user_data.pop("otp_state", None)
@@ -350,6 +350,7 @@ def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Refund number", callback_data="otp_refund_now")]
     ])
+
 
     
     
