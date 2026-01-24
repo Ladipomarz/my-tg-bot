@@ -421,15 +421,15 @@ def _area_codes_for_state(state_full: str) -> list[str]:
             codes.append(str(getattr(ac, "area_code", "")).strip())
     return [c for c in codes if c.isdigit()]
 
-async def reserve_sms_verification(service_name: str, state: str | None, service_not_listed_name: str | None = None):
-    kwargs = {"service_name": service_name, "state": state}
-    if service_not_listed_name:
-        kwargs["service_not_listed_name"] = service_not_listed_name
-        return await asyncio.to_thread(lambda: provider.verifications.create(**kwargs))
-
+async def reserve_sms_verification(
+    service_name: str,
+    state: str | None,
+    service_not_listed_name: str | None = None,
+):
     """
     Creates an SMS verification and returns the verification object.
-    Runs in a thread because the SDK calls are sync.
+    TextVerified SDK does NOT accept `state=...`.
+    We map state -> area codes using provider.services.area_codes().
     """
     def _do():
         kwargs = {
@@ -437,15 +437,20 @@ async def reserve_sms_verification(service_name: str, state: str | None, service
             "capability": ReservationCapability.SMS,
         }
 
+        # For "not listed" flow
+        if service_not_listed_name and service_name == "servicenotlisted":
+            kwargs["service_not_listed_name"] = service_not_listed_name
+
+        # Map state -> area codes
         if state:
             acs = _area_codes_for_state(state)
             if acs:
-                # pass a short list to avoid massive payloads
                 kwargs["area_code_select_option"] = acs[:15]
 
         return provider.verifications.create(**kwargs)
 
     return await asyncio.to_thread(_do)
+
 
 def _poll_textverified_once(verification_id: str, since_dt: datetime.datetime) -> Optional[dict]:
     """
