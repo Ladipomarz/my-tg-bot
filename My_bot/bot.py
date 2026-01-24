@@ -24,7 +24,6 @@ from telegram.request import HTTPXRequest
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
-from utils.db import reset_services_fetch_state
 from handlers.otp_handler import handle_otp_text_input
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 
