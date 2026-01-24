@@ -693,8 +693,8 @@ async def poll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     verification_id = context.args[0].strip()
 
-    # use "now - 10 minutes" to be safe
-    since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+    since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=1)
+
 
     try:
         result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
