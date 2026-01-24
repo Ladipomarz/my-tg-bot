@@ -173,6 +173,25 @@ async def _edit(update, text, keyboard):
         raise
 
 
+async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms") -> None:
+    """
+    Fetches the service list, builds the .txt in memory, and sends it to the user.
+    """
+    # Call the helper to build the txt content
+    data_bytes, filename = build_services_txt_bytes(capability=capability)
+
+    # Create a BytesIO object from the data
+    bio = BytesIO(data_bytes)
+    bio.name = filename  # Telegram uses this as filename
+
+    # Send the file as a document to the user
+    await update.callback_query.message.reply_document(
+        document=InputFile(bio, filename=filename),
+        caption="✅ Here’s the service list.\nReply with the CODE you want.",
+        parse_mode="HTML"  # Ensures HTML tags like <b> are properly interpreted
+
+    )
+ 
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
     """
     Handles OTP flow replies (product id / yes-no / state name / final confirm).
@@ -331,7 +350,6 @@ def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("❌ Refund number", callback_data="otp_refund_now")]
     ])
-
     
     
     
