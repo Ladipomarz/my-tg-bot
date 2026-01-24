@@ -209,19 +209,17 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
 
     if data == "otp_skip_universal":
-        # Universal number flow uses "General Service" (servicenotlisted)
-        context.user_data.pop("otp_service_name", None)            # no DB service selected
-        context.user_data["otp_custom_service"] = "General Service" # what user sees
-        context.user_data["otp_step"] = "ask_specific_state"        # ✅ IMPORTANT: step your text handler already supports
-        
+        context.user_data.pop("otp_service_name", None)
+        context.user_data["otp_custom_service"] = "General Service"
+        context.user_data["otp_api_service_name"] = "servicenotlisted"
+        context.user_data["otp_step"] = "ask_specific_state"
 
         await update.callback_query.edit_message_text(
-        "Do you want the number to be generated from a specific US state?\n\n"
-        "✅ Reply with: yes or no"
-        
-       )
-        
+            "Do you want the number to be generated from a specific US state?\n\n"
+            "✅ Reply with: yes or no"
+        )
         return
+
 
     if data == "otp_refund_now":
         await otp_refund_now_cb(update, context)

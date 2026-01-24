@@ -309,15 +309,24 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         
         if low == "yes":
             # Proceed with OTP generation (or any further steps)
-            selected = context.user_data.get("otp_service_name")
-            service_name = selected if selected else "General Service"
-            state = context.user_data.get("otp_state", "Random")
+            selected = context.user_data.get("otp_service_name")         # from DB
+            custom = context.user_data.get("otp_custom_service")         # "General Service" from skip
+            api_override = context.user_data.get("otp_api_service_name") # set by skip
+
+            display_service = selected or custom or "Custom"
+            api_service = api_override or selected or "servicenotlisted"
+
+            service_not_listed_name = display_service if api_service == "servicenotlisted" else None
+
+            state = context.user_data.get("otp_state")
+
 
             # Proceed to reserve number and generate OTP
             try:
                 ver = await reserve_sms_verification(
                     service_name=service_name,
                     state=state,
+                    service_not_listed_name=service_not_listed_name,
                 )
 
                 number = (
