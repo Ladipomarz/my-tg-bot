@@ -13,7 +13,7 @@ from handlers.wallet import open_wallet_menu
 
 def _norm_menu_text(t: str) -> str:
     t = (t or "").strip().lower()
-    for ch in ["🧰", "🛒", "👤", "💵"]:
+    for ch in ["🧰", "🛒", "👤", "💰"]: 
         t = t.replace(ch, "")
     t = " ".join(t.split())
     return t
@@ -81,7 +81,8 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_orders_menu(update, context)
 
     await update.message.reply_text("Unknown command, please use menu buttons.")
-    
+
+
     if key == "wallet":
         return await open_wallet_menu(update, context)
 
