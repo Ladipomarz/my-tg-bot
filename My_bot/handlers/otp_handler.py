@@ -707,9 +707,23 @@ async def poll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     code = (result.get("code") or "").strip() or "N/A"
+    ud = context.application.user_data.get(update.effective_user.id, {}) or {}
+    
 
+
+    service_display = (
+    ud.get("otp_service_display")
+    or ud.get("otp_service_name")
+    or ud.get("otp_custom_service")
+    or "Service"
+)
+    
+    reserved_number = ud.get("otp_reserved_number") or "Unknown"
+    local_num = format_us_local(reserved_number)
+ 
     await update.message.reply_text(
-        f"OTP verification code is: <code>{code}</code>",
-        parse_mode="HTML",
-    )
+    f"{service_display} — OTP Received — {local_num}\n\n"
+    f"OTP verification code For {service_display} is: <code>{code}</code>",
+    parse_mode="HTML",
+)
     
