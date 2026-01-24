@@ -1487,11 +1487,6 @@ async def plisio_webhook_get():
     return {"ok": True}
 
 
-from utils.db import reset_services_fetch_state
-
-
-
-
 @app.on_event("startup")
 async def on_startup():
     print("Fast API up")
@@ -1499,21 +1494,6 @@ async def on_startup():
     create_tables()
     create_service_fetch_status_table()
 
-    # one-time force refresh by env var
-    if os.getenv("FORCE_SERVICES_REFETCH") == "1":
-        reset_services_fetch_state(clear_services=False)  # keep existing, just allow missing inserts
-
-    # Run the blocking fetch in a background thread (SAFE)
-    #task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
-
-    def _log_task_result(t: asyncio.Task):
-        exc = t.exception()
-        if exc:
-            import logging
-            logging.getLogger("servicelist").exception(
-                "Background service task crashed",
-                exc_info=exc
-            )
 
     #task.add_done_callback(_log_task_result)
 
