@@ -252,6 +252,27 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
         await _send_final_confirmation(update, context)  # Send final confirmation message
         return True
+    
+        # ---- step: awaiting state name (user types state) ----
+    if step == "await_state_name":
+        state_name = update.message.text.strip()
+        
+        # Validate and normalize the state name
+        ok, canon = normalize_us_state_full_name(state_name)
+        
+        if not ok:
+            # If the state is invalid, ask the user to type a valid state
+            await update.message.reply_text("❌ Invalid state. Please enter the full state name (e.g. California).")
+            return True
+
+        # Set the state
+        context.user_data["otp_state"] = canon
+
+        # Proceed to final confirmation
+        context.user_data["otp_step"] = "final_confirm"
+        await _send_final_confirmation(update, context)
+        return True
+
 
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
