@@ -26,6 +26,7 @@ from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
 from utils.db import reset_services_fetch_state
 from handlers.otp_handler import handle_otp_text_input
+from handlers.otp_handler import poll_cmd
 
 
 from utils.db import (
@@ -1292,6 +1293,8 @@ tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
+tg_app.add_handler(CommandHandler("poll", poll_cmd))
+
 
 
 # IMPORTANT: media before text (QR upload wizard)

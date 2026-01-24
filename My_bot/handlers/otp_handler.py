@@ -15,6 +15,7 @@ from utils.validator import normalize_us_state_full_name
 import datetime
 from typing import Optional
 from telegram.constants import ParseMode
+from telegram.ext import CommandHandler
 
 
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
@@ -681,4 +682,34 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     )
 
     await _cleanup_otp_state(context.application, user_id)
+    
+
+
+async def poll_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Usage: /poll lr_XXXXXXXXXXXX
+    if not context.args:
+        await update.message.reply_text("Usage: /poll <verification_id>")
+        return
+
+    verification_id = context.args[0].strip()
+
+    # use "now - 10 minutes" to be safe
+    since_dt = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(minutes=10)
+
+    try:
+        result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
+    except Exception as e:
+        await update.message.reply_text(f"❌ Polling error: {e}")
+        return
+
+    if not result:
+        await update.message.reply_text("⏳ No OTP found for that verification.")
+        return
+
+    code = (result.get("code") or "").strip() or "N/A"
+
+    await update.message.reply_text(
+        f"OTP verification code is: <code>{code}</code>",
+        parse_mode="HTML",
+    )
     
