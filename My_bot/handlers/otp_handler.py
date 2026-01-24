@@ -192,9 +192,6 @@ async def send_services_txt(update: Update, context: CallbackContext, *, capabil
 
     )
  
-
-
-
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
     """
     Handles OTP flow replies (product id / yes-no / state name / final confirm).
@@ -230,17 +227,16 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         )
         return True
 
-     # ---- step: ask specific state yes/no ----
+    # ---- step: ask specific state yes/no ----
     if step == "ask_specific_state":
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
 
-    # Prices placeholder (you said you'll set later)
+        # Prices placeholder (you said you'll set later)
         specific_price = context.user_data.get("otp_specific_price", "$x")
         random_price = context.user_data.get("otp_random_price", "$y")
-        
-    
+
         if low == "yes":
             context.user_data["otp_step"] = "await_state_name"
             await update.message.reply_text(
@@ -250,13 +246,13 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 "✅ Example: California"
             )
             return True
-        
+
         # If "no" is selected => Set random state and proceed to final confirmation
         context.user_data["otp_state"] = "Random"  # Random state set
         context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
         await _send_final_confirmation(update, context)  # Send final confirmation message
         return True
-    
+
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
         low = update.message.text.lower()  # To handle user input correctly
@@ -272,19 +268,15 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data.pop("otp_state", None)
             context.user_data.pop("otp_custom_service", None)
 
-        # Inform the user that the process has been cancelled
-        await update.message.reply_text("✅ The process has been cancelled.")
-        return True
-    
+            # Inform the user that the process has been cancelled
+            await update.message.reply_text("✅ The process has been cancelled.")
+            return True
         
-    if low == "yes":
-        # Proceed with OTP generation (or any further steps)
+        # If "Yes" is selected, proceed with OTP generation
         selected = context.user_data.get("otp_service_name")
         service_name = selected if selected else "General Service"
         state = context.user_data.get("otp_state", "Random")
         
-        
-        # Proceed to reserve number and generate OTP
         try:
             ver = await reserve_sms_verification(
                 service_name=service_name,
@@ -324,8 +316,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             )
 
             await start_otp_auto_poll(update, context, verification_id)
-
+            
         except Exception as e:
+             
             await update.message.reply_text(f"❌ Failed to reserve number: {e}")
             return True
         
@@ -335,7 +328,6 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         context.user_data.pop("otp_service_name", None)
         context.user_data.pop("otp_state", None)
         return True
-
 
 
 US_STATES_EXAMPLE = "California"
@@ -353,6 +345,11 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
         "⚠️Please reply with either yes or no to confirm."
     )
     await update.message.reply_text(msg)
+
+def refund_kb() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("❌ Refund number", callback_data="otp_refund_now")]
+    ])
 
 
 
