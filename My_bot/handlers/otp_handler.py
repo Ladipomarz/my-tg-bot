@@ -204,74 +204,19 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     text = (update.message.text or "").strip()
     low = text.lower()
 
-    # ---- step: waiting for product id (4 digits) ----
-    if step == "awaiting_product_id":
-        if not text.isdigit() or len(text) not in (3, 4):  # support old 3-digit and new 4-digit
-            await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
-            return True
-
-        service_name = get_service_name_by_code(text)
-        if not service_name:
-            await update.message.reply_text("❌ I couldn't find that Product ID in the DB. Try again or press Skip.")
-            return True
-
-        context.user_data["otp_service_name"] = service_name
-
-        # Ask state preference
-        context.user_data["otp_step"] = "ask_specific_state"
-        await update.message.reply_text(
-            "If you've got the 4-digit Product ID, we can proceed.\n\n"
-            "⚠️Please make sure the service is not listed before using the universal phone number.\n\n"
-            "Do you want the number to be generated from a specific US state?\n"
-            "Reply with: yes / no"
-        )
-        return True
-
-    # ---- step: ask specific state yes/no ----
-    if step == "ask_specific_state":
-        if low not in ("yes", "no"):
-            await update.message.reply_text("Please reply with: yes or no")
-            return True
-
-        # Prices placeholder (you said you'll set later)
-        specific_price = context.user_data.get("otp_specific_price", "$x")
-        random_price = context.user_data.get("otp_random_price", "$y")
-        
-        if low == "yes":
-            context.user_data["otp_step"] = "await_state_name"
-            await update.message.reply_text(
-                f"Specific State Price: {specific_price}\n"
-                f"Random State Price: {random_price}\n\n"
-                "🇺🇸 Which US state do you want the phone number to be generated from?\n"
-                "✅ Example: California"
-            )
-            return True
-        
-        # If "no" is selected => Set random state and proceed to final confirmation
-        context.user_data["otp_state"] = "Random"  # Random state set
-        context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
-        await _send_final_confirmation(update, context)  # Send final confirmation message
-        return True
-
     # ---- step: final confirm yes/no ----
     if step == "final_confirm":
-        low = update.message.text.lower()  # To handle user input correctly
-        
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
 
         if low == "no":
-            # If "No" is selected in final confirmation, cancel the process and clear data
-            context.user_data.pop("otp_step", None)
-            context.user_data.pop("otp_service_name", None)
-            context.user_data.pop("otp_state", None)
-            context.user_data.pop("otp_custom_service", None)
-
-            # Inform the user that the process has been cancelled
-            await update.message.reply_text("✅ The process has been cancelled.")
+            # Set random state and proceed to final confirmation without asking for state input
+            context.user_data["otp_state"] = "Random"  # Random state set
+            context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
+            await _send_final_confirmation(update, context)  # Send final confirmation message
             return True
-        
+
         if low == "yes":
             # Proceed with OTP generation (or any further steps)
             selected = context.user_data.get("otp_service_name")
@@ -328,6 +273,35 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data.pop("otp_service_name", None)
             context.user_data.pop("otp_state", None)
             return True
+
+    # ---- step: ask specific state yes/no ----
+    if step == "ask_specific_state":
+        if low not in ("yes", "no"):
+            await update.message.reply_text("Please reply with: yes or no")
+            return True
+
+        # Prices placeholder (you said you'll set later)
+        specific_price = context.user_data.get("otp_specific_price", "$x")
+        random_price = context.user_data.get("otp_random_price", "$y")
+        
+        if low == "yes":
+            context.user_data["otp_step"] = "await_state_name"
+            await update.message.reply_text(
+                f"Specific State Price: {specific_price}\n"
+                f"Random State Price: {random_price}\n\n"
+                "🇺🇸 Which US state do you want the phone number to be generated from?\n"
+                "✅ Example: California"
+            )
+            return True
+        
+        # If "no" is selected => Set random state and proceed to final confirmation
+        context.user_data["otp_state"] = "Random"  # Random state set
+        context.user_data["otp_step"] = "final_confirm"  # Proceed to final confirmation step
+        await _send_final_confirmation(update, context)  # Send final confirmation message
+        return True
+
+    return False
+
 
 
 US_STATES_EXAMPLE = "California"
