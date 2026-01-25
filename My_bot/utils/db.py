@@ -99,7 +99,6 @@ def create_tables():
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
                 user_id BIGINT UNIQUE,
-                wallet_balance DECIMAL(10, 2) DEFAULT 0
             );
             """)
 
