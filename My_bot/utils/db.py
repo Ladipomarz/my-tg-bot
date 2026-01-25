@@ -92,9 +92,23 @@ def migrate_orders_schema():
         conn.commit()
 
 
-def create_tables():
+def drop_existing_tables():
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Drop tables if they already exist
+            cur.execute("DROP TABLE IF EXISTS wallet_transactions;")
+            cur.execute("DROP TABLE IF EXISTS orders;")
+            cur.execute("DROP TABLE IF EXISTS users;")
+        conn.commit()
+
+
+def create_tables():
+    # Drop existing tables and recreate them
+    drop_existing_tables()
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Create the 'users' table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -102,26 +116,52 @@ def create_tables():
                 );
             """)
 
+            # Create the 'orders' table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
                     id SERIAL PRIMARY KEY,
                     user_id BIGINT REFERENCES users(user_id),
-                    order_code TEXT UNIQUE,  -- No need for double quotes unless it's a reserved word
+                    order_code TEXT UNIQUE,
                     status TEXT,
                     description TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
 
-            # Create necessary indexes
+            # Create necessary indexes for 'orders'
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
 
         conn.commit()
 
+    # Assuming your migration functions are already handling the migration schema
     migrate_users_schema()
     migrate_orders_schema()
+
+
+def create_wallet_transactions_table():
+    # Drop and recreate 'wallet_transactions' table
+    drop_existing_tables()
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Create the 'wallet_transactions' table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS wallet_transactions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT NOT NULL REFERENCES users(id),
+                    order_code VARCHAR(255) UNIQUE,
+                    amount_usd DECIMAL(10, 2),
+                    status VARCHAR(20) DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()
+      
+        
+        
 
 
 # ---------------- USERS ----------------
@@ -640,24 +680,6 @@ def create_service_fetch_status_table():
         conn.commit()
         
         
-        
-def create_wallet_transactions_table():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS wallet_transactions (
-                    id SERIAL PRIMARY KEY,
-                    user_id INT NOT NULL REFERENCES users(id),  -- Reference to the 'id' column in 'users' table
-                    order_code VARCHAR(255) UNIQUE,
-                    amount_usd DECIMAL(10, 2),
-                    status VARCHAR(20) DEFAULT 'pending',  -- can be 'pending', 'completed', 'cancelled'
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            conn.commit()        
-        
-    
 
 
 # ---------------- FUNCTION TO CHECK FETCH STATUS ----------------        
