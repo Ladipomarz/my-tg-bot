@@ -5,7 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
-from utils.db import get_connection
+
 
 from config import DATABASE_URL
 
