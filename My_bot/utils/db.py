@@ -242,21 +242,26 @@ def update_order_status(order_id: int, status: str):
 
 
 
-
 def get_pending_order(user_id: int):
-    migrate_orders_schema()
+    migrate_orders_schema()  # Ensure schema migration
     with get_connection() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Query to fetch the pending order
             cur.execute("""
                 SELECT *
                 FROM orders
-                WHERE user_id = %s AND pay_status = 'pending'
+                WHERE user_id = %s AND status = 'pending'
                 ORDER BY id DESC
                 LIMIT 1;
             """, (user_id,))
-            
-            # Fetch the first result and return as a dictionary
-            return cur.fetchone()  # This will return None if no result is found
+
+            # Fetch the first row as a dictionary, or return None if no row is found
+            result = cur.fetchone()
+            if result is None:
+                return None  # No pending order found
+
+            return result
+
 
 
 
