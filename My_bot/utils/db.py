@@ -647,7 +647,7 @@ def create_wallet_transactions_table():
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS wallet_transactions (
                     id SERIAL PRIMARY KEY,
-                    user_id INT REFERENCES users(id),  -- link to users table
+                    user_id INT NOT NULL REFERENCES users(id),  -- Reference to the 'id' column in 'users' table
                     order_code VARCHAR(255) UNIQUE,
                     amount_usd DECIMAL(10, 2),
                     status VARCHAR(20) DEFAULT 'pending',  -- can be 'pending', 'completed', 'cancelled'
