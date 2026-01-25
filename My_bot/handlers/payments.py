@@ -164,8 +164,9 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=open_invoice_kb(existing_url),
         )
         return
-
-        
+    
+    
+    
     logger.info(
         "payments_callback user_id=%s order_code=%s desc=%r custom_price_usd=%r resolved_amount_usd=%r data=%r",
         q.from_user.id,
@@ -175,6 +176,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_usd,
         data,
     )
+    
 
     if amount_usd is None:
         await q.edit_message_text(
@@ -265,12 +267,28 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
         except Exception as e:
-            logger.exception("Plisio invoice creation failed")
+            # Log the exception to understand the error message structure
+            logger.exception("Plisio invoice creation failed: %s", str(e))
+
+            # Get the error message, or use a fallback if it's not present
+            msg = str(e) if hasattr(e, 'message') and e.message else str(e)
+
+            # ✅ Plisio duplicate invoice: don't keep trying to create again
+            if "Invoice with the same order_number already exists" in msg or "return_existing" in msg:
+                await q.edit_message_text(
+                    "⚠️ Payment link already exists for this order.\n"
+                    "Tap below to continue:",
+                    reply_markup=make_payment_kb(order_code),
+                )
+                return
+
+            # Handle any other errors
             await q.edit_message_text(
                 f"❌ Failed to create payment link:\n{e}\n\nChoose another coin.",
                 reply_markup=coin_picker_kb(order_code, amount_usd),
             )
-        return
+            return
+
 
     # If some unknown callback comes in
     await q.edit_message_text("❌ Unknown action. Please try again.")
