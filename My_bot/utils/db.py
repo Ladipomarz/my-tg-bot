@@ -106,7 +106,7 @@ def create_tables():
             CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
                user_id BIGINT REFERENCES users(user_id)
-                order_code TEXT UNIQUE,
+                "order_code" TEXT UNIQUE,
                 status TEXT,
                 description TEXT,
                 created_at TIMESTAMP
