@@ -98,14 +98,14 @@ def create_tables():
             cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                user_id BIGINT UNIQUE,
+                user_id BIGINT UNIQUE
             );
             """)
 
             cur.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 id SERIAL PRIMARY KEY,
-                user_id BIGINT,
+               user_id BIGINT REFERENCES users(user_id)
                 order_code TEXT UNIQUE,
                 status TEXT,
                 description TEXT,
