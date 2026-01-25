@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 Make Payment", callback_data=f"pay_make:{order_code}")]
+    ])
 
 
 def coin_picker_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
