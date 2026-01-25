@@ -8,5 +8,5 @@ python-multipart
 reportlab
 requests
 textverified
-
+psycopg2
 
