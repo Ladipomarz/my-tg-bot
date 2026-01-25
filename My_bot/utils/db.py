@@ -1,7 +1,7 @@
 import datetime
 import random
 import json
-import psycopg
+import psycopg2
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
@@ -13,7 +13,7 @@ from config import DATABASE_URL
 def get_connection():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(DATABASE_URL)        
+    return psycopg2.connect(DATABASE_URL)        
         
 
 def test_connection():
