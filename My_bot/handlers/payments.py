@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 from payments.plisio import create_plisio_invoice
 from utils.db import get_pending_order, set_order_payment
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
+from datetime import datetime, timedelta
 
 logger = logging.getLogger(__name__)
 
@@ -112,70 +113,108 @@ def _resolve_amount_usd(context: ContextTypes.DEFAULT_TYPE, pending: dict) -> fl
     return None
 
 
+
+# Modify the function to check and expire pending orders after 1 minute
 async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
     data = (q.data or "").strip()
 
     pending = get_pending_order(q.from_user.id)
-    
     if not pending:
         await q.edit_message_text("❌ No pending order.")
         return
-    
 
     order_code = pending["order_code"]
-    
 
-    # Use description for nicer invoice title
-    desc = (pending.get("description") or "").strip() or "Service"
-    
-
-    # ✅ Decide amount FIRST
-    order_type = (pending.get("order_type") or "").lower().strip()
-    
-    if order_type == "wallet_topup":
-        
-        amount_usd = _safe_float(pending.get("amount_usd"))
-    else:
-        amount_usd = _resolve_amount_usd(context, pending)
-
-    if amount_usd is None:
-        
-        await q.edit_message_text(
-            "❌ Could not determine price for this order.\n"
-            "Please restart the order and try again."
-            
-            )
-        
-        return
-
-    # ✅ THEN: reuse existing invoice if present
+    # Check if there's an existing invoice URL and it's not yet processed
     existing_url = (pending.get("invoice_url") or "").strip()
     existing_status = (pending.get("pay_status") or "").lower().strip()
 
+    # Expire order if it's been pending for more than 1 minute
+    order_created_at = pending.get("created_at")  # assuming you store creation time in DB
+    if order_created_at:
+        created_at = datetime.fromisoformat(order_created_at)
+        if datetime.now() - created_at > timedelta(minutes=1):
+            # Expire the order
+            expire_pending_order_if_needed(q.from_user.id)
+            await q.edit_message_text(
+                f"⚠️ Your previous order has expired because it was pending for too long.\n"
+                f"Please create a new order.",
+            )
+            return
+
+    # If invoice URL exists and its status is "pending", "processing", or "detected", reuse the invoice
     if existing_url and existing_status in {"pending", "processing", "detected"}:
         await q.edit_message_text(
             f"✅ Payment link already created\n"
             f"Order: {order_code}\n"
-            f"Amount: ${amount_usd:.2f}\n"
+            f"Amount: ${pending.get('amount_usd'):.2f}\n"
             f"Currency: {pending.get('pay_currency') or '—'}\n\n"
             f"Tap below to open payment page:",
             reply_markup=open_invoice_kb(existing_url),
         )
         return
+
+    # Use description for nicer invoice title
+    desc = (pending.get("description") or "").strip() or "Service"
     
-    
-    
-    logger.info(
-        "payments_callback user_id=%s order_code=%s desc=%r custom_price_usd=%r resolved_amount_usd=%r data=%r",
-        q.from_user.id,
-        order_code,
-        desc,
-        context.user_data.get("custom_price_usd"),
-        amount_usd,
-        data,
-    )
+    order_type = (pending.get("order_type") or "").lower().strip()
+
+    # Proceed to create a new invoice if no existing invoice
+    if order_type == "wallet_topup":
+        # Wallet topups must always use DB amount, never custom_price_usd/MSN price
+        amount_usd = _safe_float(pending.get("amount_usd"))
+    else:
+        amount_usd = _resolve_amount_usd(context, pending)
+
+    if amount_usd is None:
+        await q.edit_message_text(
+            "❌ Could not determine price for this order.\n"
+            "Please restart the order and try again."
+        )
+        return
+
+    try:
+        # Creating a new payment invoice if no existing one is found
+        inv = await create_plisio_invoice(
+            order_number=order_code,
+            order_name=f"{desc} {order_code}",
+            amount_usd=amount_usd,
+            crypto_currency="usdt",  # Adjust this part if your user selects a different coin
+            callback_url=f"{public_base}/webhooks/plisio",  # You should have public_base configured
+            success_url=f"https://t.me/{context.bot.username}",
+            fail_url=f"https://t.me/{context.bot.username}",
+        )
+
+        invoice_url = inv["invoice_url"] if isinstance(inv, dict) else inv
+        set_order_payment(
+            pending["id"],
+            invoice_url=invoice_url,
+            pay_currency="USDT",  # You can dynamically use the selected currency
+            pay_provider="plisio",
+            pay_status="pending",
+        )
+
+        # Sending the link for payment
+        await q.edit_message_text(
+            f"✅ Payment link created\n"
+            f"Order: {order_code}\n"
+            f"Amount: ${amount_usd:.2f}\n"
+            f"Currency: USDT\n\n"
+            f"Tap below to open payment page:",
+            reply_markup=open_invoice_kb(invoice_url),
+        )
+
+    except Exception as e:
+        logger.exception("Plisio invoice creation failed")
+        await q.edit_message_text(
+            f"❌ Failed to create payment link:\n{e}\n\nChoose another coin.",
+            reply_markup=coin_picker_kb(order_code, amount_usd),
+        )
+        return
+
+
     
 
     if amount_usd is None:
