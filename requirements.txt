@@ -1,6 +1,6 @@
 python-telegram-bot[webhooks,job-queue]==20.6
 httpx>=0.25
-psycopg2-binary==3.2.3  # Only keep this
+psycopg2-binary==2.9.3  # or another stable version from available versions
 pycryptodome
 fastapi
 uvicorn
@@ -8,4 +8,3 @@ python-multipart
 reportlab
 requests
 textverified
-
