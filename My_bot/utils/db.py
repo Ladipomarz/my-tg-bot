@@ -5,6 +5,8 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
+from psycopg2.extras import RealDictCursor
+from utils.db import get_connection
 
 from config import DATABASE_URL
 
@@ -239,18 +241,23 @@ def update_order_status(order_id: int, status: str):
     return set_order_status(order_id, status)
 
 
+
+
 def get_pending_order(user_id: int):
     migrate_orders_schema()
     with get_connection() as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("""
                 SELECT *
                 FROM orders
-                WHERE user_id = %s AND status = 'pending'
+                WHERE user_id = %s AND pay_status = 'pending'
                 ORDER BY id DESC
                 LIMIT 1;
             """, (user_id,))
-            return cur.fetchone()
+            
+            # Fetch the first result and return as a dictionary
+            return cur.fetchone()  # This will return None if no result is found
+
 
 
 def expire_pending_order_if_needed(user_id: int):
