@@ -1,6 +1,6 @@
 python-telegram-bot[webhooks,job-queue]==20.6
 httpx>=0.25
-psycopg[binary]==3.2.3
+psycopg2-binary==3.2.3  # Only keep this
 pycryptodome
 fastapi
 uvicorn
@@ -8,6 +8,4 @@ python-multipart
 reportlab
 requests
 textverified
-psycopg2
-psycopg2-binary
 
