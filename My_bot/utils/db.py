@@ -91,21 +91,9 @@ def migrate_orders_schema():
 
         conn.commit()
 
-
-def drop_existing_tables():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            # Drop tables if they already exist
-            cur.execute("DROP TABLE IF EXISTS wallet_transactions;")
-            cur.execute("DROP TABLE IF EXISTS orders;")
-            cur.execute("DROP TABLE IF EXISTS users;")
-        conn.commit()
-
-
+        
 def create_tables():
-    # Drop existing tables and recreate them
-    drop_existing_tables()
-
+    # Ensure 'users' table is created first
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Create the 'users' table
@@ -116,7 +104,7 @@ def create_tables():
                 );
             """)
 
-            # Create the 'orders' table
+            # Create the 'orders' table after 'users' table is created
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
                     id SERIAL PRIMARY KEY,
@@ -135,32 +123,29 @@ def create_tables():
 
         conn.commit()
 
-    # Assuming your migration functions are already handling the migration schema
+    # Now that the users and orders tables exist, create the wallet_transactions table
+    create_wallet_transactions_table()
+
     migrate_users_schema()
     migrate_orders_schema()
 
 
 def create_wallet_transactions_table():
-    # Drop and recreate 'wallet_transactions' table
-    drop_existing_tables()
-
     with get_connection() as conn:
         with conn.cursor() as cur:
             # Create the 'wallet_transactions' table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS wallet_transactions (
                     id SERIAL PRIMARY KEY,
-                    user_id INT NOT NULL REFERENCES users(id),
+                    user_id INT NOT NULL REFERENCES users(id),  -- Reference to the 'id' column in 'users' table
                     order_code VARCHAR(255) UNIQUE,
                     amount_usd DECIMAL(10, 2),
-                    status VARCHAR(20) DEFAULT 'pending',
+                    status VARCHAR(20) DEFAULT 'pending',  -- Can be 'pending', 'completed', 'cancelled'
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             conn.commit()
-      
-        
         
 
 
