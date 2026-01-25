@@ -99,7 +99,8 @@ def create_tables():
             cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
-                user_id BIGINT UNIQUE
+                user_id BIGINT UNIQUE,
+                wallet_balance DECIMAL(10, 2) DEFAULT 0
             );
             """)
 
@@ -596,11 +597,13 @@ def create_service_fetch_status_table():
                     fetched BOOLEAN NOT NULL DEFAULT FALSE
                 );
             """)
+            
             cur.execute("""
                 INSERT INTO service_fetch_status (id, fetched)
                 VALUES (1, FALSE)
                 ON CONFLICT (id) DO NOTHING;
             """)
+            
 
             # ---- services table ----
             cur.execute("""
@@ -636,6 +639,26 @@ def create_service_fetch_status_table():
             """)
 
         conn.commit()
+        
+        
+        
+def create_wallet_transactions_table():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS wallet_transactions (
+                    id SERIAL PRIMARY KEY,
+                    user_id INT REFERENCES users(id),  -- link to users table
+                    order_code VARCHAR(255) UNIQUE,
+                    amount_usd DECIMAL(10, 2),
+                    status VARCHAR(20) DEFAULT 'pending',  -- can be 'pending', 'completed', 'cancelled'
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            conn.commit()        
+        
+    
 
 
 # ---------------- FUNCTION TO CHECK FETCH STATUS ----------------        

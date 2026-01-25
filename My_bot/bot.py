@@ -27,6 +27,7 @@ from utils.db import create_service_fetch_status_table
 from handlers.otp_handler import handle_otp_text_input
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 
+
 from utils.db import (
     create_tables,
     update_payment_status_by_order_code,
@@ -39,7 +40,8 @@ from utils.db import (
     get_delivery_payload_by_code,
     add_user_balance_usd,
     get_user_balance_usd,
-    mark_order_wallet_credited
+    mark_order_wallet_credited,
+    create_wallet_transactions_table
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -1504,7 +1506,9 @@ async def on_startup():
 
     create_tables()
     create_service_fetch_status_table()
-
+    
+    # Call the function to create the table when the bot starts
+    create_wallet_transactions_table()
 
     #task.add_done_callback(_log_task_result)
 
