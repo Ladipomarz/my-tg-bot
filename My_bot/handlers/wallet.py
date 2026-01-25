@@ -87,6 +87,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
     text = (update.message.text or "").strip()
 
     if step == "await_amount":
+
         try:
             amt = Decimal(text)
         except (InvalidOperation, ValueError):
@@ -99,43 +100,39 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
 
         user_id = update.effective_user.id
 
-        # Don’t allow multiple pending orders
+        # Expire old pending so we don’t block user forever
+        expire_pending_order_if_needed(user_id)
+
         pending = get_pending_order(user_id)
         if pending:
-            await update.message.reply_text(
-                "⚠️ You already have a pending order. Go to 🛒 Orders to continue payment, or wait for it to expire."
-            )
+            # ✅ Don’t block — just show the existing pending order payment button
+            # Also set amount for payments.py resolver
+            pending_amt = pending.get("amount_usd")
+            if pending_amt:
+                context.user_data["custom_price_usd"] = float(pending_amt)
+
             context.user_data.pop("wallet_step", None)
+            await show_make_payment(update, context, pending["order_code"])
             return True
 
-        desc = f"WALLET_TOPUP:{amt}"
-        create_order(user_id, desc, ttl_seconds=3600, amount_usd=float(amt), order_type="wallet_topup")
+        # ✅ Create top-up order (capture return!)
+        desc = f"WALLET_TOPUP:{amt:g}"
+        order = create_order(
+            user_id,
+            desc,
+            ttl_seconds=3600,
+            amount_usd=float(amt),
+            order_type="wallet_topup",
+        )
+
+        # ✅ payments.py uses this to decide amount
+        context.user_data["custom_price_usd"] = float(amt)
 
         context.user_data.pop("wallet_step", None)
-        # 2) store order_code where your pay flow expects it
-        context.user_data["pending_order_code"] = create_order["order_code"]  # or whatever your pay flow uses
-        context.user_data["active_order_code"] = create_order["order_code"]   # option
-        
-        
-                    # 3) call your existing make-payment function directly
-        await show_make_payment(update, context)   # <-- use YOUR real function name
-        
 
-        # Reuse existing payment flow: user clicks pay_make_payment
-        pay_kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("💵 Make payment", callback_data="pay_make_payment")],
-            [InlineKeyboardButton("🔄 Check status", callback_data="pay_check_status")],
-        ])
+        # ✅ Reuse your existing payment UI (this creates callback_data pay_make:<order_code>)
+        await show_make_payment(update, context, order["order_code"])
 
-        await update.message.reply_text(
-            (
-                f"✅ Top-up created: <b>{_fmt_usd(amt)}</b>\n\n"
-                "Tap <b>Make payment</b> to pay with crypto.\n"
-                "After confirmation, your Wallet balance will update."
-            ),
-            parse_mode="HTML",
-            reply_markup=pay_kb,
-        )
         return True
 
     return False
