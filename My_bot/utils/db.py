@@ -96,31 +96,32 @@ def create_tables():
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                user_id BIGINT UNIQUE
-            );
+                CREATE TABLE IF NOT EXISTS users (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT UNIQUE
+                );
             """)
 
             cur.execute("""
-            CREATE TABLE IF NOT EXISTS orders (
-                id SERIAL PRIMARY KEY,
-               user_id BIGINT REFERENCES users(user_id)
-                "order_code" TEXT UNIQUE,
-                status TEXT,
-                description TEXT,
-                created_at TIMESTAMP
-            );
+                CREATE TABLE IF NOT EXISTS orders (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    "order_code" TEXT UNIQUE,  -- Double quotes around order_code to avoid reserved word conflict
+                    status TEXT,
+                    description TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
             """)
 
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(\"order_code\");")
 
         conn.commit()
 
     migrate_users_schema()
     migrate_orders_schema()
+
 
 
 # ---------------- USERS ----------------
