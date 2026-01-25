@@ -118,18 +118,54 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (q.data or "").strip()
 
     pending = get_pending_order(q.from_user.id)
+    
     if not pending:
         await q.edit_message_text("❌ No pending order.")
         return
+    
 
     order_code = pending["order_code"]
+    
 
     # Use description for nicer invoice title
     desc = (pending.get("description") or "").strip() or "Service"
+    
 
-    # ✅ Resolve amount safely (prevents None crashes)
-    amount_usd = _resolve_amount_usd(context, pending)
+    # ✅ Decide amount FIRST
+    order_type = (pending.get("order_type") or "").lower().strip()
+    
+    if order_type == "wallet_topup":
+        
+        amount_usd = _safe_float(pending.get("amount_usd"))
+    else:
+        amount_usd = _resolve_amount_usd(context, pending)
 
+    if amount_usd is None:
+        
+        await q.edit_message_text(
+            "❌ Could not determine price for this order.\n"
+            "Please restart the order and try again."
+            
+            )
+        
+        return
+
+    # ✅ THEN: reuse existing invoice if present
+    existing_url = (pending.get("invoice_url") or "").strip()
+    existing_status = (pending.get("pay_status") or "").lower().strip()
+
+    if existing_url and existing_status in {"pending", "processing", "detected"}:
+        await q.edit_message_text(
+            f"✅ Payment link already created\n"
+            f"Order: {order_code}\n"
+            f"Amount: ${amount_usd:.2f}\n"
+            f"Currency: {pending.get('pay_currency') or '—'}\n\n"
+            f"Tap below to open payment page:",
+            reply_markup=open_invoice_kb(existing_url),
+        )
+        return
+
+        
     logger.info(
         "payments_callback user_id=%s order_code=%s desc=%r custom_price_usd=%r resolved_amount_usd=%r data=%r",
         q.from_user.id,
