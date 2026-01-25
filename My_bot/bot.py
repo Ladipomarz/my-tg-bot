@@ -1216,14 +1216,16 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     
+    
 
     # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet"}:
         pending = None  # prevent UnboundLocalError no matter what
-            
-    if text == "💰 Wallet":
-        await open_wallet_menu(update, context)
-        return
+        
+                    
+        if text == "💰 Wallet":
+               await open_wallet_menu(update, context)
+               return
 
 
 

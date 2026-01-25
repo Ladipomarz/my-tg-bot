@@ -2,6 +2,7 @@ from decimal import Decimal, InvalidOperation
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+from handlers.payments import show_make_payment
 
 from utils.db import (
     get_user_balance_usd,
@@ -111,6 +112,14 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         create_order(user_id, desc, ttl_seconds=3600, amount_usd=float(amt), order_type="wallet_topup")
 
         context.user_data.pop("wallet_step", None)
+        # 2) store order_code where your pay flow expects it
+        context.user_data["pending_order_code"] = create_order["order_code"]  # or whatever your pay flow uses
+        context.user_data["active_order_code"] = create_order["order_code"]   # option
+        
+        
+                    # 3) call your existing make-payment function directly
+        await show_make_payment(update, context)   # <-- use YOUR real function name
+        
 
         # Reuse existing payment flow: user clicks pay_make_payment
         pay_kb = InlineKeyboardMarkup([
