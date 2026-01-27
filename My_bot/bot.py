@@ -796,15 +796,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.warning("q.answer() failed (ignored): %s", e)
 
     logger.info("callback_router got data=%r", data)
-    
-    # Assuming user clicked 'top up' and you need to expire the order if needed
-    pending = expire_pending_order_if_needed(user_id)
-    if pending and pending["status"] == "expired":
-        
-    # Handle the expired order case
-        await q.edit_message_text("⚠️ Your previous order has expired due to inactivity.\nPlease create a new order.")
-        return
-
 
     # Back to main (everyone)
     if data == "back_main":

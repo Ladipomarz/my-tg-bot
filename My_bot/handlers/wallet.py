@@ -109,9 +109,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
             # Also set amount for payments.py resolver
             pending_amt = pending.get("amount_usd")
             if pending_amt:
-                context.user_data["custom_price_usd"] = float(pending_amt)
-
-            context.user_data.pop("wallet_step", None)
+               context.user_data.pop("wallet_step", None)
             await show_make_payment(update, context, pending["order_code"])
             return True
 
@@ -120,7 +118,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         order_id, order_code = create_order(
             user_id,
             desc,
-            ttl_seconds=3600,
+            ttl_seconds=180,
             amount_usd=float(amt),
             order_type="wallet_topup",
         )
