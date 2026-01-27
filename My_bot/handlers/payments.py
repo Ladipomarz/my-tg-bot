@@ -120,43 +120,38 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     data = (q.data or "").strip()
-    
+
     # Fetch pending order
     pending = get_pending_order(q.from_user.id)
     if not pending:
         await q.edit_message_text("❌ No pending order.")
         return
 
+    # Expire ONLY if expires_at says so
+    chk = expire_pending_order_if_needed(q.from_user.id)
+    if chk and chk.get("status") == "expired":
+        await q.edit_message_text("⚠️ Your previous order expired. Please create a new order.")
+        return
+
     order_code = pending["order_code"]
-    
-    # Get order type and amount
+    desc = (pending.get("description") or "").strip() or "Service"
     order_type = (pending.get("order_type") or "").lower().strip()
+
+    # Determine amount
     if order_type == "wallet_topup":
         amount_usd = _safe_float(pending.get("amount_usd"))
     else:
         amount_usd = _resolve_amount_usd(context, pending)
-    
-    # Check if there's an existing invoice URL and its status
-    existing_url = (pending.get("invoice_url") or "").strip()
-    existing_status = (pending.get("pay_status") or "").lower().strip()
-    
 
-
-    # Expire order ONLY if expires_at is actually passed
-    expired_or_pending = expire_pending_order_if_needed(q.from_user.id)
-
-    if expired_or_pending and expired_or_pending.get("status") == "expired":
-        
+    if amount_usd is None:
         await q.edit_message_text(
-            
-            "⚠️ Your previous order expired.\n"
-            "Please create a new order."
-            )
+            "❌ Could not determine price for this order.\nPlease restart the order and try again."
+        )
         return
 
-
-            
-    # If an invoice URL exists and the order status is still 'pending' or 'processing'
+    # If invoice already exists and still usable, reuse it
+    existing_url = (pending.get("invoice_url") or "").strip()
+    existing_status = (pending.get("pay_status") or "").lower().strip()
     if existing_url and existing_status in {"pending", "processing", "detected"}:
         await q.edit_message_text(
             f"✅ Payment link already created for this order.\n"
@@ -167,31 +162,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=open_invoice_kb(existing_url),
         )
         return
-    
-    # If there's no invoice, we proceed to create a new one
-    logger.info(f"Proceeding to create a new invoice for order {order_code}")
-    # Add logic to create invoice here
 
-
-    # Use description for nicer invoice title
-    desc = (pending.get("description") or "").strip() or "Service"
-    
-    order_type = (pending.get("order_type") or "").lower().strip()
-
-    # Proceed to create a new invoice if no existing invoice
-    if order_type == "wallet_topup":
-        # Wallet topups must always use DB amount, never custom_price_usd/MSN price
-        amount_usd = _safe_float(pending.get("amount_usd"))
-    else:
-        amount_usd = _resolve_amount_usd(context, pending)
-
-    if amount_usd is None:
-        await q.edit_message_text(
-            "❌ Could not determine price for this order.\n"
-            "Please restart the order and try again."
-        )
-        return
-
+    # ---- ROUTING: handle the pressed button ----
     if data.startswith("pay_back:"):
         await q.edit_message_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
         return
@@ -211,6 +183,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("pay_coin:"):
+        # Expected: pay_coin:<order_code>:<coin_key>
         try:
             _, _, coin_key = data.split(":")
         except ValueError:
@@ -222,6 +195,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await q.edit_message_text("❌ Unknown currency. Try again.")
             return
 
+        # Min checks
         min_required = get_plisio_min_usd(plisio_currency)
         if amount_usd < min_required:
             if coin_key.startswith("usdt"):
@@ -272,30 +246,24 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Tap below to open payment page:",
                 reply_markup=open_invoice_kb(invoice_url),
             )
+            return  # ✅ CRITICAL: prevent falling into Unknown action
 
         except Exception as e:
-            # Log the exception to understand the error message structure
             logger.exception("Plisio invoice creation failed: %s", str(e))
+            msg = str(e)
 
-            # Get the error message, or use a fallback if it's not present
-            msg = str(e) if hasattr(e, 'message') and e.message else str(e)
-
-            # ✅ Plisio duplicate invoice: don't keep trying to create again
             if "Invoice with the same order_number already exists" in msg or "return_existing" in msg:
                 await q.edit_message_text(
-                    "⚠️ Payment link already exists for this order.\n"
-                    "Tap below to continue:",
+                    "⚠️ Payment link already exists for this order.\nTap below to continue:",
                     reply_markup=make_payment_kb(order_code),
                 )
                 return
 
-            # Handle any other errors
             await q.edit_message_text(
                 f"❌ Failed to create payment link:\n{e}\n\nChoose another coin.",
                 reply_markup=coin_picker_kb(order_code, amount_usd),
             )
             return
 
-
-    # If some unknown callback comes in
+    # Unknown callback
     await q.edit_message_text("❌ Unknown action. Please try again.")
