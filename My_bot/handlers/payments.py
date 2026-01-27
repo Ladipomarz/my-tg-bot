@@ -200,7 +200,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # If invoice already exists and still usable, reuse it
         if existing_url and existing_status in {"pending", "processing", "detected"}:
             if order_type == "wallet_topup" and remaining and remaining > 0:
-                await q.edit_message_text( 
+                await safe_edit_message(q, 
                     f"✅ You already have an active top up.\n"
                     f"⏳ Time left: {remaining//60} min\n\n"
                     f"Tap below to continue or cancel and create a new top up.",
@@ -211,24 +211,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             
             # fallback for non-topup orders
-            await q.edit_message_text(
-                f"✅ Payment link already created for this order.\n"
-                f"Order: {order_code}\n"
-                f"Amount: ${amount_usd:.2f}\n"
-                f"Currency: {pending.get('pay_currency') or '—'}\n\n"
-                f"Tap below to open payment page:",
+            await safe_edit_message(q,
+                f"✅ Payment link already created for this order.\n Tap below to open payment page:",
                 reply_markup=open_invoice_kb(existing_url),
                 
                 )
             return
     
-        # If there's no link at all
-        if not existing_url:
-            await safe_edit_message(q,
-                f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
-                reply_markup=coin_picker_kb(order_code, amount_usd),
-            )
-            return
 
     # ---- ROUTING: handle the pressed button ----
     if data.startswith("pay_back:"):
