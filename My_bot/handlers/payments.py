@@ -210,15 +210,19 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
             
             
-            
+            # fallback for non-topup orders
             await q.edit_message_text(
-                "✅ Payment link already created.\nTap below to open it:",
+                f"✅ Payment link already created for this order.\n"
+                f"Order: {order_code}\n"
+                f"Amount: ${amount_usd:.2f}\n"
+                f"Currency: {pending.get('pay_currency') or '—'}\n\n"
+                f"Tap below to open payment page:",
                 reply_markup=open_invoice_kb(existing_url),
-            )
+                
+                )
             return
-        
-          
-        # fallback for non-topup orders
+    
+        # If there's no link at all
         if not existing_url:
             await q.edit_message_text("❌ Missing payment link. Please create a new top up.")
             return
