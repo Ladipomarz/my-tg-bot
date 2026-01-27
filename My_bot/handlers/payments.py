@@ -69,11 +69,10 @@ def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
 
 def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Open payment page", url=invoice_url)],
-        [InlineKeyboardButton("🗑 Cancel & create new", callback_data=f"pay_cancel:{order_code}")]
+        [InlineKeyboardButton("🔗 Open payment page", url=str(invoice_url))],
+        [InlineKeyboardButton("🗑 Cancel & create new", callback_data=f"pay_cancel:{order_code}")],
     ])
-    
-    
+  
 
 async def safe_edit(q, text: str, reply_markup=None, **kwargs):
     try:
@@ -180,8 +179,16 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     expires_at = pending.get("expires_at")
     remaining = None
     if expires_at:
-        now = datetime.utcnow()
-        remaining = int((expires_at - now).total_seconds())
+        if isinstance(expires_at, str):
+            expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            
+        now = datetime.now(timezone.utc)
+        remaining = int((expires_at - now).total_seconds())    
+        if remaining < 0:
+            remaining = 0
         
         
         existing_url = (pending.get("invoice_url") or "").strip()
@@ -197,6 +204,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 reply_markup=open_invoice_cancel_kb(existing_url, order_code),
             )
             return
+            
     
     # fallback for non-topup orders
         await q.edit_message_text(
