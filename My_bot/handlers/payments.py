@@ -76,7 +76,7 @@ def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardM
     ])
   
 
-async def safe_edit(q, text: str, reply_markup=None, **kwargs):
+async def safe_edit_message(q, text: str, reply_markup=None, **kwargs):
     try:
         await q.edit_message_text(text, reply_markup=reply_markup, **kwargs)
     except BadRequest as e:
@@ -172,7 +172,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_usd = _resolve_amount_usd(context, pending)
 
     if amount_usd is None:
-        await safe_edit(q,
+        await safe_edit_message(q,
             "❌ Could not determine price for this order.\nPlease restart the order and try again.",
             )
         
@@ -224,7 +224,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
         # If there's no link at all
         if not existing_url:
-            await q.edit_message_text(
+            await safe_edit_message(q,
                 f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
                 reply_markup=coin_picker_kb(order_code, amount_usd),
             )
@@ -236,17 +236,16 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("pay_make:"):
-        
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
-        await q.edit_message_text(
+        await safe_edit_message(q,
             f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
             reply_markup=coin_picker_kb(order_code, amount_usd),
         )
         return
 
     if data.startswith("pay_usdt:"):
-        await q.edit_message_text(
+        await safe_edit_message(q,
             "Choose USDT network:",
             reply_markup=usdt_network_kb(order_code, amount_usd),
         )
@@ -254,7 +253,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data.startswith("pay_cancel:"):
         update_order_status(pending["id"], "cancelled")
-        await q.edit_message_text("✅ Top up cancelled. Now create a new top up.")
+        update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
+        await safe_edit_message(q,"✅ Top up cancelled. Now create a new top up.")
         return
 
     
@@ -263,7 +263,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             _, _, coin_key = data.split(":")
         except ValueError:
-            await q.edit_message_text("❌ Invalid selection. Try again.")
+            await safe_edit_message(q,"❌ Invalid selection. Try again.")
             return
         
 
@@ -314,13 +314,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pay_provider="plisio",
                 pay_status="pending",
             )
+            
 
             await q.edit_message_text(
                 f"✅ Payment link created\n"
                 f"Order: {order_code}\n"
                 f"Amount: ${amount_usd:.2f}\n"
                 f"Currency: {plisio_currency}\n\n"
-                 f"⏳ Time left: {remaining//60} min\n\n"
                 f"Tap below to open payment page:",
                 reply_markup=open_invoice_kb(invoice_url,order_code),
             )
@@ -331,7 +331,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = str(e)
 
             if "Invoice with the same order_number already exists" in msg or "return_existing" in msg:
-                await q.edit_message_text(
+                await safe_edit_message(q,
                     "⚠️ Payment link already exists for this order.\nTap below to continue:",
                     reply_markup=make_payment_kb(order_code),
                 )
