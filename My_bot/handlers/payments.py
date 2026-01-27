@@ -118,8 +118,10 @@ def _resolve_amount_usd(context: ContextTypes.DEFAULT_TYPE, pending: dict) -> fl
 async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     await q.answer()
-    data = (q.data or "").strip()
 
+    data = (q.data or "").strip()
+    
+    # Fetch pending order
     pending = get_pending_order(q.from_user.id)
     if not pending:
         await q.edit_message_text("❌ No pending order.")
@@ -127,41 +129,53 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     order_code = pending["order_code"]
     
+    # Get order type and amount
     order_type = (pending.get("order_type") or "").lower().strip()
     if order_type == "wallet_topup":
         amount_usd = _safe_float(pending.get("amount_usd"))
     else:
         amount_usd = _resolve_amount_usd(context, pending)
-
-
-    # Check if there's an existing invoice URL and it's not yet processed
+    
+    # Check if there's an existing invoice URL and its status
     existing_url = (pending.get("invoice_url") or "").strip()
     existing_status = (pending.get("pay_status") or "").lower().strip()
 
-    # Expire order if it's been pending for more than 1 minute
-    order_created_at = pending.get("created_at")  # assuming you store creation time in DB
+    # Ensure 'order_created_at' is valid and parse the date
+    order_created_at = pending.get("created_at")
     if order_created_at:
-        created_at = datetime.fromisoformat(order_created_at)
+        try:
+            created_at = datetime.fromisoformat(order_created_at)
+        except ValueError:
+            # If the date is not in valid format, handle it appropriately
+            logger.error(f"Invalid 'created_at' format for order {order_code}: {order_created_at}")
+            await q.edit_message_text("❌ Invalid order creation date. Please contact support.")
+            return
+        
+        # Check if the order has expired (1 minute threshold)
         if datetime.now() - created_at > timedelta(minutes=1):
-            # Expire the order
             expire_pending_order_if_needed(q.from_user.id)
             await q.edit_message_text(
                 f"⚠️ Your previous order has expired because it was pending for too long.\n"
-                f"Please create a new order.",
+                f"Please create a new order."
             )
             return
-
-    # If invoice URL exists and its status is "pending", "processing", or "detected", reuse the invoice
+    
+    # If an invoice URL exists and the order status is still 'pending' or 'processing'
     if existing_url and existing_status in {"pending", "processing", "detected"}:
         await q.edit_message_text(
-            f"✅ Payment link already created\n"
+            f"✅ Payment link already created for this order.\n"
             f"Order: {order_code}\n"
-            f"Amount: ${pending.get('amount_usd'):.2f}\n"
+            f"Amount: ${amount_usd:.2f}\n"
             f"Currency: {pending.get('pay_currency') or '—'}\n\n"
             f"Tap below to open payment page:",
             reply_markup=open_invoice_kb(existing_url),
         )
         return
+    
+    # If there's no invoice, we proceed to create a new one
+    logger.info(f"Proceeding to create a new invoice for order {order_code}")
+    # Add logic to create invoice here
+
 
     # Use description for nicer invoice title
     desc = (pending.get("description") or "").strip() or "Service"
