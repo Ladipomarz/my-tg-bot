@@ -2,6 +2,7 @@ import os
 import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
 
 from payments.plisio import create_plisio_invoice
 from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status
@@ -15,6 +16,7 @@ def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("💳 Make Payment", callback_data=f"pay_make:{order_code}")]
     ])
+    
 
 
 def coin_picker_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
@@ -70,7 +72,22 @@ def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardM
         [InlineKeyboardButton("🔗 Open payment page", url=invoice_url)],
         [InlineKeyboardButton("🗑 Cancel & create new", callback_data=f"pay_cancel:{order_code}")]
     ])
+    
+    
 
+async def safe_edit(q, text: str, reply_markup=None, **kwargs):
+    try:
+        await q.edit_message_text(text, reply_markup=reply_markup, **kwargs)
+    except BadRequest as e:
+        msg = str(e).lower()
+        # ignore harmless edit errors
+        if "message is not modified" in msg:
+            return
+        if "message can't be edited" in msg:
+            # fallback: send a new message
+            await q.message.reply_text(text, reply_markup=reply_markup, **kwargs)
+            return
+        raise
 
 
 async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE, order_code: str):
@@ -152,9 +169,10 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_usd = _resolve_amount_usd(context, pending)
 
     if amount_usd is None:
-        await q.edit_message_text(
-            "❌ Could not determine price for this order.\nPlease restart the order and try again."
-        )
+        await safe_edit(q,
+            "❌ Could not determine price for this order.\nPlease restart the order and try again.",
+            )
+        
         return
     
     expires_at = pending.get("expires_at")
@@ -162,7 +180,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if expires_at:
         now = datetime.utcnow()
         remaining = int((expires_at - now).total_seconds())
-        
         
         
         existing_url = (pending.get("invoice_url") or "").strip()
