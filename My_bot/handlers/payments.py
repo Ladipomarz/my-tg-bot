@@ -61,10 +61,12 @@ def usdt_network_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
     ])
     
 
+
 def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Open payment page", url=invoice_url)]
+        [InlineKeyboardButton("🔗 Open payment page", url=str(invoice_url))]
     ])
+
 
 
 def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardMarkup:
@@ -193,31 +195,33 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         existing_url = (pending.get("invoice_url") or "").strip()
         existing_status = (pending.get("pay_status") or "").lower().strip()
+        
 
         # If invoice already exists and still usable, reuse it
         if existing_url and existing_status in {"pending", "processing", "detected"}:
             if order_type == "wallet_topup" and remaining and remaining > 0:
-                await q.edit_message_text(
-                f"✅ You already have an active top up.\n"
-                f"⏳ Time left: {remaining//60} min\n\n"
-                f"Tap below to continue or cancel and create a new top up.",
-                reply_markup=open_invoice_cancel_kb(existing_url, order_code),
+                await q.edit_message_text( 
+                    f"✅ You already have an active top up.\n"
+                    f"⏳ Time left: {remaining//60} min\n\n"
+                    f"Tap below to continue or cancel and create a new top up.",
+                    reply_markup=open_invoice_cancel_kb(existing_url, order_code), 
+                      
+                )
+                return
+            
+            
+            
+            await q.edit_message_text(
+                "✅ Payment link already created.\nTap below to open it:",
+                reply_markup=open_invoice_kb(existing_url),
             )
             return
-            
-    
-    # fallback for non-topup orders
-        await q.edit_message_text(
-            f"✅ Payment link already created for this order.\n"
-            f"Order: {order_code}\n"
-            f"Amount: ${amount_usd:.2f}\n"
-            f"Currency: {pending.get('pay_currency') or '—'}\n\n"
-            f"Tap below to open payment page:",
-            reply_markup=open_invoice_kb(existing_url),
-            
-            )
         
-        return
+          
+        # fallback for non-topup orders
+        if not existing_url:
+            await q.edit_message_text("❌ Missing payment link. Please create a new top up.")
+            return
 
     # ---- ROUTING: handle the pressed button ----
     if data.startswith("pay_back:"):
