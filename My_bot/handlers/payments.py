@@ -126,6 +126,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     order_code = pending["order_code"]
+    
+    order_type = (pending.get("order_type") or "").lower().strip()
+    if order_type == "wallet_topup":
+        amount_usd = _safe_float(pending.get("amount_usd"))
+    else:
+        amount_usd = _resolve_amount_usd(context, pending)
+
 
     # Check if there's an existing invoice URL and it's not yet processed
     existing_url = (pending.get("invoice_url") or "").strip()

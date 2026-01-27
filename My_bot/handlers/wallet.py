@@ -126,8 +126,6 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         )
 
         # ✅ payments.py uses this to decide amount
-        context.user_data[pending.amount_usd] = float(amt)
-
         context.user_data.pop("wallet_step", None)
 
         # ✅ Reuse your existing payment UI (this creates callback_data pay_make:<order_code>)

@@ -39,7 +39,6 @@ async def create_plisio_invoice(
         "currency": crypto_currency,
         "allowed_psys_cids": crypto_currency,
         "allow_renew": 0,
-        "return_existing": 1,
         "callback_url": callback_url,
         "success_url": success_url,
         "fail_url": fail_url,
@@ -48,6 +47,10 @@ async def create_plisio_invoice(
         "email_required": 0,
         "required_email": 0,
         "email": "",
+        
+        "return_existing": 1,   # if order_number exists, return it instead of 422
+        "expire_min": 2,        # OPTIONAL: invoice expires in 1 minute
+
         
     }
 
