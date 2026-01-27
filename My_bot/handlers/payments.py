@@ -311,7 +311,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Amount: ${amount_usd:.2f}\n"
                 f"Currency: {plisio_currency}\n\n"
                 f"Tap below to open payment page:",
-                reply_markup=open_invoice_kb(invoice_url,order_code),
+                reply_markup=open_invoice_kb(invoice_url),
             )
             return  # ✅ CRITICAL: prevent falling into Unknown action
 
