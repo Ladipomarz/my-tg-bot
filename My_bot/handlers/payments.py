@@ -141,6 +141,8 @@ def _resolve_amount_usd(context: ContextTypes.DEFAULT_TYPE, pending: dict) -> fl
 
 # Modify the function to check and expire pending orders after 1 minute
 async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+     
+    logger.info("coin_picker_kb resolved to: %r", coin_picker_kb)
     q = update.callback_query
     await q.answer()
 
@@ -151,7 +153,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not pending:
         await q.edit_message_text("❌ No pending order.")
         return
-
+   
     # Expire ONLY if expires_at says so
     chk = expire_pending_order_if_needed(q.from_user.id)
     if chk and chk.get("status") == "expired":
@@ -215,6 +217,9 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if data.startswith("pay_make:"):
+        
+        kb = coin_picker_kb(order_code, amount_usd)
+        logger.info("pay_make keyboard=%r", kb.to_dict())
         await q.edit_message_text(
             f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
             reply_markup=coin_picker_kb(order_code, amount_usd),
