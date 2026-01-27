@@ -104,7 +104,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         expire_pending_order_if_needed(user_id)
 
         pending = get_pending_order(user_id)
-        if pending:
+        if pending and (pending.get("order_type") or "").lower() == "wallet_topup":
             # ✅ Don’t block — just show the existing pending order payment button
             # Also set amount for payments.py resolver
             pending_amt = pending.get("amount_usd")
@@ -118,7 +118,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         order_id, order_code = create_order(
             user_id,
             desc,
-            ttl_seconds=180,
+            ttl_seconds=3600,
             amount_usd=float(amt),
             order_type="wallet_topup",
         )

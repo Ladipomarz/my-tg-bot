@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from payments.plisio import create_plisio_invoice
-from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed
+from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 from datetime import datetime, timedelta,timezone
 
@@ -57,12 +57,20 @@ def usdt_network_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
         ],
         [InlineKeyboardButton("⬅ Back", callback_data=f"pay_make:{order_code}")],
     ])
-
+    
 
 def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("🔗 Open payment page", url=invoice_url)]
     ])
+
+
+def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🔗 Open payment page", url=invoice_url)],
+        [InlineKeyboardButton("🗑 Cancel & create new", callback_data=f"pay_cancel:{order_code}")]
+    ])
+
 
 
 async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE, order_code: str):
@@ -148,11 +156,30 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "❌ Could not determine price for this order.\nPlease restart the order and try again."
         )
         return
+    
+    expires_at = pending.get("expires_at")
+    remaining = None
+    if expires_at:
+        now = datetime.utcnow()
+        remaining = int((expires_at - now).total_seconds())
+        
+        
+        
+        existing_url = (pending.get("invoice_url") or "").strip()
+        existing_status = (pending.get("pay_status") or "").lower().strip()
 
-    # If invoice already exists and still usable, reuse it
-    existing_url = (pending.get("invoice_url") or "").strip()
-    existing_status = (pending.get("pay_status") or "").lower().strip()
-    if existing_url and existing_status in {"pending", "processing", "detected"}:
+        # If invoice already exists and still usable, reuse it
+        if existing_url and existing_status in {"pending", "processing", "detected"}:
+            if order_type == "wallet_topup" and remaining and remaining > 0:
+                await q.edit_message_text(
+                f"✅ You already have an active top up.\n"
+                f"⏳ Time left: {remaining//60} min\n\n"
+                f"Tap below to continue or cancel and create a new top up.",
+                reply_markup=open_invoice_cancel_kb(existing_url, order_code),
+            )
+            return
+    
+    # fallback for non-topup orders
         await q.edit_message_text(
             f"✅ Payment link already created for this order.\n"
             f"Order: {order_code}\n"
@@ -160,7 +187,9 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Currency: {pending.get('pay_currency') or '—'}\n\n"
             f"Tap below to open payment page:",
             reply_markup=open_invoice_kb(existing_url),
-        )
+            
+            )
+        
         return
 
     # ---- ROUTING: handle the pressed button ----
@@ -181,7 +210,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=usdt_network_kb(order_code, amount_usd),
         )
         return
+    
+    if data.startswith("pay_cancel:"):
+        update_order_status(pending["id"], "cancelled")
+        await q.edit_message_text("✅ Top up cancelled. Now create a new top up.")
+        return
 
+    
     if data.startswith("pay_coin:"):
         # Expected: pay_coin:<order_code>:<coin_key>
         try:
@@ -189,6 +224,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             await q.edit_message_text("❌ Invalid selection. Try again.")
             return
+        
 
         plisio_currency = COIN_MAP.get(coin_key)
         if not plisio_currency:
@@ -243,8 +279,9 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Order: {order_code}\n"
                 f"Amount: ${amount_usd:.2f}\n"
                 f"Currency: {plisio_currency}\n\n"
+                 f"⏳ Time left: {remaining//60} min\n\n"
                 f"Tap below to open payment page:",
-                reply_markup=open_invoice_kb(invoice_url),
+                reply_markup=open_invoice_kb(invoice_url,order_code),
             )
             return  # ✅ CRITICAL: prevent falling into Unknown action
 
