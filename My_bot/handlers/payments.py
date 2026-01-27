@@ -4,7 +4,7 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from payments.plisio import create_plisio_invoice
-from utils.db import get_pending_order, set_order_payment
+from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 from datetime import datetime, timedelta,timezone
 
