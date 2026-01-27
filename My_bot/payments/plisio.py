@@ -49,7 +49,7 @@ async def create_plisio_invoice(
         "email": "",
         
         "return_existing": 1,   # if order_number exists, return it instead of 422
-        "expire_min": 2,        # OPTIONAL: invoice expires in 1 minute
+        "expire_min": 16,        # OPTIONAL: invoice expires in 1 minute
 
         
     }
