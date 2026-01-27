@@ -1364,10 +1364,12 @@ async def telegram_webhook(req: Request):
 # ------------------------------
 # PLISIO WEBHOOK
 # ------------------------------
-@app.post("/webhooks/plisio")
 async def plisio_webhook(req: Request):
     ctype = (req.headers.get("content-type") or "").lower()
 
+    # ---------------------------
+    # Parse payload (json or form)
+    # ---------------------------
     try:
         if "multipart/form-data" in ctype or "application/x-www-form-urlencoded" in ctype:
             form = await req.form()
@@ -1376,13 +1378,21 @@ async def plisio_webhook(req: Request):
             payload = await req.json()
     except Exception:
         body = await req.body()
-        logger.warning("PLISIO WEBHOOK: parse failed content-type=%s body=%r", ctype, body[:500])
+        logger.warning(
+            "PLISIO WEBHOOK: parse failed content-type=%s body=%r",
+            ctype,
+            body[:500],
+        )
         return {"ok": True}
 
+    # Some providers nest under {"data": {...}}
     p = payload.get("data") if isinstance(payload, dict) and isinstance(payload.get("data"), dict) else payload
     if not isinstance(p, dict):
         return {"ok": True}
 
+    # ---------------------------
+    # Extract important fields
+    # ---------------------------
     order_number = p.get("order_number") or p.get("orderNumber") or p.get("order_id") or p.get("orderId")
     txn_id = p.get("txn_id") or p.get("txid") or p.get("invoice") or p.get("invoice_id")
     status = (p.get("status") or p.get("state") or "").lower().strip()
@@ -1398,7 +1408,24 @@ async def plisio_webhook(req: Request):
     paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
     expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
 
+    is_paid = status in paid_statuses
+    is_expired = status in expired_statuses
+
+    # Wallet topup flag (define ONCE)
+    desc_raw = (order.get("description") or "")
+    is_wallet_topup = bool(order) and (
+        order.get("order_type") == "wallet_topup"
+        or desc_raw.upper().startswith("WALLET_TOPUP:")
+    )
+
+    # ---------------------------
+    # Detect payment activity
+    # ---------------------------
     detected_now = False
+    invoice_total = None
+    invoice_received = None
+    invoice_remaining = None
+    pending_amt = None
 
     received_amount = _to_float(p.get("received_amount"))
     if received_amount > 0:
@@ -1408,27 +1435,110 @@ async def plisio_webhook(req: Request):
         if isinstance(txn_id, str) and txn_id.strip():
             inv = await _fetch_plisio_invoice_details(txn_id.strip())
 
-        if inv and isinstance(inv, dict):
-            total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum"))
-            received = _to_float(inv.get("received_amount"))
-            remaining = _to_float(inv.get("remaining_amount"))
+        if isinstance(inv, dict):
+            invoice_total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum"))
+            invoice_received = _to_float(inv.get("received_amount"))
+            invoice_remaining = _to_float(inv.get("remaining_amount"))
             pending_amt = _to_float(inv.get("pending_amount"))
 
-            if received > 0:
+            # Keep your broader "detected" logic (partial OR full)
+            if invoice_received > 0:
                 detected_now = True
-            elif total > 0 and remaining >= 0 and remaining < total:
+            elif invoice_total and invoice_total > 0 and invoice_remaining is not None and 0 <= invoice_remaining < invoice_total:
                 detected_now = True
-            elif total > 0 and pending_amt >= 0 and pending_amt < total:
+            elif invoice_total and invoice_total > 0 and pending_amt is not None and 0 <= pending_amt < invoice_total:
                 detected_now = True
 
-    if detected_now:
-        if current_pay_status not in {"detected", "paid"}:
-            update_payment_status_by_order_code(order_number, pay_status="detected", pay_txn_id=txn_id)
-            try:
+    # ---------------------------
+    # EXPIRED / FAILED (highest priority)
+    # ---------------------------
+    if is_expired:
+        try:
+            update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
+        except Exception:
+            logger.exception("update_payment_status_by_order_code(expired) failed (ignored)")
+
+        try:
+            if order.get("id"):
+                update_order_status(order["id"], "expired")
+        except Exception:
+            logger.exception("update_order_status(expired) failed (ignored)")
+
+        return {"ok": True}
+
+    # ---------------------------
+    # DETECTED or PAID
+    # ---------------------------
+    if detected_now or is_paid:
+        new_pay_status = "paid" if is_paid else "detected"
+        first_time = current_pay_status not in {"detected", "paid"}
+
+        # Update pay_status (idempotent)
+        try:
+            if current_pay_status != new_pay_status:
+                update_payment_status_by_order_code(order_number, pay_status=new_pay_status, pay_txn_id=txn_id)
+        except Exception:
+            logger.exception("update_payment_status_by_order_code(%s) failed (ignored)", new_pay_status)
+
+        # Move order into processing (idempotent)
+        try:
+            if order.get("id"):
                 update_order_status(order["id"], "processing")
-            except Exception:
-                logger.exception("update_order_status failed (ignored)")
+        except Exception:
+            logger.exception("update_order_status(processing) failed (ignored)")
 
+        # ✅ CREDIT WALLET ON DETECTED (idempotent)
+        # NOTE: This credits FULL order amount as soon as any payment is detected.
+        # If you allow partial payments, this is risky.
+        if is_wallet_topup and order and not order.get("wallet_credited"):
+            # Try reading the invoice details used above
+            usd_paid = None
+            # If invoice detail was fetched above (inv), try to read source_amount
+            if isinstance(inv, dict):
+                try:
+                    # Some Plisio invoice APIs return `source_amount` or similar
+                    usd_paid = _to_float(inv.get("source_amount") or inv.get("amount_usd") or inv.get("usd_amount"))
+                except Exception:
+                    usd_paid = None
+                    
+            # Fallback: if webhook payload includes fiat amount directly
+            if usd_paid is None:
+                # This is uncommon, but we try parsing a field like received_amount_usd
+                usd_paid = _to_float(p.get("received_amount_usd") or p.get("received_amount_fiat"))
+        
+            # If still nothing, fallback to your stored order amount
+            if usd_paid is None:
+                try:
+                    usd_paid = float(order.get("amount_usd") or 0)
+                except Exception:
+                    usd_paid = 0.0  
+                    
+            # Credit if value is positive
+            if usd_paid > 0:
+                try:
+                    add_user_balance_usd(order["user_id"], usd_paid)
+                    mark_order_wallet_credited(order_number)
+                except Exception:
+                    logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)              
+                    
+                    # Notify user about wallet credit
+                    if await ensure_telegram_ready():
+                        try:
+                            new_bal = get_user_balance_usd(order["user_id"])
+                        except Exception:
+                            new_bal = None
+
+                        msg = f"✅ Wallet topped up: ${amt:.2f}"
+                        if new_bal is not None:
+                            try:
+                                msg += f"\nNew balance: ${float(new_bal):.2f}"
+                            except Exception:
+                                pass
+
+                        asyncio.create_task(_safe_send_message(order["user_id"], msg))
+
+        # Notify admin/user only on first transition to detected/paid
+        if first_time:
             try:
                 if await ensure_telegram_ready():
                     asyncio.create_task(_notify_admin_new_paid_order(order))
@@ -1439,10 +1549,12 @@ async def plisio_webhook(req: Request):
                 asyncio.create_task(
                     _safe_send_message(
                         chat_id,
-                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\nYou can return to Telegram now.",
+                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\n"
+                        "You can return to Telegram now.",
                     )
                 )
 
+                # Optional eSIM processing notice
                 if order_desc.startswith("esim"):
                     try:
                         if tg_app.job_queue is not None:
@@ -1460,33 +1572,20 @@ async def plisio_webhook(req: Request):
 
         return {"ok": True}
 
-    if status in paid_statuses:
-        if current_pay_status != "paid":
-            update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
-        return {"ok": True}
-    
-    if order and (order.get("order_type") == "wallet_topup" or (order.get("description") or "").startswith("WALLET_TOPUP:")):
-        if not order.get("wallet_credited"):
-            amt = order.get("amount_usd") or 0
-            if amt:
-                add_user_balance_usd(order["user_id"], float(amt))
-                mark_order_wallet_credited(order_number)
-
-                new_bal = get_user_balance_usd(order["user_id"])
-                await app.bot.send_message(
-                    chat_id=order["user_id"],
-                    text=f"✅ Wallet topped up: ${float(amt):.2f}\nNew balance: ${new_bal:.2f}",
-                )
-
-
-    if status in expired_statuses:
-        update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
-        return {"ok": True}
-
+    # ---------------------------
+    # Ignore noisy repeats after detected/paid
+    # ---------------------------
     if current_pay_status in {"detected", "paid"}:
         return {"ok": True}
 
-    update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
+    # ---------------------------
+    # Otherwise: store whatever status we got
+    # ---------------------------
+    try:
+        update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
+    except Exception:
+        logger.exception("update_payment_status_by_order_code(%s) failed (ignored)", status or "pending")
+
     return {"ok": True}
 
 

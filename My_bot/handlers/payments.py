@@ -139,32 +139,23 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Check if there's an existing invoice URL and its status
     existing_url = (pending.get("invoice_url") or "").strip()
     existing_status = (pending.get("pay_status") or "").lower().strip()
-
-    # Ensure 'order_created_at' is valid and parse the date
-    order_created_at = pending.get("created_at")
-
-    if order_created_at:
-        # psycopg often returns a real datetime, not a string
-        if isinstance(order_created_at, datetime):
-            created_at = order_created_at
-        else:
-            # if it ever comes as string
-            created_at = datetime.fromisoformat(str(order_created_at))
-
-        # normalize timezone to avoid naive/aware issues
-        if created_at.tzinfo is None:
-            created_at = created_at.replace(tzinfo=timezone.utc)
-
-        now = datetime.now(timezone.utc)
-
-        if now - created_at > timedelta(minutes=1):
-            expire_pending_order_if_needed(q.from_user.id)
-            await q.edit_message_text(
-                "⚠️ Your previous order expired (pending too long). Please create a new order."
-            )
-            return
-
     
+
+
+    # Expire order ONLY if expires_at is actually passed
+    expired_or_pending = expire_pending_order_if_needed(q.from_user.id)
+
+    if expired_or_pending and expired_or_pending.get("status") == "expired":
+        
+        await q.edit_message_text(
+            
+            "⚠️ Your previous order expired.\n"
+            "Please create a new order."
+            )
+        return
+
+
+            
     # If an invoice URL exists and the order status is still 'pending' or 'processing'
     if existing_url and existing_status in {"pending", "processing", "detected"}:
         await q.edit_message_text(
@@ -193,55 +184,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_usd = _safe_float(pending.get("amount_usd"))
     else:
         amount_usd = _resolve_amount_usd(context, pending)
-
-    if amount_usd is None:
-        await q.edit_message_text(
-            "❌ Could not determine price for this order.\n"
-            "Please restart the order and try again."
-        )
-        return
-
-    try:
-        # Creating a new payment invoice if no existing one is found
-        inv = await create_plisio_invoice(
-            order_number=order_code,
-            order_name=f"{desc} {order_code}",
-            amount_usd=amount_usd,
-            crypto_currency="usdt",  # Adjust this part if your user selects a different coin
-            callback_url=f"{public_base}/webhooks/plisio",  # You should have public_base configured
-            success_url=f"https://t.me/{context.bot.username}",
-            fail_url=f"https://t.me/{context.bot.username}",
-        )
-
-        invoice_url = inv["invoice_url"] if isinstance(inv, dict) else inv
-        set_order_payment(
-            pending["id"],
-            invoice_url=invoice_url,
-            pay_currency="USDT",  # You can dynamically use the selected currency
-            pay_provider="plisio",
-            pay_status="pending",
-        )
-
-        # Sending the link for payment
-        await q.edit_message_text(
-            f"✅ Payment link created\n"
-            f"Order: {order_code}\n"
-            f"Amount: ${amount_usd:.2f}\n"
-            f"Currency: USDT\n\n"
-            f"Tap below to open payment page:",
-            reply_markup=open_invoice_kb(invoice_url),
-        )
-
-    except Exception as e:
-        logger.exception("Plisio invoice creation failed")
-        await q.edit_message_text(
-            f"❌ Failed to create payment link:\n{e}\n\nChoose another coin.",
-            reply_markup=coin_picker_kb(order_code, amount_usd),
-        )
-        return
-
-
-    
 
     if amount_usd is None:
         await q.edit_message_text(
