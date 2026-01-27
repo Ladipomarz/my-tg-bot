@@ -39,7 +39,7 @@ async def create_plisio_invoice(
         "currency": crypto_currency,
         "allowed_psys_cids": crypto_currency,
         "allow_renew": 0,
-
+        "return_existing": 1,
         "callback_url": callback_url,
         "success_url": success_url,
         "fail_url": fail_url,
@@ -48,6 +48,7 @@ async def create_plisio_invoice(
         "email_required": 0,
         "required_email": 0,
         "email": "",
+        
     }
 
     async with httpx.AsyncClient(timeout=20) as client:

@@ -203,47 +203,35 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600, amount
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
             code = _generate_order_code(cur)
-            cur.execute("""
-                INSERT INTO orders (
-                    user_id,
-                    order_code,
-                    status,
-                    description,
-                    created_at,
-                    expires_at,
-                    pay_status,
-                    pay_provider,
-                    pay_updated_at,
-                    delivery_status,
-                    delivered_at,
-                    delivery_file_id,
-                    delivery_filename,
-                    status_updated_at,
-                    delivery_payload_json,
-                    delivered_message_id
-                )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, order_code;
-            """, (
-                user_id,
-                code,
-                "pending",
-                description,
-                now,
-                expires_at,
-                "pending",
-                None,
-                now,
-                "not_delivered",
-                None,
-                None,
-                None,
-                now,
-                None,
-                None,
-            ))
+            cur.execute("""         
+                            INSERT INTO orders (
+                                user_id, order_code, status, description,
+                                created_at, expires_at,
+                                amount_usd, order_type,
+                                pay_status, pay_provider, pay_updated_at,
+                                delivery_status, delivered_at,
+                                delivery_file_id, delivery_filename,
+                                status_updated_at, delivery_payload_json,
+                                delivered_message_id
+                               ) 
+                                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+                                RETURNING id, order_code;
+                                """,
+                                
+                               (   
+                                    user_id, code, "pending", description,
+                                    now, expires_at,
+                                    amount_usd, order_type,
+                                    "pending", None, now,
+                                    "not_delivered", None,
+                                    None, None,
+                                    now, None,
+                                    None,
+                                   ))
+            
+
             row = cur.fetchone()
-        conn.commit()
+            conn.commit()
 
     return row["id"], row["order_code"]
 
@@ -270,7 +258,7 @@ def update_order_status(order_id: int, status: str):
 def get_pending_order(user_id: int):
     migrate_orders_schema()  # Ensure schema migration
     with get_connection() as conn:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             # Query to fetch the pending order
             cur.execute("""
                 SELECT *

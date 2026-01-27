@@ -117,7 +117,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
 
         # ✅ Create top-up order (capture return!)
         desc = f"WALLET_TOPUP:{amt:g}"
-        order = create_order(
+        order_id, order_code = create_order(
             user_id,
             desc,
             ttl_seconds=3600,
@@ -126,12 +126,13 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         )
 
         # ✅ payments.py uses this to decide amount
-        context.user_data["custom_price_usd"] = float(amt)
+        context.user_data[pending.amount_usd] = float(amt)
 
         context.user_data.pop("wallet_step", None)
 
         # ✅ Reuse your existing payment UI (this creates callback_data pay_make:<order_code>)
-        await show_make_payment(update, context, order["order_code"])
+        await show_make_payment(update, context, order_code)
+
 
         return True
 
