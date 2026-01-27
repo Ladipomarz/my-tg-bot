@@ -224,7 +224,10 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
         # If there's no link at all
         if not existing_url:
-            await q.edit_message_text("❌ Missing payment link. Please create a new top up.")
+            await q.edit_message_text(
+                f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
+                reply_markup=coin_picker_kb(order_code, amount_usd),
+            )
             return
 
     # ---- ROUTING: handle the pressed button ----
