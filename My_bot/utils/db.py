@@ -278,20 +278,33 @@ def get_pending_order(user_id: int):
 
 
 
+import datetime
+
 def expire_pending_order_if_needed(user_id: int):
-    migrate_orders_schema()
+    migrate_orders_schema()  # Ensure the orders schema is migrated (if needed)
+    
+    # Fetch the most recent pending order for the user
     pending = get_pending_order(user_id)
     if not pending:
-        return None
+        return None  # No pending order for the user
 
+    # Ensure we have the 'expires_at' field (if not, handle gracefully)
     expires_at = pending.get("expires_at")
-    if expires_at and datetime.datetime.utcnow() > expires_at:
-        set_order_status(pending["id"], "expired")
-        pending["status"] = "expired"
-        return pending
+    if expires_at:
+        # Make sure the expires_at is a datetime object
+        if isinstance(expires_at, str):
+            try:
+                expires_at = datetime.datetime.fromisoformat(expires_at)
+            except ValueError:
+                expires_at = None
 
-    return pending
+        if expires_at and datetime.datetime.utcnow() > expires_at:
+            # If the current time is past 'expires_at', expire the order
+            set_order_status(pending["id"], "expired")
+            pending["status"] = "expired"
+            return pending
 
+    return pending  # Return the pending order (or None if expired)
 
 def get_orders_for_user(
     user_id: int,

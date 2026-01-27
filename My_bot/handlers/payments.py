@@ -6,7 +6,7 @@ from telegram.ext import ContextTypes
 from payments.plisio import create_plisio_invoice
 from utils.db import get_pending_order, set_order_payment
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta,timezone
 
 logger = logging.getLogger(__name__)
 
@@ -142,23 +142,28 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Ensure 'order_created_at' is valid and parse the date
     order_created_at = pending.get("created_at")
+
     if order_created_at:
-        try:
-            created_at = datetime.fromisoformat(order_created_at)
-        except ValueError:
-            # If the date is not in valid format, handle it appropriately
-            logger.error(f"Invalid 'created_at' format for order {order_code}: {order_created_at}")
-            await q.edit_message_text("❌ Invalid order creation date. Please contact support.")
-            return
-        
-        # Check if the order has expired (1 minute threshold)
-        if datetime.now() - created_at > timedelta(minutes=1):
+        # psycopg often returns a real datetime, not a string
+        if isinstance(order_created_at, datetime):
+            created_at = order_created_at
+        else:
+            # if it ever comes as string
+            created_at = datetime.fromisoformat(str(order_created_at))
+
+        # normalize timezone to avoid naive/aware issues
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=timezone.utc)
+
+        now = datetime.now(timezone.utc)
+
+        if now - created_at > timedelta(minutes=1):
             expire_pending_order_if_needed(q.from_user.id)
             await q.edit_message_text(
-                f"⚠️ Your previous order has expired because it was pending for too long.\n"
-                f"Please create a new order."
+                "⚠️ Your previous order expired (pending too long). Please create a new order."
             )
             return
+
     
     # If an invoice URL exists and the order status is still 'pending' or 'processing'
     if existing_url and existing_status in {"pending", "processing", "detected"}:
