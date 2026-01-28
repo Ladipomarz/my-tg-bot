@@ -7,7 +7,7 @@ from telegram.error import BadRequest
 from payments.plisio import create_plisio_invoice
 from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status,update_payment_status_by_order_code
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
-from datetime import datetime, timedelta,timezone
+import datetime
 from handlers.wallet_continue import open_wallet_menu
 
 
@@ -196,9 +196,10 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
             
         if expires_at.tzinfo is None:
-            expires_at = expires_at.replace(tzinfo=timezone.utc)
+            expires_at = expires_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
+
             
-        now = datetime.now(timezone.utc)
+        now = datetime.datetime.utcnow()
         remaining = int((expires_at - now).total_seconds())    
         if remaining < 0:
             remaining = 0

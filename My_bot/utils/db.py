@@ -5,7 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
-from datetime import datetime, timezone,timedelta
+
 
 
 from config import DATABASE_URL
@@ -198,8 +198,9 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600, amount
     """
     migrate_orders_schema()
 
-    now = datetime.now(timezone.utc)
-    expires_at = now + timedelta(seconds=int(ttl_seconds))
+    now = datetime.datetime.utcnow()
+    expires_at = now + datetime.timedelta(seconds=int(ttl_seconds))
+
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -246,7 +247,7 @@ def set_order_status(order_id: int, status: str):
                 SET status = %s,
                     status_updated_at = %s
                 WHERE id = %s;
-            """, (status, datetime.now(timezone.utc), order_id))
+            """, (status, datetime.datetime.utcnow(), order_id))
         conn.commit()
 
 
@@ -284,23 +285,27 @@ def expire_pending_order_if_needed(user_id: int):
     if not expires_at:
         return pending
 
+    # Parse string timestamps safely
     if isinstance(expires_at, str):
         try:
-            expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+            # Handles "2026-01-28T12:34:56Z" and "+00:00" forms
+            s = expires_at.strip().replace("Z", "+00:00")
+            expires_at = datetime.datetime.fromisoformat(s)
         except Exception:
             return pending
 
-    if expires_at.tzinfo is None:
-        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    # If it's timezone-aware, convert to naive UTC for comparison with utcnow()
+    if isinstance(expires_at, datetime.datetime) and expires_at.tzinfo is not None:
+        expires_at = expires_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
 
-    now = datetime.now(timezone.utc)
-    if now >= expires_at:
+    now = datetime.datetime.utcnow()
+
+    if isinstance(expires_at, datetime.datetime) and now >= expires_at:
         set_order_status(pending["id"], "expired")
         pending["status"] = "expired"
         return pending
 
     return pending
-
 
 
 def get_orders_for_user(
