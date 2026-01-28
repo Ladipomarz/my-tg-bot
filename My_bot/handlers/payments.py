@@ -81,19 +81,38 @@ def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardM
     ])
 
 
-async def safe_edit_message(q, text: str, reply_markup=None, **kwargs):
+
+async def safe_edit_message(q, context, text: str, reply_markup=None, **kwargs):
+    """
+    Edit the callback message safely, and keep auto-delete tracking consistent
+    with safe_send() by updating last_bot_message_id.
+    """
     try:
         await q.edit_message_text(text, reply_markup=reply_markup, **kwargs)
+
+        # Track the edited message as the "last bot message"
+        context.user_data["last_bot_message_id"] = q.message.message_id
+        context.user_data["last_bot_message_had_reply_kb"] = isinstance(reply_markup, ReplyKeyboardMarkup)
+
     except BadRequest as e:
         msg = str(e).lower()
-        # ignore harmless edit errors
+
         if "message is not modified" in msg:
+            # Still track it, so the system doesn't drift
+            context.user_data["last_bot_message_id"] = q.message.message_id
+            context.user_data["last_bot_message_had_reply_kb"] = isinstance(reply_markup, ReplyKeyboardMarkup)
             return
+
         if "message can't be edited" in msg:
-            # fallback: send a new message
-            await q.message.reply_text(text, reply_markup=reply_markup, **kwargs)
+            sent = await q.message.reply_text(text, reply_markup=reply_markup, **kwargs)
+
+            # Track the newly sent message
+            context.user_data["last_bot_message_id"] = sent.message_id
+            context.user_data["last_bot_message_had_reply_kb"] = isinstance(reply_markup, ReplyKeyboardMarkup)
             return
+
         raise
+
 
 
 async def show_make_payment(update_or_query, context: ContextTypes.DEFAULT_TYPE, order_code: str):

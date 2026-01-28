@@ -70,8 +70,7 @@ async def safe_delete_user_message(update):
     except Exception:
         pass
     
-    
-    from telegram.ext import ContextTypes
+
 
 async def delete_tracked_message(
     context: ContextTypes.DEFAULT_TYPE,

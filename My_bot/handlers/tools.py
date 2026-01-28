@@ -119,15 +119,15 @@ def _normalize_dob_input(dob_str: str) -> str:
 
 async def tools_callback(update: Update, context: CallbackContext):
     print("Callback received for:", update.callback_query.data)
-    query = update.callback_query
-    data = query.data.strip()
-    await query.answer()  # Acknowledge the button click
+    q = update.callback_query
+    data = q.data.strip()
+    await q.answer()  # Acknowledge the button click
 
     # Early exit if there is no query data
-    if not query or not query.data:
+    if not q or not q.data:
         return
 
-    data = (query.data or "").strip()
+    data = (q.data or "").strip()
     print(f"Received callback data: {data}")  # Debug log to ensure data is being captured
     user_id = update.effective_user.id
 
@@ -140,7 +140,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         _clear_msn_state(context)
         _clear_esim_state(context)
         await safe_send(
-            query,
+            q,
             context,
             "🖥️ RDP Service\n\nComing soon…",
             reply_markup=get_tools_inline(),
@@ -153,7 +153,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         pay_status = (pending.get("pay_status") or "").lower().strip()
         if pay_status in {"pending", "", "new"}:
             await safe_send(
-                query,
+                q,
                 context,
                 f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                 reply_markup=get_pending_order_menu(),
@@ -231,16 +231,16 @@ async def tools_callback(update: Update, context: CallbackContext):
 
 
     if data == "social_menu":
-        await safe_edit_message(query, "📣 Social Services\n\n🚧 Coming soon.")
+        await safe_edit_message(q, "📣 Social Services\n\n🚧 Coming soon.")
         await asyncio.sleep(1.5)
-        await safe_edit_message(query, "🧰 Tools:", reply_markup=get_tools_inline())
+        await safe_edit_message(q, "🧰 Tools:", reply_markup=get_tools_inline())
         return
 
 
     
 # BACK NAVIGATION
     if data == "otp_back_tools":
-        await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
+        await safe_send(q, context, "Tools:", reply_markup=get_tools_inline())
         return
     if data == "otp_back_country":
         await show_usa_verification_menu(update, context)
@@ -276,28 +276,28 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "tool_msn_services":
         _clear_msn_state(context)
         await safe_send(
-            query, context, "MSN Services:", reply_markup=get_msn_services_menu()
+            q, context, "MSN Services:", reply_markup=get_msn_services_menu()
         )
         return
 
     if data == "tool_back_tools":
         _clear_msn_state(context)
         _clear_esim_state(context)
-        await safe_send(query, context, "Tools:", reply_markup=get_tools_inline())
+        await safe_send(q, context, "Tools:", reply_markup=get_tools_inline())
         return
 
     if data == "tool_msn_lookup":
         _clear_msn_state(context)
         context.user_data["msn_step"] = "first_name"
         await safe_send(
-            query, context, _prompt_for_step("first_name"), reply_markup=msn_nav_kb()
+            q, context, _prompt_for_step("first_name"), reply_markup=msn_nav_kb()
         )
         return
 
     if data == "tool_msn_magic":
         _clear_msn_state(context)
         await safe_send(
-            query,
+            q,
             context,
             "MSN Magic Coming Soon...",
             reply_markup=get_msn_services_menu(),
