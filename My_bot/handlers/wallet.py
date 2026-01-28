@@ -62,9 +62,9 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
     invoice_url = (pending.get("invoice_url") or "").strip()
     order_code = pending.get("order_code")
     amount = pending.get("amount_usd")
-    currency = (pending.get("pay_currency")).upper()
-   
+    currency = (pending.get("pay_currency") or "Not chosen").upper()
 
+   
     # Prefer replying on message if available (callback vs text)
     msg_target = update.callback_query.message if update.callback_query else update.message
     if not msg_target:
