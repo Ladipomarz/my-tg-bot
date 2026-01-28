@@ -178,6 +178,12 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         return
     
+    
+    
+    existing_url = (pending.get("invoice_url") or "").strip()
+    existing_status = (pending.get("pay_status") or "").lower().strip()
+        
+    
     expires_at = pending.get("expires_at")
     remaining = None
     if expires_at:
@@ -191,11 +197,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         remaining = int((expires_at - now).total_seconds())    
         if remaining < 0:
             remaining = 0
-        
-        
-        existing_url = (pending.get("invoice_url") or "").strip()
-        existing_status = (pending.get("pay_status") or "").lower().strip()
-        
 
         # If invoice already exists and still usable, reuse it
         if existing_url and existing_status in {"pending", "processing", "detected"}:
@@ -310,6 +311,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Order: {order_code}\n"
                 f"Amount: ${amount_usd:.2f}\n"
                 f"Currency: {plisio_currency}\n\n"
+                f"⏳ Time left: {remaining//60} min\n\n"
                 f"Tap below to open payment page:",
                 reply_markup=open_invoice_kb(invoice_url),
             )
