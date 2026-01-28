@@ -1,6 +1,8 @@
 from decimal import Decimal
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+from telegram.error import BadRequest
+
 
 from utils.db import get_user_balance_usd, get_last_wallet_transactions, expire_pending_order_if_needed
 
@@ -46,14 +48,27 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     )
 
     keyboard = [
-        [InlineKeyboardButton("➕ Top up", callback_data="wallet_topup")],
-        [InlineKeyboardButton("⬅ Back", callback_data="back_main")],
-    ]
+    [
+        InlineKeyboardButton("➕ Top up", callback_data="wallet_topup"),
+        InlineKeyboardButton("⬅ Back", callback_data="back_main"),
+    ],
+]
+
 
     if update.message:
         await update.message.reply_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
-        # callback flow
-        await update.callback_query.edit_message_text(
+        try:
+            await update.callback_query.edit_message_text(
             msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
         )
+        except BadRequest as e:
+            em = str(e).lower()
+        if "message is not modified" in em:
+            return
+        if "message can't be edited" in em:
+            await update.callback_query.message.reply_text(
+                msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+        raise
