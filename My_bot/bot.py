@@ -1143,7 +1143,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_tools_related = (
         data.startswith("tool_")
         or data == "esim_services"
-        or data.startswith("esim_duration:")
+        or data.startswith("esim_duration:", "social_menu")
         or data in {"msn_back", "cancel_msn"}
     )
     if is_tools_related:

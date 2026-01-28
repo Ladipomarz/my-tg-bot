@@ -226,14 +226,13 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_refund_now_cb(update, context)
         return
     
-    if data == "social_menu":
-        await safe_edit_message(
-        query
-        ,
-        "📣 Social Services\n\n🚧 Coming soon.",
-    )
-        return
 
+
+    if data == "social_menu":
+        ok = await safe_edit_message(query, "📣 Social Services\n\n🚧 Coming soon.")
+        if not ok:
+            await query.message.reply_text("📣 Social Services\n\n🚧 Coming soon.")
+        return
 
 
     
