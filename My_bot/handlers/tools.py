@@ -233,7 +233,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "social_menu":
         await safe_edit_message(q, context, "📣 Social Services\n\n🚧 Coming soon.")
         await asyncio.sleep(1.5)
-        await safe_edit_message(q, "🧰 Tools:", reply_markup=get_tools_inline())
+        await safe_edit_message(q, context, "🧰 Tools:", reply_markup=get_tools_inline())
         return
 
 
