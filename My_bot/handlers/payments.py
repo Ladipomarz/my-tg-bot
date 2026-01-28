@@ -8,7 +8,8 @@ from payments.plisio import create_plisio_invoice
 from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status,update_payment_status_by_order_code
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 from datetime import datetime, timedelta,timezone
-from handlers.wallet import open_wallet_menu
+from handlers.wallet_continue import open_wallet_menu
+
 
 
 logger = logging.getLogger(__name__)
