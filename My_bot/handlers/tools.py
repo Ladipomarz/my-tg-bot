@@ -1,5 +1,6 @@
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+import asyncio
 from telegram.ext import CallbackContext
 from telegram import Update
 from menus.tools_menu import (
@@ -230,6 +231,8 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     if data == "social_menu":
         await safe_edit_message(query, "📣 Social Services\n\n🚧 Coming soon.")
+        await asyncio.sleep(1.5)
+        await safe_edit_message(query, "🧰 Tools:", reply_markup=tools_kb())
         return
 
 
