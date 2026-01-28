@@ -5,6 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
+from datetime import datetime, timezone
 
 
 from config import DATABASE_URL
@@ -245,7 +246,7 @@ def set_order_status(order_id: int, status: str):
                 SET status = %s,
                     status_updated_at = %s
                 WHERE id = %s;
-            """, (status, datetime.datetime.utcnow(), order_id))
+            """, (status, datetime.now(timezone.utc), order_id))
         conn.commit()
 
 
@@ -256,55 +257,51 @@ def update_order_status(order_id: int, status: str):
 
 
 def get_pending_order(user_id: int):
-    migrate_orders_schema()  # Ensure schema migration
+    migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
-            # Query to fetch the pending order
             cur.execute("""
                 SELECT *
                 FROM orders
-                WHERE user_id = %s AND status = 'pending'
+                WHERE user_id = %s
+                  AND status = 'pending'
+                  AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'utc'))
                 ORDER BY id DESC
                 LIMIT 1;
             """, (user_id,))
-
-            # Fetch the first row as a dictionary, or return None if no row is found
-            result = cur.fetchone()
-            if result is None:
-                return None  # No pending order found
-
-            return result
+            return cur.fetchone()
 
 
-
-
-import datetime
 
 def expire_pending_order_if_needed(user_id: int):
-    migrate_orders_schema()  # Ensure the orders schema is migrated (if needed)
-    
-    # Fetch the most recent pending order for the user
+    migrate_orders_schema()
+
     pending = get_pending_order(user_id)
     if not pending:
-        return None  # No pending order for the user
+        return None
 
-    # Ensure we have the 'expires_at' field (if not, handle gracefully)
     expires_at = pending.get("expires_at")
-    if expires_at:
-        # Make sure the expires_at is a datetime object
-        if isinstance(expires_at, str):
-            try:
-                expires_at = datetime.datetime.fromisoformat(expires_at)
-            except ValueError:
-                expires_at = None
+    if not expires_at:
+        return pending
 
-        if expires_at and datetime.datetime.utcnow() > expires_at:
-            # If the current time is past 'expires_at', expire the order
-            set_order_status(pending["id"], "expired")
-            pending["status"] = "expired"
+    if isinstance(expires_at, str):
+        try:
+            expires_at = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        except Exception:
             return pending
 
-    return pending  # Return the pending order (or None if expired)
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    if now >= expires_at:
+        set_order_status(pending["id"], "expired")
+        pending["status"] = "expired"
+        return pending
+
+    return pending
+
+
 
 def get_orders_for_user(
     user_id: int,

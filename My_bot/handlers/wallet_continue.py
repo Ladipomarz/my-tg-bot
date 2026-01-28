@@ -3,7 +3,6 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 
-
 from utils.db import get_user_balance_usd, get_last_wallet_transactions, expire_pending_order_if_needed
 
 
@@ -26,13 +25,16 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     lines = []
     for t in txs:
         amt = t.get("amount_usd")
-        status = (t.get("pay_status") or t.get("status") or "unknown").lower()
+        status = (t.get("status") or t.get("pay_status") or "unknown").lower()
+        
         if status in ("paid", "confirmed", "completed"):
             status_txt = "Completed"
+        elif status in ("expired",):
+            status_txt = "Expired"
+        elif status in ("cancelled", "canceled", "cancel"):
+            status_txt = "Canceled"
         elif status in ("detected", "processing", "pending"):
             status_txt = "Pending"
-        elif status in ("expired", "cancelled", "canceled"):
-            status_txt = "Canceled"
         else:
             status_txt = status.capitalize()
 
@@ -62,13 +64,14 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await update.callback_query.edit_message_text(
             msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
         )
+            
         except BadRequest as e:
             em = str(e).lower()
-        if "message is not modified" in em:
-            return
-        if "message can't be edited" in em:
-            await update.callback_query.message.reply_text(
-                msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
-            )
-            return
-        raise
+            if "message is not modified" in em:
+                return
+            if "message can't be edited" in em:
+                await update.callback_query.message.reply_text(
+                    msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
+                )
+                return
+            raise

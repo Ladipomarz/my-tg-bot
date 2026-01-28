@@ -204,6 +204,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             remaining = 0
 
         # If invoice already exists and still usable, reuse it
+        
+    if not data.startswith("pay_cancel:"):
         if existing_url and existing_status in {"pending", "processing", "detected"}:
             if order_type == "wallet_topup" and remaining and remaining > 0:
                 await safe_edit_message(q, 
@@ -250,10 +252,9 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_order_status(pending["id"], "cancelled")
         update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
         
+        #await safe_edit_message(q,"✅ Top up cancelled. Now create a new top up.")
         # Clear any wallet flow state (optional)
         context.user_data.pop("wallet_step", None)
-        
-        await safe_edit_message(q,"✅ Top up cancelled. Now create a new top up.")
         await open_wallet_menu(update, context)
         return
 
