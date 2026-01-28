@@ -8,6 +8,8 @@ from payments.plisio import create_plisio_invoice
 from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status,update_payment_status_by_order_code
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 from datetime import datetime, timedelta,timezone
+from handlers.wallet import open_wallet_menu
+
 
 logger = logging.getLogger(__name__)
 
@@ -71,10 +73,12 @@ def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
 
 def open_invoice_cancel_kb(invoice_url: str, order_code: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔗 Open payment page", url=str(invoice_url))],
-        [InlineKeyboardButton("🗑 Cancel & create new", callback_data=f"pay_cancel:{order_code}")],
+        [
+            InlineKeyboardButton("🔗 Open payment", url=str(invoice_url)),
+            InlineKeyboardButton("🗑 Cancel & new", callback_data=f"pay_cancel:{order_code}"),
+        ]
     ])
-  
+
 
 async def safe_edit_message(q, text: str, reply_markup=None, **kwargs):
     try:
@@ -244,7 +248,12 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("pay_cancel:"):
         update_order_status(pending["id"], "cancelled")
         update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
+        
+        # Clear any wallet flow state (optional)
+        context.user_data.pop("wallet_step", None)
+        
         await safe_edit_message(q,"✅ Top up cancelled. Now create a new top up.")
+        await open_wallet_menu(update, context)
         return
 
     

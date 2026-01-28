@@ -108,6 +108,9 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
 
     invoice_url = (pending.get("invoice_url") or "").strip()
     order_code = pending.get("order_code")
+    amount = pending.get("amount_usd")
+    currency = (pending.get("pay_currency")).upper()
+   
 
     # Prefer replying on message if available (callback vs text)
     msg_target = update.callback_query.message if update.callback_query else update.message
@@ -117,6 +120,9 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
     if invoice_url:
         await msg_target.reply_text(
             "✅ You already have an active top up.\n"
+            f"Order: {order_code}\n"
+            f"Amount: ${float(amount):.2f}\n"
+            f"Currency: {currency}\n"
             f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
             "Tap below to continue or cancel and create a new top up.",
             reply_markup=open_invoice_cancel_kb(invoice_url, order_code),
