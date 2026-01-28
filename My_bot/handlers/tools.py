@@ -229,9 +229,7 @@ async def tools_callback(update: Update, context: CallbackContext):
 
 
     if data == "social_menu":
-        ok = await safe_edit_message(query, "📣 Social Services\n\n🚧 Coming soon.")
-        if not ok:
-            await query.message.reply_text("📣 Social Services\n\n🚧 Coming soon.")
+        await safe_edit_message(query, "📣 Social Services\n\n🚧 Coming soon.")
         return
 
 
