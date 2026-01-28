@@ -196,7 +196,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         amount_usd = _resolve_amount_usd(context, pending)
 
     if amount_usd is None:
-        await safe_edit_message(q,
+        await safe_edit_message(q, context,
             "❌ Could not determine price for this order.\nPlease restart the order and try again.",
             )
         
@@ -228,7 +228,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not data.startswith("pay_cancel:"):
         if existing_url and existing_status in {"pending", "processing", "detected"}:
             if order_type == "wallet_topup" and remaining and remaining > 0:
-                await safe_edit_message(q, 
+                await safe_edit_message(q, context,
                     f"✅ You already have an active top up.\n"
                     f"⏳ Time left: {remaining//60} min\n\n"
                     f"Tap below to continue or cancel and create a new top up.",
@@ -239,7 +239,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             
             # fallback for non-topup orders
-            await safe_edit_message(q,
+            await safe_edit_message(q, context,
                 f"✅ Payment link already created for this order.\n Tap below to open payment page:",
                 reply_markup=open_invoice_kb(existing_url),
                 
@@ -255,14 +255,14 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith("pay_make:"):
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
-        await safe_edit_message(q,
+        await safe_edit_message(q, context,
             f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
             reply_markup=coin_picker_kb(order_code, amount_usd),
         )
         return
 
     if data.startswith("pay_usdt:"):
-        await safe_edit_message(q,
+        await safe_edit_message(q, context,
             "Choose USDT network:",
             reply_markup=usdt_network_kb(order_code, amount_usd),
         )
@@ -284,7 +284,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             _, _, coin_key = data.split(":")
         except ValueError:
-            await safe_edit_message(q,"❌ Invalid selection. Try again.")
+            await safe_edit_message(q, context,"❌ Invalid selection. Try again.")
             return
         
 
@@ -353,7 +353,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             msg = str(e)
 
             if "Invoice with the same order_number already exists" in msg or "return_existing" in msg:
-                await safe_edit_message(q,
+                await safe_edit_message(q, context,
                     "⚠️ Payment link already exists for this order.\nTap below to continue:",
                     reply_markup=make_payment_kb(order_code),
                 )
