@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
-from handlers.payments import show_make_payment
+from handlers.payments import show_make_payment, open_invoice_cancel_kb, make_payment_kb
 from utils.db import (
     get_user_balance_usd,
     get_last_wallet_transactions,
@@ -13,11 +13,13 @@ from utils.db import (
     get_pending_order,
 )
 
+
 def _fmt_usd(x) -> str:
     try:
         return f"${Decimal(str(x)):.2f}"
     except Exception:
         return f"${x}"
+
 
 def _seconds_left_from_expires_at(expires_at) -> int:
     if not expires_at:
@@ -35,6 +37,7 @@ def _seconds_left_from_expires_at(expires_at) -> int:
     now = datetime.now(timezone.utc)
     return max(0, int((expires_at - now).total_seconds()))
 
+
 def _fmt_left(seconds: int) -> str:
     m, s = divmod(max(0, seconds), 60)
     h, m = divmod(m, 60)
@@ -43,6 +46,7 @@ def _fmt_left(seconds: int) -> str:
     if m:
         return f"{m}m"
     return f"{s}s"
+
 
 async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
@@ -89,6 +93,46 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
         )
 
+
+async def _show_existing_topup_or_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, pending: dict) -> bool:
+    """
+    Returns True if it handled the flow (pending exists),
+    False if caller should proceed with 'ask for amount / create order'.
+    """
+    if not pending or (pending.get("order_type") or "").lower() != "wallet_topup":
+        return False
+
+    secs_left = _seconds_left_from_expires_at(pending.get("expires_at"))
+    if secs_left <= 0:
+        return False
+
+    invoice_url = (pending.get("invoice_url") or "").strip()
+    order_code = pending.get("order_code")
+
+    # Prefer replying on message if available (callback vs text)
+    msg_target = update.callback_query.message if update.callback_query else update.message
+    if not msg_target:
+        return False
+
+    if invoice_url:
+        await msg_target.reply_text(
+            "✅ You already have an active top up.\n"
+            f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
+            "Tap below to continue or cancel and create a new top up.",
+            reply_markup=open_invoice_cancel_kb(invoice_url, order_code),
+        )
+        return True
+
+    # No invoice yet -> send them to payment menu (coin selection happens in payments.py)
+    await msg_target.reply_text(
+        "✅ You already started a top up.\n"
+        f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
+        "Continue to payment:",
+        reply_markup=make_payment_kb(order_code),
+    )
+    return True
+
+
 async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
     await q.answer()
@@ -103,22 +147,12 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # 1) Expire old pending orders
         expire_pending_order_if_needed(user_id)
 
-        # 2) If there is an active wallet_topup pending, DO NOT ask for amount.
+        # 2) If active topup exists -> show link+cancel (or continue-to-payment)
         pending = get_pending_order(user_id)
-        if pending and (pending.get("order_type") or "").lower() == "wallet_topup":
-            secs_left = _seconds_left_from_expires_at(pending.get("expires_at"))
-            # If somehow expired_at is missing, treat as no time left
-            if secs_left > 0:
-                # Send them back to the payment flow for the same order
-                await q.message.reply_text(
-                    "✅ You already have an active top up.\n"
-                    f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
-                    "Continuing your existing top up…",
-                    parse_mode="HTML",
-                )
-                context.user_data.pop("wallet_step", None)
-                await show_make_payment(update, context, pending["order_code"])
-                return
+        handled = await _show_existing_topup_or_continue(update, context, pending)
+        if handled:
+            context.user_data.pop("wallet_step", None)
+            return
 
         # 3) Otherwise ask for amount
         context.user_data["wallet_step"] = "await_amount"
@@ -127,6 +161,7 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="HTML",
         )
         return
+
 
 async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     step = context.user_data.get("wallet_step")
@@ -151,20 +186,12 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         # Expire old pending so we don’t block user forever
         expire_pending_order_if_needed(user_id)
 
-        # If pending wallet_topup exists, do NOT create a new one.
+        # If pending wallet_topup exists, do NOT create a new one. Show existing.
         pending = get_pending_order(user_id)
-        if pending and (pending.get("order_type") or "").lower() == "wallet_topup":
-            secs_left = _seconds_left_from_expires_at(pending.get("expires_at"))
-            if secs_left > 0:
-                await update.message.reply_text(
-                    "✅ You already have an active top up.\n"
-                    f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
-                    "Continuing your existing top up…",
-                    parse_mode="HTML",
-                )
-                context.user_data.pop("wallet_step", None)
-                await show_make_payment(update, context, pending["order_code"])
-                return True
+        handled = await _show_existing_topup_or_continue(update, context, pending)
+        if handled:
+            context.user_data.pop("wallet_step", None)
+            return True
 
         # Create top-up order
         desc = f"WALLET_TOPUP:{float(amt):.2f}"
@@ -178,7 +205,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
 
         context.user_data.pop("wallet_step", None)
 
-        # Send to existing payment UI
+        # Send to existing payment UI (coin selection happens there)
         await show_make_payment(update, context, order_code)
         return True
 
