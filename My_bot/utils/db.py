@@ -5,7 +5,7 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
-from datetime import datetime, timezone
+from datetime import datetime, timezone,timedelta
 
 
 from config import DATABASE_URL
@@ -199,7 +199,7 @@ def create_order(user_id: int, description: str, ttl_seconds: int = 3600, amount
     migrate_orders_schema()
 
     now = datetime.now(timezone.utc)
-    expires_at = now + datetime.timedelta(seconds=int(ttl_seconds))
+    expires_at = now + timedelta(seconds=int(ttl_seconds))
 
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
