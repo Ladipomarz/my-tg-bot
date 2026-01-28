@@ -11,6 +11,7 @@ def get_tools_inline():
             InlineKeyboardButton("OTP Verification", callback_data="tool_otp_usa"),
             ],
         
+        [InlineKeyboardButton("📣 Social Services", callback_data="social_menu")],
         [InlineKeyboardButton("⬅ Back", callback_data="back_main")],
     ]
     return InlineKeyboardMarkup(buttons)

@@ -23,6 +23,7 @@ from handlers.otp_handler import(
 from handlers.otp_handler import send_services_txt
 from handlers.service_list_flow import start_service_list_flow
 from handlers.otp_handler import otp_refund_now_cb
+from handlers.payments import safe_edit_message
 
 
 from utils.validator import (
@@ -224,6 +225,15 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_refund_now":
         await otp_refund_now_cb(update, context)
         return
+    
+    if data == "social_menu":
+        await safe_edit_message(
+        query
+        ,
+        "📣 Social Services\n\n🚧 Coming soon.",
+    )
+        return
+
 
 
     
