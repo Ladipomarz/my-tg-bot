@@ -7,7 +7,7 @@ from menus.orders_menu import get_pending_order_menu
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
 from config import ADMIN_IDS
-from handlers.wallet import open_wallet_menu
+from handlers.wallet_continue import open_wallet_menu
 
 
 
