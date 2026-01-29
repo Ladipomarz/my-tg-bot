@@ -1613,9 +1613,8 @@ async def health():
 
 
 @app.post("/webhooks/plisio")
-async def plisio_webhook_get(req: Request):
-    print("PLISIO WEBHOOK HIT")
-    return {"ok": True}
+async def plisio_webhook_post(req: Request):
+    return await plisio_webhook(req)
 
 
 @app.on_event("startup")
