@@ -384,8 +384,6 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data.pop("otp_step", None)
             # Remember debited amount so we can refund on cancel/timeout
             context.user_data["otp_debited_amount"] = float(price_val)
-            ud = context.application.user_data.setdefault(user_id, {})
-            ud["otp_debited_amount"] = float(price_val)
    
 
             context.user_data["otp_verification_id"] = verification_id
