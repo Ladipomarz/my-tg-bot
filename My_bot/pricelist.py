@@ -5,6 +5,26 @@ PRICES = {
     "msn": 1.00,
 }
 
+
+# OTP verification pricing (USD)
+# - "General Service" (unlisted / universal): $1.80 random, $2.70 specific state
+# - All other listed services:              $3.00 random, $4.00 specific state
+OTP_PRICES_USD = {
+    "general_random": 1.80,
+    "general_specific": 2.70,
+    "standard_random": 3.00,
+    "standard_specific": 4.00,
+}
+
+def get_otp_price_usd(*, is_general_service: bool, specific_state: bool) -> float:
+    key = (
+        "general_specific" if is_general_service and specific_state else
+        "general_random" if is_general_service else
+        "standard_specific" if specific_state else
+        "standard_random"
+    )
+    return float(OTP_PRICES_USD[key])
+
 ESIM_PRICES_USD = {
     "1m": 1.00,
     "3m": 31,   # set yours

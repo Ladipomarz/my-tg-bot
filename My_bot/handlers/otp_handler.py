@@ -16,6 +16,9 @@ import datetime
 from typing import Optional
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
+from pricelist import get_otp_price_usd
+from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd
+
 
 
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
@@ -90,6 +93,7 @@ async def _cleanup_otp_state(app, user_id: int) -> None:
         "otp_reserved_at_utc",
         "otp_poll_job_name",
         "otp_refund_job_name",
+        "otp_debited_amount",
     ):
         ud.pop(k, None)
 
@@ -239,9 +243,22 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             await update.message.reply_text("Please reply with: yes or no")
             return True
 
-        # Prices placeholder (you said you'll set later)
-        specific_price = context.user_data.get("otp_specific_price", "$x")
-        random_price = context.user_data.get("otp_random_price", "$y")
+        # "General Service" (unlisted/universal) uses cheaper pricing.
+        is_general = (
+            (context.user_data.get("otp_api_service_name") == "servicenotlisted")
+            or not context.user_data.get("otp_service_name")
+        )
+
+        random_price_val = get_otp_price_usd(is_general_service=is_general, specific_state=False)
+        specific_price_val = get_otp_price_usd(is_general_service=is_general, specific_state=True)
+
+        # store for UI + later confirmation
+        context.user_data["otp_random_price"] = random_price_val
+        context.user_data["otp_specific_price"] = specific_price_val
+
+        random_price = f"${random_price_val:.2f}"
+        specific_price = f"${specific_price_val:.2f}"
+
         
         if low == "yes":
             context.user_data["otp_step"] = "await_state_name"
@@ -307,6 +324,38 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         service_not_listed_name = display_service if api_service == "servicenotlisted" else None
 
         state = context.user_data.get("otp_state")  # None => random
+        
+        
+        user_id = update.effective_user.id
+
+        # Price should already be set earlier, but recompute safely if missing
+        price_val = context.user_data.get("otp_price")
+        if price_val is None:
+            is_general = (api_service == "servicenotlisted")
+            specific_state = bool(state) and str(state).lower() != "random"
+            price_val = get_otp_price_usd(is_general_service=is_general, specific_state=specific_state)
+            context.user_data["otp_price"] = float(price_val)
+
+        # ✅ Debit wallet (atomic)
+        if not try_debit_user_balance_usd(user_id, float(price_val)):
+            bal = get_user_balance_usd(user_id)
+            await update.message.reply_text(
+                f"❌ Insufficient wallet balance.\n"
+                f"Price: ${float(price_val):.2f}\n"
+                f"Your balance: ${bal:.2f}\n\n"
+                f"Please top up your wallet and try again."
+            )
+            return True
+
+        # Remember debited amount so we can refund on cancel/timeout
+        context.user_data["otp_debited_amount"] = float(price_val)
+        ud = context.application.user_data.setdefault(user_id, {})
+        ud["otp_debited_amount"] = float(price_val)
+
+
+    
+
+
 
         try:
             ver = await reserve_sms_verification(
@@ -350,8 +399,18 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             )
 
             await start_otp_auto_poll(update, context, verification_id)
-
+            
+            
         except Exception as e:
+            # refund wallet if we already debited
+            try:
+                amt = context.user_data.get("otp_debited_amount")
+                if amt:
+                    add_user_balance_usd(user_id, float(amt))
+                    context.user_data.pop("otp_debited_amount", None)
+            except Exception:
+                pass
+
             await update.message.reply_text(f"❌ Failed to reserve number: {e}")
             return True
 
@@ -366,10 +425,19 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 US_STATES_EXAMPLE = "California"
 
 async def _send_final_confirmation(update: Update, context: CallbackContext) -> None:
-    service_name = context.user_data.get("otp_service_name") or "General Service"
+    service_name = context.user_data.get("otp_service_name") or context.user_data.get("otp_custom_service") or "General Service"
     state = context.user_data.get("otp_state")
 
-    price = context.user_data.get("otp_price", "$x")  # placeholder
+    is_general = (
+        (context.user_data.get("otp_api_service_name") == "servicenotlisted")
+        or not context.user_data.get("otp_service_name")
+    )
+
+    specific_state = bool(state) and str(state).lower() != "random"
+    price_val = get_otp_price_usd(is_general_service=is_general, specific_state=specific_state)
+    context.user_data["otp_price"] = price_val
+    price = f"${price_val:.2f}"
+
     msg = (
         "FINAL CONFIRMATION\n\n"
         f"Service: {service_name}\n"
@@ -478,13 +546,25 @@ def _poll_textverified_once(verification_id: str, since_dt: datetime.datetime) -
 
 async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     data = context.job.data or {}
-    chat_id = data["chat_id"]
-    user_id = data["user_id"]
-    verification_id = data["verification_id"]
-    reserved_at_iso = data["reserved_at_utc"]
+    chat_id = data.get("chat_id")
+    user_id = data.get("user_id")
+    verification_id = data.get("verification_id")
+    reserved_at_iso = data.get("reserved_at_utc")
 
-    # Parse reservation timestamp
-    since_dt = datetime.datetime.fromisoformat(reserved_at_iso)
+    if not chat_id or not user_id or not verification_id:
+        return
+
+    # Parse reservation timestamp safely
+    since_dt = None
+    try:
+        if isinstance(reserved_at_iso, str):
+            since_dt = datetime.datetime.fromisoformat(reserved_at_iso.replace("Z", "+00:00"))
+    except Exception:
+        since_dt = None
+
+    if since_dt is None:
+        since_dt = datetime.datetime.now(datetime.timezone.utc)
+
     if since_dt.tzinfo is None:
         since_dt = since_dt.replace(tzinfo=datetime.timezone.utc)
 
@@ -493,6 +573,7 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         # don’t spam; just stop on hard errors
         await context.bot.send_message(chat_id=chat_id, text=f"❌ OTP polling error: {e}")
+
         # stop jobs
         poll_name = data.get("poll_job_name")
         refund_name = data.get("refund_job_name")
@@ -500,6 +581,7 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             _remove_jobs_by_name(context.job_queue, poll_name)
         if refund_name:
             _remove_jobs_by_name(context.job_queue, refund_name)
+
         await _cleanup_otp_state(context.application, user_id)
         return
 
@@ -530,6 +612,11 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         parse_mode="HTML",
     )
 
+    # ✅ IMPORTANT: OTP succeeded -> do NOT allow wallet refund anymore
+    try:
+        ud.pop("otp_debited_amount", None)
+    except Exception:
+        pass
 
     # Stop both jobs and clear state
     poll_name = data.get("poll_job_name")
@@ -538,6 +625,7 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         _remove_jobs_by_name(context.job_queue, poll_name)
     if refund_name:
         _remove_jobs_by_name(context.job_queue, refund_name)
+
     await _cleanup_otp_state(context.application, user_id)
 
 
@@ -556,12 +644,16 @@ def _cancel_and_report_blocking(verification_id: str) -> None:
 
 async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     data = context.job.data or {}
-    chat_id = data["chat_id"]
-    user_id = data["user_id"]
-    verification_id = data["verification_id"]
+    chat_id = data.get("chat_id")
+    user_id = data.get("user_id")
+    verification_id = data.get("verification_id")
     poll_name = data.get("poll_job_name")
 
+    if not chat_id or not user_id or not verification_id:
+        return
+
     # If polling job no longer exists, OTP was received/cancelled already
+    # (no auto-refund in that case)
     if poll_name and context.job_queue.get_jobs_by_name(poll_name) == []:
         return
 
@@ -569,7 +661,7 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if poll_name:
         _remove_jobs_by_name(context.job_queue, poll_name)
 
-    # refund attempt
+    # refund attempt with provider
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
@@ -577,20 +669,50 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         await _cleanup_otp_state(context.application, user_id)
         return
 
+    # ✅ refund wallet if we debited earlier
+    refunded_msg = ""
+    try:
+        ud = context.application.user_data.get(user_id, {}) or {}
+        amt = ud.get("otp_debited_amount")
+
+        # fallback (in case you stored it only in chat user_data)
+        if amt is None:
+            try:
+                chat_ud = context.user_data  # may exist in job context depending on PTB version
+                amt = chat_ud.get("otp_debited_amount") if isinstance(chat_ud, dict) else None
+            except Exception:
+                amt = None
+
+        if amt and float(amt) > 0:
+            add_user_balance_usd(user_id, float(amt))
+            ud.pop("otp_debited_amount", None)
+            refunded_msg = f"\n💸 Wallet refunded: ${float(amt):.2f}"
+    except Exception:
+        # don't break refund flow if wallet credit fails
+        pass
+
     await context.bot.send_message(
         chat_id=chat_id,
         text=(
             "⌛ No OTP received within 5 minutes.\n"
-            "I cancelled the verification and reported it as 'no SMS' (refund/credit depends on TextVerified eligibility)."
+            "I cancelled the verification and reported it as 'no SMS' "
+            "(refund/credit depends on TextVerified eligibility)."
+            + refunded_msg
         ),
     )
 
     await _cleanup_otp_state(context.application, user_id)
+
     
     
-async def start_otp_auto_poll(update: Update, context: ContextTypes.DEFAULT_TYPE, verification_id: str) -> None:
+async def start_otp_auto_poll(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    verification_id: str
+) -> None:
     """
-    Starts repeating poll (every 5s) + a 5-minute refund watchdog.
+    Starts repeating poll (every 5s) + a refund watchdog (after OTP_REFUND_AFTER_SEC).
+    Persists job names + verification_id into application.user_data so callbacks/jobs can read it reliably.
     """
     if not context.job_queue:
         await update.effective_message.reply_text("❌ JobQueue not available; cannot auto-poll OTP.")
@@ -620,8 +742,22 @@ async def start_otp_auto_poll(update: Update, context: ContextTypes.DEFAULT_TYPE
         "refund_job_name": refund_name,
     }
 
+    # store in context.user_data (good for current chat flow)
     context.user_data["otp_poll_job_name"] = poll_name
     context.user_data["otp_refund_job_name"] = refund_name
+    context.user_data["otp_verification_id"] = verification_id
+
+    # store in application.user_data (critical for jobs/callbacks consistency)
+    ud = context.application.user_data.setdefault(user_id, {})
+    ud["otp_poll_job_name"] = poll_name
+    ud["otp_refund_job_name"] = refund_name
+    ud["otp_verification_id"] = verification_id
+    ud["otp_reserved_at_utc"] = reserved_at_iso
+    ud["otp_chat_id"] = chat_id
+
+    # also mirror debited amount here if it exists only in context.user_data
+    if "otp_debited_amount" in context.user_data and "otp_debited_amount" not in ud:
+        ud["otp_debited_amount"] = context.user_data["otp_debited_amount"]
 
     context.job_queue.run_repeating(
         _otp_poll_job,
@@ -637,17 +773,22 @@ async def start_otp_auto_poll(update: Update, context: ContextTypes.DEFAULT_TYPE
         name=refund_name,
         data=payload,
     )
-    
+
     
 async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    User pressed "Refund now".
+    Stops jobs, cancels + reports on provider, then refunds wallet if we previously debited.
+    """
     q = update.callback_query
     await q.answer()
 
     user_id = q.from_user.id
     chat_id = q.message.chat_id
 
-    # read state
-    ud = context.application.user_data.get(user_id, {})
+    # Prefer application.user_data (shared across callbacks/jobs)
+    ud = context.application.user_data.get(user_id, {}) or {}
+
     verification_id = ud.get("otp_verification_id") or context.user_data.get("otp_verification_id")
     poll_name = ud.get("otp_poll_job_name") or context.user_data.get("otp_poll_job_name")
     refund_name = ud.get("otp_refund_job_name") or context.user_data.get("otp_refund_job_name")
@@ -662,7 +803,7 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     if refund_name:
         _remove_jobs_by_name(context.job_queue, refund_name)
 
-    # reuse same refund action
+    # refund action with provider
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
@@ -670,9 +811,27 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await _cleanup_otp_state(context.application, user_id)
         return
 
+    # ✅ Refund wallet if you debited earlier
+    refunded_msg = ""
+    try:
+        amt = ud.get("otp_debited_amount")
+        if amt is None:
+            amt = context.user_data.get("otp_debited_amount")
+
+        if amt and float(amt) > 0:
+            add_user_balance_usd(user_id, float(amt))
+            # clear markers
+            ud.pop("otp_debited_amount", None)
+            context.user_data.pop("otp_debited_amount", None)
+            refunded_msg = f"\n💸 Wallet refunded: ${float(amt):.2f}"
+    except Exception:
+        # don't fail the refund flow if wallet credit fails
+        pass
+
     await q.message.reply_text(
         "✅ Refund requested: cancelled + reported as 'no SMS'.\n"
         "Refund/credit depends on TextVerified eligibility."
+        + refunded_msg
     )
 
-    await _cleanup_otp_state(context.application, user_id)
+    await _cleanup_otp_state(context.application, user_id)    

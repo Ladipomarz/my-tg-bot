@@ -945,6 +945,32 @@ def add_user_balance_usd(user_id: int, amount_usd: float) -> None:
                 (amount_usd, user_id),
             )
         conn.commit()
+        
+def try_debit_user_balance_usd(user_id: int, amount_usd: float) -> bool:
+    """
+    Atomically subtracts from balance if enough funds exist.
+    Returns True if debited, False if insufficient.
+    """
+    amt = float(amount_usd or 0)
+    if amt <= 0:
+        return False
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE users
+                SET balance_usd = COALESCE(balance_usd, 0) - %s,
+                    balance_updated_at = NOW()
+                WHERE user_id = %s
+                  AND COALESCE(balance_usd, 0) >= %s
+                """,
+                (amt, user_id, amt),
+            )
+            ok = cur.rowcount == 1
+        conn.commit()
+    return ok
+
 
 def mark_order_wallet_credited(order_code: str) -> None:
     migrate_orders_schema()
