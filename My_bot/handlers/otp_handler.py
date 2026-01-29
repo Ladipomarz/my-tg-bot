@@ -342,7 +342,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         if not try_debit_user_balance_usd(user_id, float(price_val)):
             bal = get_user_balance_usd(user_id)
             kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_topup")],
+        [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
         
         ])
             await safe_send(
