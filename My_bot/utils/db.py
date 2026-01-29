@@ -926,26 +926,33 @@ def get_service_name_by_code(code: str) -> str | None:
                  
 
 def get_user_balance_usd(user_id: int) -> float:
+    migrate_users_schema()
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute("SELECT COALESCE(balance_usd, 0) FROM users WHERE user_id=%s", (user_id,))
             row = cur.fetchone()
             return float(row[0] if row else 0)
 
+
 def add_user_balance_usd(user_id: int, amount_usd: float) -> None:
+    migrate_users_schema()  # ensure balance columns exist
+
     with get_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                UPDATE users
-                SET balance_usd = COALESCE(balance_usd, 0) + %s,
+                INSERT INTO users (user_id, balance_usd, balance_updated_at)
+                VALUES (%s, %s, NOW())
+                ON CONFLICT (user_id) DO UPDATE SET
+                    balance_usd = COALESCE(users.balance_usd, 0) + EXCLUDED.balance_usd,
                     balance_updated_at = NOW()
-                WHERE user_id = %s
                 """,
-                (amount_usd, user_id),
+                (user_id, amount_usd),
             )
         conn.commit()
-        
+
+
 def try_debit_user_balance_usd(user_id: int, amount_usd: float) -> bool:
     """
     Atomically subtracts from balance if enough funds exist.

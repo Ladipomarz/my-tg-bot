@@ -1432,6 +1432,16 @@ async def plisio_webhook(req: Request):
         order.get("order_type") == "wallet_topup"
         or desc_raw.upper().startswith("WALLET_TOPUP:")
     )
+    
+    logger.info(
+    "WEBHOOK order=%s type=%r desc=%r is_wallet_topup=%s wallet_credited=%r",
+    order_number,
+    order.get("order_type"),
+    order.get("description"),
+    is_wallet_topup,
+    order.get("wallet_credited"),
+)
+
 
     # ---------------------------
     # Detect payment activity
@@ -1534,6 +1544,7 @@ async def plisio_webhook(req: Request):
             if usd_paid > 0:
                 try:
                     add_user_balance_usd(order["user_id"], float(usd_paid))
+                    logger.info("WALLET CREDIT OK user_id=%s usd_paid=%s order=%s", order["user_id"], usd_paid, order_number)
                     mark_order_wallet_credited(order_number)
                 except Exception:
                     logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)              
@@ -1553,7 +1564,11 @@ async def plisio_webhook(req: Request):
                             except Exception:
                                 pass
 
-                        asyncio.create_task(_safe_send_message(order["user_id"], msg))
+                        asyncio.create_task( 
+                            _safe_send_message(order["user_id"],
+                            f"DEBUG: is_wallet_topup={is_wallet_topup} wallet_credited={order.get('wallet_credited')} usd_paid={usd_paid}")
+                            )
+
 
         # Notify admin/user only on first transition to detected/paid
         if first_time:
