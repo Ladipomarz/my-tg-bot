@@ -778,7 +778,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("callback_router hit:", data)
 
     
+    if data == "wallet_menu":
+        await open_wallet_menu(update, context)
+        return
     
+
     # Route OTP/tools/service callbacks into tools_callback
     if data.startswith(("tool_", "otp_", "service_", "esim_")):
         await tools_callback(update, context)

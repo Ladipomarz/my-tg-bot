@@ -60,18 +60,14 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if update.message:
         await update.message.reply_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
+        q = update.callback_query
         try:
-            await update.callback_query.edit_message_text(
-            msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
-        )
-            
+            await q.edit_message_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
         except BadRequest as e:
             em = str(e).lower()
             if "message is not modified" in em:
                 return
             if "message can't be edited" in em:
-                await update.callback_query.message.reply_text(
-                    msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard)
-                )
+                await q.message.reply_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
                 return
             raise

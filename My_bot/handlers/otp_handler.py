@@ -18,7 +18,7 @@ from typing import Optional
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
 from pricelist import get_otp_price_usd
-from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd
+from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd 
 
 
 
