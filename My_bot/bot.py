@@ -1441,6 +1441,8 @@ async def plisio_webhook(req: Request):
     invoice_received = None
     invoice_remaining = None
     pending_amt = None
+    
+    inv =None
 
     received_amount = _to_float(p.get("received_amount"))
     if received_amount > 0:
@@ -1531,11 +1533,12 @@ async def plisio_webhook(req: Request):
             # Credit if value is positive
             if usd_paid > 0:
                 try:
-                    add_user_balance_usd(order["user_id"], usd_paid)
+                    add_user_balance_usd(order["user_id"], float(usd_paid))
                     mark_order_wallet_credited(order_number)
                 except Exception:
                     logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)              
-                    
+                
+                else:   
                     # Notify user about wallet credit
                     if await ensure_telegram_ready():
                         try:
@@ -1543,7 +1546,7 @@ async def plisio_webhook(req: Request):
                         except Exception:
                             new_bal = None
 
-                        msg = f"✅ Wallet topped up: ${amt:.2f}"
+                        msg = f"✅ Wallet topped up: ${(usd_paid):.2f}"
                         if new_bal is not None:
                             try:
                                 msg += f"\nNew balance: ${float(new_bal):.2f}"

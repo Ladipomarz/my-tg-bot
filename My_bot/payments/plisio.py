@@ -48,10 +48,7 @@ async def create_plisio_invoice(
         "required_email": 0,
         "email": "",
         
-        "return_existing": 1,   # if order_number exists, return it instead of 422
-        "expire_min": 16,        # OPTIONAL: invoice expires in 1 minute
-
-        
+        "return_existing": 1   # if order_number exists, return it instead of 422
     }
 
     async with httpx.AsyncClient(timeout=20) as client:
