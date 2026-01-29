@@ -1519,7 +1519,7 @@ async def plisio_webhook(req: Request):
         # If you allow partial payments, this is risky.
         if is_wallet_topup and order and not order.get("wallet_credited"):
             # Try reading the invoice details used above
-            usd_paid = None
+            usd_paid = 0.0
             # If invoice detail was fetched above (inv), try to read source_amount
             if isinstance(inv, dict):
                 try:
@@ -1529,12 +1529,12 @@ async def plisio_webhook(req: Request):
                     usd_paid = None
                     
             # Fallback: if webhook payload includes fiat amount directly
-            if usd_paid is None:
+            if usd_paid <= 0:
                 # This is uncommon, but we try parsing a field like received_amount_usd
-                usd_paid = _to_float(p.get("received_amount_usd") or p.get("received_amount_fiat"))
+                usd_paid = _to_float(p.get("received_amount_usd") or p.get("received_amount_fiat")or p.get("source_amount"))
         
             # If still nothing, fallback to your stored order amount
-            if usd_paid is None:
+            if usd_paid <= 0:
                 try:
                     usd_paid = float(order.get("amount_usd") or 0)
                 except Exception:
