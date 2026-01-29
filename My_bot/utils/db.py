@@ -33,12 +33,29 @@ test_connection()
 def migrate_users_schema():
     with get_connection() as conn:
         with conn.cursor() as cur:
+            # Ensure core columns exist
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS user_id BIGINT;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS first_name TEXT;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMP;")
             cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_usd NUMERIC DEFAULT 0;")
-            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_updated_at TIMESTAMPTZ;")
+            cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_updated_at TIMESTAMP;")
+
+            # ✅ Ensure user_id is unique so ON CONFLICT (user_id) works
+            cur.execute("""
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'users_user_id_key'
+    ) THEN
+        ALTER TABLE users ADD CONSTRAINT users_user_id_key UNIQUE (user_id);
+    END IF;
+END $$;
+""")
         conn.commit()
+
 
 
 def migrate_orders_schema():
