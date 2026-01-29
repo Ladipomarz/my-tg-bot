@@ -1205,11 +1205,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_delete_user_message(update)   # ✅ delete only if handled
             return
         
-    # ✅ OTP flow next
-    if await handle_otp_text_input(update, context):
-        await safe_delete_user_message(update)
-        return
-    
         
 
     user_id = update.effective_user.id
@@ -1550,24 +1545,23 @@ async def plisio_webhook(req: Request):
                     logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)              
                 
                 else:   
+                    
                     # Notify user about wallet credit
                     if await ensure_telegram_ready():
-                        try:
-                            new_bal = get_user_balance_usd(order["user_id"])
-                        except Exception:
-                            new_bal = None
-
-                        msg = f"✅ Wallet topped up: ${(usd_paid):.2f}"
-                        if new_bal is not None:
                             try:
-                                msg += f"\nNew balance: ${float(new_bal):.2f}"
+                                new_bal = get_user_balance_usd(order["user_id"])
                             except Exception:
-                                pass
+                                new_bal = None
 
-                        asyncio.create_task( 
-                            _safe_send_message(order["user_id"],
-                            f"DEBUG: is_wallet_topup={is_wallet_topup} wallet_credited={order.get('wallet_credited')} usd_paid={usd_paid}")
-                            )
+                            msg = f"✅ Wallet topped up: ${float(usd_paid):.2f}"
+                            if new_bal is not None:
+                                try:
+                                    msg += f"\nNew balance: ${float(new_bal):.2f}"
+                                except Exception:
+                                    pass
+
+                            asyncio.create_task(_safe_send_message(order["user_id"], msg))
+
 
 
         # Notify admin/user only on first transition to detected/paid

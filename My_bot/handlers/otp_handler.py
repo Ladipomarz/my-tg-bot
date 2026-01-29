@@ -337,35 +337,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             specific_state = bool(state) and str(state).lower() != "random"
             price_val = get_otp_price_usd(is_general_service=is_general, specific_state=specific_state)
             context.user_data["otp_price"] = float(price_val)
-
-        # ✅ Debit wallet (atomic)
-        if not try_debit_user_balance_usd(user_id, float(price_val)):
-            bal = get_user_balance_usd(user_id)
-            kb = InlineKeyboardMarkup([
-        [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
+        price_val =float(price_val)   
         
-        ])
-            await safe_send(
-                update,
-                context,
-                f"❌ Insufficient wallet balance.\n"
-                f"Price: ${float(price_val):.2f}\n"
-                f"Your balance: ${bal:.2f}\n\n"
-                f"Please top up your wallet and try again.",
-                reply_markup=kb,
-            )
-            return True
-
-        # Remember debited amount so we can refund on cancel/timeout
-        context.user_data["otp_debited_amount"] = float(price_val)
-        ud = context.application.user_data.setdefault(user_id, {})
-        ud["otp_debited_amount"] = float(price_val)
-
-
-    
-
-
-
+        
         try:
             ver = await reserve_sms_verification(
                 service_name=api_service,
@@ -383,6 +357,36 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 or getattr(ver, "reservation_id", None)
                 or getattr(ver, "verification_id", None)
             )
+            
+            if not verification_id:
+                raise RuntimeError("TextVerified did not return verification_id")
+
+
+            # ✅ Debit wallet (atomic)
+            if not try_debit_user_balance_usd(user_id, float(price_val)):
+                bal = get_user_balance_usd(user_id)
+                kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
+            
+            ])
+                await safe_send(
+                    update,
+                    context,
+                    f"❌ Insufficient wallet balance.\n"
+                    f"Price: ${float(price_val):.2f}\n"
+                    f"Your balance: ${bal:.2f}\n\n"
+                    f"Please top up your wallet and try again.",
+                    reply_markup=kb,
+                )
+                return True
+                
+            # ✅ stop the OTP flow so user isn't stuck in final_confirm
+            context.user_data.pop("otp_step", None)
+            # Remember debited amount so we can refund on cancel/timeout
+            context.user_data["otp_debited_amount"] = float(price_val)
+            ud = context.application.user_data.setdefault(user_id, {})
+            ud["otp_debited_amount"] = float(price_val)
+   
 
             context.user_data["otp_verification_id"] = verification_id
             context.user_data["otp_reserved_number"] = number
@@ -424,10 +428,12 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             return True
 
         # clear step data but keep verification info
-        for k in ("otp_step", "otp_service_name", "otp_state", "otp_custom_service", "otp_api_service_name"):
+        for k in ("otp_step", "otp_service_name", "otp_state", "otp_custom_service", "otp_api_service_name", "otp_price"):
             context.user_data.pop(k, None)
 
         return True
+    
+    return False
 
 
 

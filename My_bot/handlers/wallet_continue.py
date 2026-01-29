@@ -33,8 +33,11 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             status_txt = "Expired"
         elif status in ("cancelled", "canceled", "cancel"):
             status_txt = "Canceled"
-        elif status in ("detected", "processing", "pending"):
+        elif status in ("detected",):
+            status_txt = "Completed"
+        elif status in ("processing", "pending"):
             status_txt = "Pending"
+
         else:
             status_txt = status.capitalize()
 
