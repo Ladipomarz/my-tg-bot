@@ -11,6 +11,7 @@ from io import BytesIO
 from telegram import InputFile
 from utils.db import build_services_txt_bytes
 from utils.db import get_services_for_export, get_service_name_by_code
+from utils.auto_delete import safe_send,safe_delete_user_message
 from utils.validator import normalize_us_state_full_name
 import datetime
 from typing import Optional
@@ -303,6 +304,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     # ---- step: final confirm yes/no ----
         # ---- step: final confirm yes/no ----
     if step == "final_confirm":
+
         if low not in ("yes", "no"):
             await update.message.reply_text("Please reply with: yes or no")
             return True
@@ -339,11 +341,18 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         # ✅ Debit wallet (atomic)
         if not try_debit_user_balance_usd(user_id, float(price_val)):
             bal = get_user_balance_usd(user_id)
-            await update.message.reply_text(
+            kb = InlineKeyboardMarkup([
+        [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_topup")],
+        
+        ])
+            await safe_send(
+                update,
+                context,
                 f"❌ Insufficient wallet balance.\n"
                 f"Price: ${float(price_val):.2f}\n"
                 f"Your balance: ${bal:.2f}\n\n"
-                f"Please top up your wallet and try again."
+                f"Please top up your wallet and try again.",
+                reply_markup=kb,
             )
             return True
 

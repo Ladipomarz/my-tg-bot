@@ -1186,21 +1186,20 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
+        await safe_delete_user_message(update) # best-effort delete user message
         return
 
     # Admin wizard capture FIRST
     if await _admin_capture_text(update, context):
+        await safe_delete_user_message(update)   # ✅ optional: delete admin typed text too
+
         return
     
-    if await handle_otp_text_input(update, context):
-        return
-
+    # Wallet flow
     if await handle_wallet_text_input(update, context):
+        await safe_delete_user_message(update)   # ✅ delete only if handled
         return
-
-
-    # best-effort delete user message
-    await safe_delete_user_message(update)
+    
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
