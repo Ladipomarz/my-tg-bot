@@ -1226,6 +1226,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet"}:
+        
+        # clear OTP step so it doesn't hijack menu navigation
+        context.user_data.pop("otp_step", None)
+        context.user_data.pop("wallet_step", None)
         pending = None  # prevent UnboundLocalError no matter what
         
                     
