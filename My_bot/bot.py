@@ -1200,10 +1200,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     # Wallet flow
-    if await handle_wallet_text_input(update, context):
-        await safe_delete_user_message(update)   # ✅ delete only if handled
+    if context.user_data.get("wallet_step"):
+        if await handle_wallet_text_input(update, context):
+            await safe_delete_user_message(update)   # ✅ delete only if handled
+            return
+        
+    # ✅ OTP flow next
+    if await handle_otp_text_input(update, context):
+        await safe_delete_user_message(update)
         return
     
+        
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
