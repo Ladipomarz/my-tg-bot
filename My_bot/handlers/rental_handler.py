@@ -1,18 +1,45 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from utils.db import get_rental_by_id, debit_balance, extend_rental, cancel_rental
+from utils.db import get_rental_by_id, debit_balance, extend_rental, cancel_rental,get_connection
 from menus.main_menu import get_main_menu  # Main menu handler
+
+
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Example logging inside rental handler
+logger.debug("Processing rental renewal for rental_id: %s", rental_id)
+
 
 # Renew rental if the balance is sufficient
 async def renew_rental_handler(update, context, rental_id):
-    rental = get_rental_by_id(rental_id)  # Assuming a function to fetch rental data
+    try:
+        conn = get_connection()  # Get a fresh connection
+        cursor = conn.cursor()
 
-    # Check user balance
-    if rental['balance'] >= rental['renewal_price']:
-        # Proceed with auto-renew if balance is sufficient
-        await process_auto_renewal(rental)
-    else:
-        # Insufficient balance, send top-up message
-        await send_top_up_message(update)
+        # Fetch rental data from DB
+        cursor.execute("SELECT * FROM rentals WHERE rental_id = %s", (rental_id,))
+        rental = cursor.fetchone()
+
+        if rental is None:
+            await update.message.reply_text("❌ Rental not found.")
+            return
+
+        # Check user balance
+        if rental['balance'] >= rental['renewal_price']:
+            # Proceed with auto-renew if balance is sufficient
+            await process_auto_renewal(rental)
+        else:
+            # Insufficient balance, send top-up message
+            await send_top_up_message(update)
+
+        conn.close()
+
+    except Exception as e:
+        logger.error(f"Error in renew_rental_handler: {str(e)}")
+        await update.message.reply_text(f"❌ An error occurred: {str(e)}")
 
 # Send message if balance is insufficient for renewal
 async def send_top_up_message(update):
