@@ -82,8 +82,7 @@ def _remove_jobs_by_name(job_queue, name: str) -> None:
 
 
 async def _cleanup_otp_state(context: ContextTypes.DEFAULT_TYPE, user_id: int | None = None) -> None:
-    # Always clear chat-scoped state
-    for k in (
+    keys = (
         "otp_step",
         "otp_service_name",
         "otp_state",
@@ -99,41 +98,28 @@ async def _cleanup_otp_state(context: ContextTypes.DEFAULT_TYPE, user_id: int | 
         "otp_poll_job_name",
         "otp_refund_job_name",
         "otp_debited_amount",
-    ):
-        context.user_data.pop(k, None)
+    )
 
-    # Best-effort: also clear application.user_data if it exists and is mutable
+    # ✅ Try clearing chat-scoped user_data ONLY if it's a real dict
     try:
-        if user_id is None:
-            return
-        app = context.application
-        ud = getattr(app, "user_data", None)
-        if not ud:
-            return
-        user_bucket = ud.get(user_id)
-        if not isinstance(user_bucket, dict):
-            return
-        for k in (
-            "otp_step",
-            "otp_service_name",
-            "otp_state",
-            "otp_custom_service",
-            "otp_api_service_name",
-            "otp_price",
-            "otp_random_price",
-            "otp_specific_price",
-            "otp_verification_id",
-            "otp_reserved_number",
-            "otp_reserved_at_utc",
-            "otp_service_display",
-            "otp_poll_job_name",
-            "otp_refund_job_name",
-            "otp_debited_amount",
-        ):
-            user_bucket.pop(k, None)
+        ud = getattr(context, "user_data", None)
+        if isinstance(ud, dict):
+            for k in keys:
+                ud.pop(k, None)
     except Exception:
-        # Never crash cleanup
-        return
+        pass
+
+    # ✅ Best-effort clear application user_data ONLY if it's mutable dict-of-dicts
+    try:
+        if user_id is not None:
+            app_ud = getattr(context.application, "user_data", None)
+            bucket = app_ud.get(user_id) if app_ud else None
+            if isinstance(bucket, dict):
+                for k in keys:
+                    bucket.pop(k, None)
+    except Exception:
+        pass
+
 
 
 # Correcting how the reserve_number_for_otp should handle country and service_name
@@ -664,16 +650,25 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 def _cancel_and_report_blocking(verification_id: str) -> None:
-    # best effort: cancel first
-    if hasattr(provider, "verifications") and hasattr(provider.verifications, "cancel"):
-        provider.verifications.cancel(verification_id)
-
-    # best effort: report issue for “no SMS” if supported by SDK
-    if hasattr(provider, "verifications") and hasattr(provider.verifications, "report"):
-        try:
-            provider.verifications.report(verification_id)
-        except Exception:
+    # best-effort cancel first
+    try:
+        if hasattr(provider, "verifications") and hasattr(provider.verifications, "cancel"):
+            provider.verifications.cancel(verification_id)
+    except Exception as e:
+        msg = str(e).lower()
+        # ✅ harmless: already cancelled/expired/not cancelable
+        if "invalid operation" in msg or "400" in msg:
             pass
+        else:
+            raise
+
+    # best-effort report issue for “no SMS” if supported by SDK
+    try:
+        if hasattr(provider, "verifications") and hasattr(provider.verifications, "report"):
+            provider.verifications.report(verification_id)
+    except Exception:
+        pass
+
 
 async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     data = context.job.data or {}
@@ -701,7 +696,7 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Refund attempt failed: {e}")
-        await _cleanup_otp_state(context.application, user_id)
+        await _cleanup_otp_state(context, user_id)
         return
 
     # ✅ refund wallet if we debited earlier
@@ -725,7 +720,7 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         ),
     )
 
-    await _cleanup_otp_state(context.application, user_id)
+    await _cleanup_otp_state(context, user_id)
 
     
 async def start_otp_auto_poll(
