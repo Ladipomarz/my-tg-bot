@@ -1547,6 +1547,19 @@ async def plisio_webhook(req: Request):
                 
                 else:   
                     
+                        # ✅ ADD THIS RIGHT HERE (after credit succeeded)
+                    try:
+                        update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
+                    except Exception:
+                        logger.exception("update_payment_status_by_order_code(paid) failed (ignored)")
+                        
+                    try:
+                        if order.get("id"):
+                            update_order_status(order["id"], "completed")
+                    except Exception:
+                        logger.exception("update_order_status(completed) failed (ignored)")   
+
+                    
                     # Notify user about wallet credit
                     if await ensure_telegram_ready():
                             try:
