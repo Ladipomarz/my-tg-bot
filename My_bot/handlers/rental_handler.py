@@ -1,5 +1,5 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from utils.db import get_connection
+from utils.db import db  # Use the already established connection
 from menus.main_menu import get_main_menu
 
 # Renew rental if the balance is sufficient
