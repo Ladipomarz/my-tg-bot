@@ -25,6 +25,8 @@ from handlers.otp_handler import send_services_txt
 from handlers.service_list_flow import start_service_list_flow
 from handlers.otp_handler import otp_refund_now_cb
 from handlers.payments import safe_edit_message
+from rental_handler import renew_rental_handler, cancel_rental
+
 
 from utils.validator import (
     is_valid_email,
@@ -237,6 +239,25 @@ async def tools_callback(update: Update, context: CallbackContext):
         # Send the services list and proceed to the next flow
         await start_service_list_flow(update, context, plan="rental", capability="sms")
         return
+    
+
+    # Handle renewal if user selects renew
+    if data.startswith("renew_"):
+        rental_id = data.split('_')[1]  # Extract rental_id
+        await renew_rental_handler(update, context, rental_id)
+        return
+
+    # Handle rental cancellation if user selects cancel
+    if data.startswith("cancel_"):
+        rental_id = data.split('_')[1]  # Extract rental_id
+        await cancel_rental(update, context, rental_id)
+        return
+
+    # Handle top-up wallet button
+    if data == "top_up_wallet":
+        await (update, context)
+        return
+
 
 
 
