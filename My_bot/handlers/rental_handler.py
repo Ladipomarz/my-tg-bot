@@ -1,5 +1,4 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from utils.db import get_rental_by_id, debit_balance, extend_rental, cancel_rental,get_connection
 from menus.main_menu import get_main_menu  # Main menu handler
 
 
@@ -14,8 +13,14 @@ logger.debug("Processing rental renewal for rental_id: %s", rental_id)
 
 
 # Renew rental if the balance is sufficient
+# Instead of this:
+# from utils.db import get_connection
+
 async def renew_rental_handler(update, context, rental_id):
     try:
+        # Move the import inside the function to avoid circular import issues
+        from utils.db import get_connection, debit_balance, extend_rental
+        
         conn = get_connection()  # Get a fresh connection
         cursor = conn.cursor()
 
@@ -40,6 +45,7 @@ async def renew_rental_handler(update, context, rental_id):
     except Exception as e:
         logger.error(f"Error in renew_rental_handler: {str(e)}")
         await update.message.reply_text(f"❌ An error occurred: {str(e)}")
+
 
 # Send message if balance is insufficient for renewal
 async def send_top_up_message(update):
