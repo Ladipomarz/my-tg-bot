@@ -778,7 +778,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     print("callback_router hit:", data)
 
     
-    if data == "wallet_menu":
+    if data == "top_up_wallet":
         await open_wallet_menu(update, context)
         return
     
