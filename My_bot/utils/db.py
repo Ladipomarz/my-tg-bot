@@ -1,5 +1,6 @@
 import datetime
 import random
+import os
 import json
 import psycopg
 from psycopg.rows import dict_row
@@ -10,10 +11,19 @@ from psycopg.errors import UndefinedColumn, UndefinedTable
 
 from config import DATABASE_URL
 
+
+
+
 def get_connection():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(DATABASE_URL)        
+    return psycopg.connect(DATABASE_URL) 
+
+DATABASE_URL = os.getenv("DATABASE_URL")  # Make sure DATABASE_URL is set as an environment variable
+
+# Global database connection (persistent across calls)
+db = get_connection()  # Establishing a connection and keeping it in 'db'
+       
         
 
 def test_connection():
