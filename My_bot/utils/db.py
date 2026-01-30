@@ -351,6 +351,11 @@ def get_orders_for_user(
                     SELECT *
                     FROM orders
                     WHERE user_id = %s
+                      AND NOT(
+                        order_type='wallet_topup'
+                        OR LEFT(COALESCE(description, ''), 12) = 'WALLET_TOPUP:'
+
+                      )
                     ORDER BY id DESC
                     LIMIT %s OFFSET %s;
                 """, (user_id, limit, offset))
@@ -360,6 +365,10 @@ def get_orders_for_user(
                 SELECT *
                 FROM orders
                 WHERE user_id = %s
+                  AND NOT (
+                    order_type = 'wallet_topup'
+                    OR LEFT(COALESCE(description, ''), 12) = 'WALLET_TOPUP:'
+                  )
                   AND NOT (
                         status IN ('cancelled', 'expired')
                         AND COALESCE(status_updated_at, created_at, NOW()) < %s
