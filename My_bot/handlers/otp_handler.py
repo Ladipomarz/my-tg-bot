@@ -187,6 +187,20 @@ async def otp_usa_monthly_duration_menu(update, context, method: str):
     ]
     await _edit(update, "Select duration:", keyboard)
     
+    
+    # Callback handler for monthly duration selection (1, 2, or 3 months)
+async def otp_usa_monthly_duration_callback(update, context, method: str):
+    if update.callback_query.data == f"otp_usa_{method}_rental_monthly_1m":
+        context.user_data['rental_months'] = 1
+    elif update.callback_query.data == f"otp_usa_{method}_rental_monthly_2m":
+        context.user_data['rental_months'] = 2
+    elif update.callback_query.data == f"otp_usa_{method}_rental_monthly_3m":
+        context.user_data['rental_months'] = 3
+
+    # Send services_sms.txt to user after rental duration selection
+    await send_services_txt (update, context)
+    
+    
   
 # ---------- INTERNAL HELPER ----------
 
