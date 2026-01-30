@@ -1,5 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from menus.main_menu import get_main_menu  # Main menu handler
+from utils.db import get_rental_by_id, debit_balance, extend_rental, cancel_rental  # Import other functions you need, not get_connection()
+
 
 
 import logging
@@ -13,35 +15,15 @@ logger.debug("Processing rental renewal for rental_id: %s", rental_id)
 
 
 # Renew rental if the balance is sufficient
-# Instead of this:
-# from utils.db import get_connection
+# rental_handler.py
 
 async def renew_rental_handler(update, context, rental_id):
-    try:
-        # Move the import inside the function to avoid circular import issues
+    rental = get_rental_by_id(rental_id)  # This will internally use get_connection()
 
-
-        # Fetch rental data from DB
-        cursor.execute("SELECT * FROM rentals WHERE rental_id = %s", (rental_id,))
-        rental = cursor.fetchone()
-
-        if rental is None:
-            await update.message.reply_text("❌ Rental not found.")
-            return
-
-        # Check user balance
-        if rental['balance'] >= rental['renewal_price']:
-            # Proceed with auto-renew if balance is sufficient
-            await process_auto_renewal(rental)
-        else:
-            # Insufficient balance, send top-up message
-            await send_top_up_message(update)
-
-        conn.close()
-
-    except Exception as e:
-        logger.error(f"Error in renew_rental_handler: {str(e)}")
-        await update.message.reply_text(f"❌ An error occurred: {str(e)}")
+    if rental['balance'] >= rental['renewal_price']:
+        await process_auto_renewal(rental)
+    else:
+        await send_top_up_message(update)
 
 
 # Send message if balance is insufficient for renewal
