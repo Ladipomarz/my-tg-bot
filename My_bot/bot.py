@@ -1560,7 +1560,7 @@ async def plisio_webhook(req: Request):
                         logger.exception("update_order_status(completed) failed (ignored)")   
 
                     
-                    # Notify user about wallet credit
+                    # Notify user about wallet the credit
                     if await ensure_telegram_ready():
                             try:
                                 new_bal = get_user_balance_usd(order["user_id"])
