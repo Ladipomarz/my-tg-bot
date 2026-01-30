@@ -228,17 +228,19 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
      
+        # Fix: Correctly extract rental duration from the callback data
     if data.startswith("otp_usa_text_rental_monthly_"):
-        rental_months = int(data.split('_')[4][0])  # Extract 1, 2, or 3 from the callback data
+        # Extract the number part before 'm' (1m, 2m, or 3m)
+        rental_months = int(data.split('_')[-1][0])  # Split the data and get the first digit (before 'm')
         context.user_data['rental_months'] = rental_months
+
         # Send the services list and proceed to the next flow
         await start_service_list_flow(update, context, plan="rental", capability="sms")
         return
-     
+
+
+
         
-
-
-     
     if data == "social_menu":
         await safe_edit_message(q, context, "📣 Social Services\n\n🚧 Coming soon.")
         await asyncio.sleep(1.5)
