@@ -19,13 +19,6 @@ def get_connection():
         raise RuntimeError("DATABASE_URL not set")
     return psycopg.connect(DATABASE_URL) 
 
-DATABASE_URL = os.getenv("DATABASE_URL")  # Make sure DATABASE_URL is set as an environment variable
-
-# Global database connection (persistent across calls)
-db = get_connection()  # Establishing a connection and keeping it in 'db'
-       
-        
-
 def test_connection():
     try:
         conn = get_connection()

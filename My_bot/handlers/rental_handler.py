@@ -1,10 +1,10 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from utils.db import db  # Use the already established connection
-from menus.main_menu import get_main_menu
+from utils.db import get_rental_by_id, debit_balance, extend_rental, cancel_rental
+from menus.main_menu import get_main_menu  # Main menu handler
 
 # Renew rental if the balance is sufficient
 async def renew_rental_handler(update, context, rental_id):
-    rental = db.get_rental_by_id(rental_id)
+    rental = get_rental_by_id(rental_id)  # Assuming a function to fetch rental data
 
     # Check user balance
     if rental['balance'] >= rental['renewal_price']:
@@ -32,31 +32,31 @@ async def send_top_up_message(update):
 
 # Redirect to top-up page
 async def top_up_wallet_handler(update, context):
-    # This can be a placeholder for the wallet top-up page
+    # Redirect user to wallet top-up page
     await show_wallet_menu(update, context)
 
 # Show wallet menu where user can top up
 async def show_wallet_menu(update, context):
     await update.message.reply_text(
         "Please select your payment method to top up your wallet.",
-        reply_markup=wallet_menu_keyboard()  # Replace with your actual wallet menu
+        reply_markup=wallet_menu_keyboard()  # Replace with actual wallet menu
     )
 
 # Process auto-renewal of the rental
 async def process_auto_renewal(rental):
     # Deduct balance and renew rental
-    db.debit_balance(rental['user_id'], rental['renewal_price'])
-    db.extend_rental(rental['rental_id'])
+    debit_balance(rental['user_id'], rental['renewal_price'])
+    extend_rental(rental['rental_id'])
     
     # Notify user about renewal success
     await rental['user_id'].send_message(f"Your rental has been successfully renewed for another {rental['renewal_period']}.")
 
 # Handle the cancellation of rental
 async def cancel_rental(update, context, rental_id):
-    rental = db.get_rental_by_id(rental_id)
+    rental = get_rental_by_id(rental_id)
     
     # Remove rental from DB or mark it as canceled
-    db.cancel_rental(rental_id)
+    cancel_rental(rental_id)
     
     # Notify the user that the rental has been canceled
     await update.callback_query.answer("Your rental has been canceled.")
