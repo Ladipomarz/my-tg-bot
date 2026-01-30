@@ -81,22 +81,59 @@ def _remove_jobs_by_name(job_queue, name: str) -> None:
         j.schedule_removal()
 
 
-async def _cleanup_otp_state(app, user_id: int) -> None:
-    ud = app.user_data.get(user_id)
-    if not ud:
-        return
+async def _cleanup_otp_state(context: ContextTypes.DEFAULT_TYPE, user_id: int | None = None) -> None:
+    # Always clear chat-scoped state
     for k in (
         "otp_step",
         "otp_service_name",
         "otp_state",
+        "otp_custom_service",
+        "otp_api_service_name",
+        "otp_price",
+        "otp_random_price",
+        "otp_specific_price",
         "otp_verification_id",
         "otp_reserved_number",
         "otp_reserved_at_utc",
+        "otp_service_display",
         "otp_poll_job_name",
         "otp_refund_job_name",
         "otp_debited_amount",
     ):
-        ud.pop(k, None)
+        context.user_data.pop(k, None)
+
+    # Best-effort: also clear application.user_data if it exists and is mutable
+    try:
+        if user_id is None:
+            return
+        app = context.application
+        ud = getattr(app, "user_data", None)
+        if not ud:
+            return
+        user_bucket = ud.get(user_id)
+        if not isinstance(user_bucket, dict):
+            return
+        for k in (
+            "otp_step",
+            "otp_service_name",
+            "otp_state",
+            "otp_custom_service",
+            "otp_api_service_name",
+            "otp_price",
+            "otp_random_price",
+            "otp_specific_price",
+            "otp_verification_id",
+            "otp_reserved_number",
+            "otp_reserved_at_utc",
+            "otp_service_display",
+            "otp_poll_job_name",
+            "otp_refund_job_name",
+            "otp_debited_amount",
+        ):
+            user_bucket.pop(k, None)
+    except Exception:
+        # Never crash cleanup
+        return
 
 
 # Correcting how the reserve_number_for_otp should handle country and service_name
@@ -564,6 +601,10 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     verification_id = data.get("verification_id")
     reserved_at_iso = data.get("reserved_at_utc")
 
+    # NEW: read these from payload (set in start_otp_auto_poll)
+    service_display = data.get("service_display") or "Service"
+    reserved_number = data.get("reserved_number") or "Unknown"
+
     if not chat_id or not user_id or not verification_id:
         return
 
@@ -584,10 +625,8 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
     except Exception as e:
-        # don’t spam; just stop on hard errors
         await context.bot.send_message(chat_id=chat_id, text=f"❌ OTP polling error: {e}")
 
-        # stop jobs
         poll_name = data.get("poll_job_name")
         refund_name = data.get("refund_job_name")
         if poll_name:
@@ -599,21 +638,9 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         return
 
     if not result:
-        return  # no OTP yet, next tick will try again
+        return
 
     code = result.get("code") or "N/A"
-
-    # Pull display service + reserved number from stored user_data
-    ud = context.application.user_data.get(user_id, {}) or {}
-
-    service_display = (
-        ud.get("otp_service_display")
-        or ud.get("otp_service_name")
-        or ud.get("otp_custom_service")
-        or "Service"
-    )
-
-    reserved_number = ud.get("otp_reserved_number") or "Unknown"
     local_num = format_us_local(reserved_number)
 
     await context.bot.send_message(
@@ -624,12 +651,6 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         ),
         parse_mode="HTML",
     )
-
-    # ✅ IMPORTANT: OTP succeeded -> do NOT allow wallet refund anymore
-    try:
-        ud.pop("otp_debited_amount", None)
-    except Exception:
-        pass
 
     # Stop both jobs and clear state
     poll_name = data.get("poll_job_name")
@@ -654,7 +675,6 @@ def _cancel_and_report_blocking(verification_id: str) -> None:
         except Exception:
             pass
 
-
 async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     data = context.job.data or {}
     chat_id = data.get("chat_id")
@@ -662,11 +682,13 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     verification_id = data.get("verification_id")
     poll_name = data.get("poll_job_name")
 
+    # NEW: amount debited saved in payload
+    debited_amount = data.get("debited_amount")  # float or str
+
     if not chat_id or not user_id or not verification_id:
         return
 
-    # If polling job no longer exists, OTP was received/cancelled already
-    # (no auto-refund in that case)
+    # If polling job no longer exists, OTP was received/cancelled already -> no refund
     if poll_name and context.job_queue.get_jobs_by_name(poll_name) == []:
         return
 
@@ -674,7 +696,7 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     if poll_name:
         _remove_jobs_by_name(context.job_queue, poll_name)
 
-    # refund attempt with provider
+    # cancel + report (provider)
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
@@ -685,21 +707,10 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     # ✅ refund wallet if we debited earlier
     refunded_msg = ""
     try:
-        ud = context.application.user_data.get(user_id, {}) or {}
-        amt = ud.get("otp_debited_amount")
-
-        # fallback (in case you stored it only in chat user_data)
-        if amt is None:
-            try:
-                chat_ud = context.user_data  # may exist in job context depending on PTB version
-                amt = chat_ud.get("otp_debited_amount") if isinstance(chat_ud, dict) else None
-            except Exception:
-                amt = None
-
-        if amt and float(amt) > 0:
-            add_user_balance_usd(user_id, float(amt))
-            ud.pop("otp_debited_amount", None)
-            refunded_msg = f"\n💸 Wallet refunded: ${float(amt):.2f}"
+        amt = float(debited_amount or 0)
+        if amt > 0:
+            add_user_balance_usd(user_id, amt)
+            refunded_msg = f"\n💸 Wallet refunded: ${amt:.2f}"
     except Exception:
         # don't break refund flow if wallet credit fails
         pass
@@ -717,7 +728,6 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     await _cleanup_otp_state(context.application, user_id)
 
     
-    
 async def start_otp_auto_poll(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
@@ -725,7 +735,7 @@ async def start_otp_auto_poll(
 ) -> None:
     """
     Starts repeating poll (every 5s) + a refund watchdog (after OTP_REFUND_AFTER_SEC).
-    Persists job names + verification_id into application.user_data so callbacks/jobs can read it reliably.
+    Uses context.user_data + job payload only (application.user_data is read-only in your runtime).
     """
     if not context.job_queue:
         await update.effective_message.reply_text("❌ JobQueue not available; cannot auto-poll OTP.")
@@ -749,28 +759,22 @@ async def start_otp_auto_poll(
     payload = {
         "chat_id": chat_id,
         "user_id": user_id,
-        "verification_id": verification_id,
+        "verification_id": str(verification_id),
         "reserved_at_utc": reserved_at_iso,
         "poll_job_name": poll_name,
         "refund_job_name": refund_name,
+        "service_display": context.user_data.get("otp_service_display") or "Service",
+        "reserved_number": context.user_data.get("otp_reserved_number") or "Unknown",
+        "debited_amount": float(context.user_data.get("otp_debited_amount") or 0),
+
     }
 
-    # store in context.user_data (good for current chat flow)
+    # store in context.user_data (safe in your runtime)
     context.user_data["otp_poll_job_name"] = poll_name
     context.user_data["otp_refund_job_name"] = refund_name
-    context.user_data["otp_verification_id"] = verification_id
-
-    # store in application.user_data (critical for jobs/callbacks consistency)
-    ud = context.application.user_data.setdefault(user_id, {})
-    ud["otp_poll_job_name"] = poll_name
-    ud["otp_refund_job_name"] = refund_name
-    ud["otp_verification_id"] = verification_id
-    ud["otp_reserved_at_utc"] = reserved_at_iso
-    ud["otp_chat_id"] = chat_id
-
-    # also mirror debited amount here if it exists only in context.user_data
-    if "otp_debited_amount" in context.user_data and "otp_debited_amount" not in ud:
-        ud["otp_debited_amount"] = context.user_data["otp_debited_amount"]
+    context.user_data["otp_verification_id"] = str(verification_id)
+    context.user_data["otp_reserved_at_utc"] = reserved_at_iso
+    context.user_data["otp_chat_id"] = chat_id
 
     context.job_queue.run_repeating(
         _otp_poll_job,
@@ -786,6 +790,7 @@ async def start_otp_auto_poll(
         name=refund_name,
         data=payload,
     )
+    
 
     
 async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -799,24 +804,22 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     user_id = q.from_user.id
     chat_id = q.message.chat_id
 
-    # Prefer application.user_data (shared across callbacks/jobs)
-    ud = context.application.user_data.get(user_id, {}) or {}
-
-    verification_id = ud.get("otp_verification_id") or context.user_data.get("otp_verification_id")
-    poll_name = ud.get("otp_poll_job_name") or context.user_data.get("otp_poll_job_name")
-    refund_name = ud.get("otp_refund_job_name") or context.user_data.get("otp_refund_job_name")
+    # Use ONLY context.user_data (application.user_data is read-only in your runtime)
+    verification_id = context.user_data.get("otp_verification_id")
+    poll_name = context.user_data.get("otp_poll_job_name")
+    refund_name = context.user_data.get("otp_refund_job_name")
 
     if not verification_id:
         await q.message.reply_text("❌ No active verification to refund.")
         return
 
-    # stop jobs
-    if poll_name:
+    # Stop jobs
+    if poll_name and context.job_queue:
         _remove_jobs_by_name(context.job_queue, poll_name)
-    if refund_name:
+    if refund_name and context.job_queue:
         _remove_jobs_by_name(context.job_queue, refund_name)
 
-    # refund action with provider
+    # Cancel + report on provider (best-effort)
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
@@ -824,21 +827,18 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await _cleanup_otp_state(context.application, user_id)
         return
 
-    # ✅ Refund wallet if you debited earlier
+    # Refund wallet if we debited earlier
     refunded_msg = ""
     try:
-        amt = ud.get("otp_debited_amount")
-        if amt is None:
-            amt = context.user_data.get("otp_debited_amount")
-
-        if amt and float(amt) > 0:
-            add_user_balance_usd(user_id, float(amt))
-            # clear markers
-            ud.pop("otp_debited_amount", None)
-            context.user_data.pop("otp_debited_amount", None)
-            refunded_msg = f"\n💸 Wallet refunded: ${float(amt):.2f}"
+        amt = context.user_data.get("otp_debited_amount")
+        if amt is not None:
+            amt_f = float(amt)
+            if amt_f > 0:
+                add_user_balance_usd(user_id, amt_f)
+                context.user_data.pop("otp_debited_amount", None)
+                refunded_msg = f"\n💸 Wallet refunded: ${amt_f:.2f}"
     except Exception:
-        # don't fail the refund flow if wallet credit fails
+        # don't fail the flow if wallet refund fails
         pass
 
     await q.message.reply_text(
@@ -847,4 +847,5 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         + refunded_msg
     )
 
-    await _cleanup_otp_state(context.application, user_id)    
+    await _cleanup_otp_state(context.application, user_id)
+   

@@ -1205,6 +1205,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_delete_user_message(update)   # ✅ delete only if handled
             return
         
+
         
 
     user_id = update.effective_user.id
