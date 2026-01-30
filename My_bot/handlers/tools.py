@@ -255,7 +255,7 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     # Handle top-up wallet button
     if data == "top_up_wallet":
-        await (update, context)
+        await start_service_list_flow (update, context)
         return
 
 
