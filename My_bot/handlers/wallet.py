@@ -129,6 +129,16 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         return False
 
     text = (update.message.text or "").strip()
+    
+        # ✅ if user types a command, don't treat it as amount
+    if text.startswith("/"):
+        return False
+    
+    if text.lower() in ("cancel", "back"):    
+        context.user_data.pop("wallet_step", None)
+        await update.message.reply_text("✅ Cancelled. Use menu buttons.")
+        return True
+
 
     if step == "await_amount":
         try:

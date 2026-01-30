@@ -28,12 +28,22 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         username=user.username,
     )
 
+    # ✅ CLEAR ANY ACTIVE "CAPTURE" FLOWS SO /start DOESN'T GET TREATED AS INPUT
+    for k in (
+        "wallet_step",
+        "otp_step",
+        "msn_step",
+        "esim_step",
+    ):
+        context.user_data.pop(k, None)
+
     admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""
 
     await update.message.reply_text(
         f"Hello {user.first_name}{admin_badge}! Welcome to your underground bot.",
         reply_markup=get_main_menu(),
     )
+
 
 
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
