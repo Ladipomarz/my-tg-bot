@@ -1,9 +1,6 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from menus.main_menu import get_main_menu  # Main menu handler
 from utils.db import get_rental_by_id, debit_balance, extend_rental, cancel_rental  # Import other functions you need, not get_connection()
-
-
-
 import logging
 
 # Set up logging
@@ -15,8 +12,6 @@ logger.debug("Processing rental renewal for rental_id: %s", rental_id)
 
 
 # Renew rental if the balance is sufficient
-# rental_handler.py
-
 async def renew_rental_handler(update, context, rental_id):
     rental = get_rental_by_id(rental_id)  # This will internally use get_connection()
 
