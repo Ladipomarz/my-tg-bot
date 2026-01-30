@@ -227,12 +227,19 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_refund_now_cb(update, context)
         return
     
-    if data == "otp_usa_rental_monthly_1m":
-        await start_service_list_flow
+     
+        # Handling rental duration selection (1, 2, or 3 months)
+    if data == "otp_usa_rental_monthly_1m" or data == "otp_usa_rental_monthly_2m" or data == "otp_usa_rental_monthly_3m":
+        # Set the rental months (1, 2, or 3)
+        rental_months = int(data.split('_')[3][0])  # Extract 1, 2, or 3 from the callback data
+        context.user_data['rental_months'] = rental_months
+        
+        # Send the services list and proceed to the next flow
+        await start_service_list_flow(update, context, plan="rental", capability="sms")
         return
-    
-    
 
+
+     
     if data == "social_menu":
         await safe_edit_message(q, context, "📣 Social Services\n\n🚧 Coming soon.")
         await asyncio.sleep(1.5)
