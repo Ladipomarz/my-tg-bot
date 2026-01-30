@@ -19,10 +19,7 @@ logger.debug("Processing rental renewal for rental_id: %s", rental_id)
 async def renew_rental_handler(update, context, rental_id):
     try:
         # Move the import inside the function to avoid circular import issues
-        from utils.db import get_connection, debit_balance, extend_rental
-        
-        conn = get_connection()  # Get a fresh connection
-        cursor = conn.cursor()
+
 
         # Fetch rental data from DB
         cursor.execute("SELECT * FROM rentals WHERE rental_id = %s", (rental_id,))
