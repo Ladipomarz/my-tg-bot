@@ -227,6 +227,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_refund_now_cb(update, context)
         return
     
+    if data == "otp_usa_rental_monthly_1m":
+        await start_service_list_flow
+        return
+    
     
 
     if data == "social_menu":
