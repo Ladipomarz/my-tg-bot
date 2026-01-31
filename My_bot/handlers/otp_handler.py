@@ -860,31 +860,34 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 # Function to send the service list with the buttons
 async def send_service_list_with_buttons(update, context):
     try:
-        # Log the start of sending the service list
         logger.info("Sending service list to user.")
         
-        services = await get_services_for_export(capability="sms")
+        # Fetch services and log the capability being passed
+        capability = "sms"  # Set based on your use case or the user input
+        logger.debug(f"Fetching services for capability: {capability}")
+
+        services = await get_services_for_export(capability=capability)
         logger.debug(f"Fetched services: {services}")
 
-        # If no services found, log and return
+        # Check if no services are returned
         if not services:
-            logger.error("No services found in the database.")
+            logger.error("No services found for the capability.")
             await update.callback_query.message.reply_text("No available services found.")
             return
 
-        # Service list text
+        # Build the message
         service_list_text = (
             "If you've got the 4-digit Product ID, click ✅ Yes to continue.\n"
             "If you couldn't find the service you need, click ⏭ Universal to get a universal phone number.\n\n"
             "⚠️ Please make sure the service is not listed before using the universal phone number, "
             "or it may not receive OTP codes."
         )
-        
-        # Append the services dynamically to the message
+
+        # Append each service to the list text
         for service in services:
             service_list_text += f"Product ID: {service[0]} | Service: {service[1]}\n"
-        
-        # Create the buttons: Yes, I have the Product ID and Universal
+
+        # Create the buttons
         keyboard = [
             [
                 InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_rental_product_id"),
@@ -893,24 +896,16 @@ async def send_service_list_with_buttons(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Log the type of callback_query.message to ensure it’s the correct object
-        logger.debug(f"Type of callback_query.message: {type(update.callback_query.message)}")
-
-        # Check if update.callback_query exists and use callback_query.message
+        # Check if update.callback_query exists
         if update.callback_query:
-            # Use callback_query.message to send the reply
             await update.callback_query.message.reply_text(service_list_text, reply_markup=reply_markup)
         else:
-            # Handle case where update doesn't contain callback_query
             logger.error("Callback query is missing, cannot send service list.")
             return
 
-        # Log successful message sending
         logger.info("Service list and buttons sent successfully.")
 
     except Exception as e:
-        # Log any error that occurs
         logger.error(f"Error sending service list with buttons: {e}")
         if update.callback_query:
-            # Send error message if callback_query exists
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
