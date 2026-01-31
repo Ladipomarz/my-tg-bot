@@ -239,25 +239,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-    # Handle renewal if user selects renew
-    if data.startswith("renew_"):
-        rental_id = data.split('_')[1]  # Extract rental_id
-        await renew_rental_handler(update, context, rental_id)
-        return
-
-    # Handle rental cancellation if user selects cancel
-    if data.startswith("cancel_"):
-        rental_id = data.split('_')[1]  # Extract rental_id
-        await cancel_rental(update, context, rental_id)
-        return
-
     # Handle top-up wallet button
     if data == "top_up_wallet":
         await start_service_list_flow (update, context)
         return
-
-
-
 
         
     if data == "social_menu":
@@ -288,24 +273,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_usa_rental_type_menu(update, context, "text")
         return
     
-    
-    
-        # Step 3: Handle the button clicks for "Yes" and "All Services"
-    if data == "otp_rental_have_product":
-        await update.callback_query.edit_message_text(
-            "✅ Great! Please reply with the 4-digit Product ID."
-        )
-        context.user_data["otp_step"] = "awaiting_product_id"  # Save their step for later
-        return
-
-    if data == "otp_rental_all_services":
-        rental_number = await fetch_rental_number_for_rental()  # Fetch rental number
-        if rental_number:
-            await update.callback_query.edit_message_text(f"Your rental number is: {rental_number}")
-        else:
-            await update.callback_query.edit_message_text("❌ Unable to fetch a rental number. Please try again later.")
-        return
-        
     
     if data.startswith("service_"):
         service_name = data.replace("service_", "")  # Extract the service name
