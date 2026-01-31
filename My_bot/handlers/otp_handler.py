@@ -862,17 +862,14 @@ async def send_service_list_with_buttons(update, context):
     try:
         logger.info("Sending service list to user.")
         
-        # Fetch services and log the capability being passed
+        # Fetch services
         capability = "sms"  # Set based on your use case or the user input
-        logger.debug(f"Fetching services for capability: {capability}")
-
-        # Removed await here as get_services_for_export is not async
         services = get_services_for_export(capability=capability)
         logger.debug(f"Fetched services: {services}")
 
-        # Check if no services are returned
+        # If no services are found
         if not services:
-            logger.error("No services found for the capability.")
+            logger.error("No services found in the database.")
             await update.callback_query.message.reply_text("No available services found.")
             return
 
@@ -887,6 +884,21 @@ async def send_service_list_with_buttons(update, context):
         # Append each service to the list text
         for service in services:
             service_list_text += f"Product ID: {service[0]} | Service: {service[1]}\n"
+        
+        # Split the message into chunks if it's too long
+        MAX_MESSAGE_LENGTH = 4096
+        while len(service_list_text) > MAX_MESSAGE_LENGTH:
+            # Find the last break in the string (ideally a newline)
+            split_point = service_list_text.rfind("\n", 0, MAX_MESSAGE_LENGTH)
+            part = service_list_text[:split_point]
+            service_list_text = service_list_text[split_point + 1:]
+
+            # Send the first part
+            await update.callback_query.message.reply_text(part)
+
+        # Send the remaining part
+        if service_list_text:
+            await update.callback_query.message.reply_text(service_list_text)
 
         # Create the buttons
         keyboard = [
@@ -897,12 +909,8 @@ async def send_service_list_with_buttons(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Check if update.callback_query exists
-        if update.callback_query:
-            await update.callback_query.message.reply_text(service_list_text, reply_markup=reply_markup)
-        else:
-            logger.error("Callback query is missing, cannot send service list.")
-            return
+        # Send the reply with the buttons
+        await update.callback_query.message.reply_text("Select your option:", reply_markup=reply_markup)
 
         logger.info("Service list and buttons sent successfully.")
 
