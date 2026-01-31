@@ -142,25 +142,7 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
             
-            # Create the 'rentals' table after 'orders' table is created
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS rentals (
-                    rental_id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),  -- Reference to 'users' table
-                    rental_number TEXT,
-                    balance DECIMAL(10, 2),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP,
-                    status TEXT
-                );
-            """)
-
-            # Create index for 'rentals' table
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_user_id ON rentals(user_id);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_status ON rentals(status);")
-
         conn.commit()
-        print("Users, Orders, and Rentals tables created or already exist.")
 
 
     # Now that the users and orders tables exist, create the wallet_transactions table
