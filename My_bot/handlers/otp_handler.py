@@ -862,10 +862,30 @@ async def send_service_list_with_buttons(update, context):
     try:
         # Log the start of sending the service list
         logger.info("Sending service list to user.")
+        
+        services = await get_services_for_export(capability="sms")
+        logger.debug(f"Fetched services: {services}")
+
+        
+        # If no services found, log and return
+        if not services:
+            logger.error("No services found in the database.")
+            await update.callback_query.message.reply_text("No available services found.")
+            return
+
 
         # Assuming services are fetched from a function or DB
-        service_list_text = "Here are the available services:\n"  # Replace with dynamic service list
-
+        service_list_text = (
+            "If you've got the 4-digit Product ID, click ✅ Yes to continue.\n"
+            "If you couldn't find the service you need, click ⏭ Universal to get a universal phone number.\n\n"
+            "⚠️ Please make sure the service is not listed before using the universal phone number, "
+            "or it may not receive OTP codes."
+        )
+        
+        # Append the services dynamically to the message
+        for service in services:
+            service_list_text += f"Product ID: {service[0]} | Service: {service[1]}\n"
+        
         # Create the buttons: Yes, I have the Product ID and Universal
         keyboard = [
             [
@@ -893,3 +913,6 @@ async def send_service_list_with_buttons(update, context):
         if update.callback_query:
             # Send error message if callback_query exists
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
+
+
+
