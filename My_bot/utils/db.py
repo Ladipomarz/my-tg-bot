@@ -1035,14 +1035,3 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
                 (user_id, limit),
             )
             return cur.fetchall()
-
-
-
-#rental downward
-
-def get_rental_by_id(rental_id):
-    with get_connection() as conn:
-        with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("SELECT * FROM rentals WHERE rental_id = %s;", (rental_id,))
-            return cur.fetchone()
-
