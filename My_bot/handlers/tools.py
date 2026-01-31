@@ -11,7 +11,7 @@ from menus.tools_menu import (
 from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
-from utils.db import get_pending_order
+from utils.db import get_pending_order,get_services_for_export
 from handlers.otp_handler import reserve_number_for_otp
 from handlers.otp_handler import(
     otp_verification_handler,
@@ -235,7 +235,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data['rental_months'] = rental_months
 
         # Send the services list and proceed to the next flow
-        await start_service_list_flow(update, context, plan="rental", capability="sms")
+        await get_services_for_export(update, context, plan="rental", capability="sms")
         return
     
 

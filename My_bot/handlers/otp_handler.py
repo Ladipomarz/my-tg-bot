@@ -863,8 +863,15 @@ async def send_service_list_with_buttons(update, context):
         # Log the start of sending the service list
         logger.info("Sending service list to user.")
 
-        # Assuming services are fetched from a function or DB
-        service_list_text = "Here are the available services:\n"  # Replace with dynamic service list
+        # Fetch the services (from your DB or API function)
+        services = get_services_for_export()  # Replace with the actual method you're using to fetch services
+        if not services:
+            raise ValueError("No services available to display.")
+
+        # Create the service list text
+        service_list_text = "Here are the available services:\n"
+        for code, service_name in services:
+            service_list_text += f"Product ID: {code} - Service: {service_name}\n"
 
         # Create the buttons: Yes, I have the Product ID and Universal
         keyboard = [
@@ -884,7 +891,4 @@ async def send_service_list_with_buttons(update, context):
     except Exception as e:
         # Log any error that occurs
         logger.error(f"Error sending service list with buttons: {e}")
-
-
-   
-   
+        await update.message.reply_text("An error occurred while fetching the service list.")
