@@ -25,6 +25,7 @@ from handlers.otp_handler import send_services_txt
 from handlers.service_list_flow import start_service_list_flow
 from handlers.otp_handler import otp_refund_now_cb
 from handlers.payments import safe_edit_message
+from handlers.rental_handler import fetch_rental_number_for_rental
 
 from utils.validator import (
     is_valid_email,
@@ -287,6 +288,25 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_back_usa_rental_type":
         await otp_usa_rental_type_menu(update, context, "text")
         return
+    
+    
+    
+        # Step 3: Handle the button clicks for "Yes" and "All Services"
+    if data == "otp_rental_have_product":
+        await update.callback_query.edit_message_text(
+            "✅ Great! Please reply with the 4-digit Product ID."
+        )
+        context.user_data["otp_step"] = "awaiting_product_id"  # Save their step for later
+        return
+
+    if data == "otp_rental_all_services":
+        rental_number = await fetch_rental_number_for_rental()  # Fetch rental number
+        if rental_number:
+            await update.callback_query.edit_message_text(f"Your rental number is: {rental_number}")
+        else:
+            await update.callback_query.edit_message_text("❌ Unable to fetch a rental number. Please try again later.")
+        return
+        
     
     if data.startswith("service_"):
         service_name = data.replace("service_", "")  # Extract the service name
