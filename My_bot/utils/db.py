@@ -883,7 +883,7 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
 
 
 
-def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str, str]]:
+def get_services_for_export(*, capability: str = "sms") -> list[tuple[str, str]]:
     """
     Returns list of (code, service_name) from DB.
     Tries (local_code, capability) schema first, falls back to (product_id) schema.
@@ -892,6 +892,10 @@ def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str
         with conn.cursor() as cur:
             
             logger.debug(f"Fetching services for capability: {capability}")
+
+            # Ensure the capability is not None and handle the default
+            capability = capability.strip().lower() if capability else "sms"
+            logger.debug(f"Normalized capability to: '{capability}'")
 
             # Try new schema: local_code + capability
             try:
