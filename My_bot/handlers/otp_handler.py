@@ -899,6 +899,8 @@ async def send_service_list_with_buttons(update, context):
         if update.callback_query:
             # Use callback_query.message to send the reply
             await update.callback_query.message.reply_text(service_list_text, reply_markup=reply_markup)
+            logger.debug(f"Type of callback_query.message: {type(update.callback_query.message)}")
+
         else:
             # Handle case where update doesn't contain callback_query
             logger.error("Callback query is missing, cannot send service list.")
@@ -913,6 +915,8 @@ async def send_service_list_with_buttons(update, context):
         if update.callback_query:
             # Send error message if callback_query exists
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
+            logger.debug(f"Type of callback_query.message: {type(update.callback_query.message)}")
+
 
 
 
