@@ -141,9 +141,27 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_user_id ON orders(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
+            
+            # Create the 'rentals' table after 'orders' table is created
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rentals (
+                    rental_id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),  -- Reference to 'users' table
+                    rental_number TEXT,
+                    balance DECIMAL(10, 2),
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP,
+                    status TEXT
+                );
+            """)
+
+            # Create index for 'rentals' table
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_user_id ON rentals(user_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_status ON rentals(status);")
 
         conn.commit()
-        print("Rentals table created or already exists.")
+        print("Users, Orders, and Rentals tables created or already exist.")
+
 
     # Now that the users and orders tables exist, create the wallet_transactions table
     create_wallet_transactions_table()
@@ -167,25 +185,6 @@ def create_wallet_transactions_table():
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
-            
-            
-             # Create the 'rentals' table after 'orders' table is created
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS rentals (
-                    rental_id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),  -- Reference to 'users' table
-                    rental_number TEXT,
-                    balance DECIMAL(10, 2),
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP,
-                    status TEXT
-                );
-            """)
-            
-             # Create index for 'rentals' table
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_user_id ON rentals(user_id);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_status ON rentals(status);")
-            
             conn.commit()
         
 
@@ -1058,8 +1057,6 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
 
 
 #rental downward
-
-
 
 def get_rental_by_id(rental_id):
     with get_connection() as conn:

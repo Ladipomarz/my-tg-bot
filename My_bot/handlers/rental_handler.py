@@ -38,3 +38,14 @@ async def handle_product_id(update, context):
         await update.message.reply_text(f"Rental found! Your product ID: {product_id}")
     else:
         await update.message.reply_text("❌ Invalid Product ID. Please try again.")
+
+
+def test_get_rental_by_id(rental_id):
+    rental = get_rental_by_id(rental_id)
+    if rental:
+        print(f"Rental found: {rental}")
+    else:
+        print(f"No rental found with ID: {rental_id}")
+
+# Call the test function with an existing rental_id
+test_get_rental_by_id(1)
