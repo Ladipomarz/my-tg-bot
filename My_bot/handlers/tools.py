@@ -11,14 +11,15 @@ from menus.tools_menu import (
 from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
-from utils.db import get_pending_order,get_services_for_export
+from utils.db import get_pending_order
 from handlers.otp_handler import reserve_number_for_otp
 from handlers.otp_handler import(
     otp_verification_handler,
     otp_usa_one_time_or_rental_menu,
     otp_usa_rental_type_menu,
     otp_usa_monthly_duration_menu,
-    show_usa_verification_menu
+    show_usa_verification_menu,
+    send_service_list_with_buttons
 )
 
 from handlers.otp_handler import send_services_txt
@@ -235,7 +236,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data['rental_months'] = rental_months
 
         # Send the services list and proceed to the next flow
-        await get_services_for_export(update, context)
+        await send_service_list_with_buttons(update, context)
         return
     
 
