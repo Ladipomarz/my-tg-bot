@@ -6,10 +6,12 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
-
-
-
+import logging
 from config import DATABASE_URL
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -888,6 +890,9 @@ def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str
     """
     with get_connection() as conn:
         with conn.cursor() as cur:
+            
+            logger.debug(f"Fetching services for capability: {capability}")
+
             # Try new schema: local_code + capability
             try:
                 if capability:
@@ -909,6 +914,8 @@ def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str
                         """
                     )
                 rows = cur.fetchall()
+                logger.debug(f"Fetched rows: {rows}")
+
                 return [(str(r[0]).zfill(4), r[1]) for r in rows]
             except (UndefinedColumn, UndefinedTable):
                 pass
@@ -922,6 +929,8 @@ def get_services_for_export(*, capability: str | None = "sms") -> list[tuple[str
                 """
             )
             rows = cur.fetchall()
+            logger.error(f"Error fetching services: {e}")
+
             # old codes are ints; still format as 4-digit for display consistency
             return [(str(r[0]).zfill(4), r[1]) for r in rows]
 
