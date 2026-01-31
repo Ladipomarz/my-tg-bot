@@ -143,6 +143,7 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
 
         conn.commit()
+        print("Rentals table created or already exists.")
 
     # Now that the users and orders tables exist, create the wallet_transactions table
     create_wallet_transactions_table()
