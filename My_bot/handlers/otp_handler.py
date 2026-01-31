@@ -862,45 +862,10 @@ async def send_service_list_with_buttons(update, context):
     try:
         logger.info("Sending service list to user.")
         
-        # Fetch services
-        capability = "sms"  # Set based on your use case or the user input
-        services = get_services_for_export(capability=capability)
-        logger.debug(f"Fetched services: {services}")
+        # Fetch the service list and send the .txt file using your existing function
+        await send_services_txt(update, context, capability="sms")
 
-        # If no services are found
-        if not services:
-            logger.error("No services found in the database.")
-            await update.callback_query.message.reply_text("No available services found.")
-            return
-
-        # Build the message
-        service_list_text = (
-            "If you've got the 4-digit Product ID, click ✅ Yes to continue.\n"
-            "If you couldn't find the service you need, click ⏭ Universal to get a universal phone number.\n\n"
-            "⚠️ Please make sure the service is not listed before using the universal phone number, "
-            "or it may not receive OTP codes."
-        )
-
-        # Append each service to the list text
-        for service in services:
-            service_list_text += f"Product ID: {service[0]} | Service: {service[1]}\n"
-        
-        # Split the message into chunks if it's too long
-        MAX_MESSAGE_LENGTH = 4096
-        while len(service_list_text) > MAX_MESSAGE_LENGTH:
-            # Find the last break in the string (ideally a newline)
-            split_point = service_list_text.rfind("\n", 0, MAX_MESSAGE_LENGTH)
-            part = service_list_text[:split_point]
-            service_list_text = service_list_text[split_point + 1:]
-
-            # Send the first part
-            await update.callback_query.message.reply_text(part)
-
-        # Send the remaining part
-        if service_list_text:
-            await update.callback_query.message.reply_text(service_list_text)
-
-        # Create the buttons
+        # Create the buttons for the user to choose
         keyboard = [
             [
                 InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_rental_product_id"),
@@ -909,8 +874,9 @@ async def send_service_list_with_buttons(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Send the reply with the buttons
-        await update.callback_query.message.reply_text("Select your option:", reply_markup=reply_markup)
+        # Send the buttons after the file is sent
+        if update.callback_query:
+            await update.callback_query.message.reply_text("Select your option:", reply_markup=reply_markup)
 
         logger.info("Service list and buttons sent successfully.")
 
