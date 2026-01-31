@@ -784,7 +784,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 
     # Route OTP/tools/service callbacks into tools_callback
-    if data.startswith(("tool_", "otp_", "service_", "esim_","top_up_wallet" )):
+    if data.startswith(("tool_", "otp_", "service_", "esim_" )):
         await tools_callback(update, context)
         return
 
