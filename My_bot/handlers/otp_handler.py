@@ -863,15 +863,8 @@ async def send_service_list_with_buttons(update, context):
         # Log the start of sending the service list
         logger.info("Sending service list to user.")
 
-        # Fetch the services (from your DB or API function)
-        services = get_services_for_export()  # Replace with the actual method you're using to fetch services
-        if not services:
-            raise ValueError("No services available to display.")
-
-        # Create the service list text
-        service_list_text = "Here are the available services:\n"
-        for code, service_name in services:
-            service_list_text += f"Product ID: {code} - Service: {service_name}\n"
+        # Assuming services are fetched from a function or DB
+        service_list_text = "Here are the available services:\n"  # Replace with dynamic service list
 
         # Create the buttons: Yes, I have the Product ID and Universal
         keyboard = [
@@ -882,8 +875,14 @@ async def send_service_list_with_buttons(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        # Send the service list message with the buttons
-        await update.message.reply_text(service_list_text, reply_markup=reply_markup)
+        # Check if update.callback_query exists and use callback_query.message
+        if update.callback_query:
+            # Use callback_query.message to send the reply
+            await update.callback_query.message.reply_text(service_list_text, reply_markup=reply_markup)
+        else:
+            # Handle case where update doesn't contain callback_query
+            logger.error("Callback query is missing, cannot send service list.")
+            return
 
         # Log successful message sending
         logger.info("Service list and buttons sent successfully.")
@@ -891,4 +890,6 @@ async def send_service_list_with_buttons(update, context):
     except Exception as e:
         # Log any error that occurs
         logger.error(f"Error sending service list with buttons: {e}")
-        await update.message.reply_text("An error occurred while fetching the service list.")
+        if update.callback_query:
+            # Send error message if callback_query exists
+            await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
