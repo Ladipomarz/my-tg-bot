@@ -866,15 +866,13 @@ async def send_service_list_with_buttons(update, context):
         services = await get_services_for_export(capability="sms")
         logger.debug(f"Fetched services: {services}")
 
-        
         # If no services found, log and return
         if not services:
             logger.error("No services found in the database.")
             await update.callback_query.message.reply_text("No available services found.")
             return
 
-
-        # Assuming services are fetched from a function or DB
+        # Service list text
         service_list_text = (
             "If you've got the 4-digit Product ID, click ✅ Yes to continue.\n"
             "If you couldn't find the service you need, click ⏭ Universal to get a universal phone number.\n\n"
@@ -895,12 +893,13 @@ async def send_service_list_with_buttons(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
+        # Log the type of callback_query.message to ensure it’s the correct object
+        logger.debug(f"Type of callback_query.message: {type(update.callback_query.message)}")
+
         # Check if update.callback_query exists and use callback_query.message
         if update.callback_query:
             # Use callback_query.message to send the reply
             await update.callback_query.message.reply_text(service_list_text, reply_markup=reply_markup)
-            logger.debug(f"Type of callback_query.message: {type(update.callback_query.message)}")
-
         else:
             # Handle case where update doesn't contain callback_query
             logger.error("Callback query is missing, cannot send service list.")
@@ -915,8 +914,3 @@ async def send_service_list_with_buttons(update, context):
         if update.callback_query:
             # Send error message if callback_query exists
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
-            logger.debug(f"Type of callback_query.message: {type(update.callback_query.message)}")
-
-
-
-
