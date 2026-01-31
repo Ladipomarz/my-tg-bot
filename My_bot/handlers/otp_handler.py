@@ -866,7 +866,8 @@ async def send_service_list_with_buttons(update, context):
         capability = "sms"  # Set based on your use case or the user input
         logger.debug(f"Fetching services for capability: {capability}")
 
-        services = await get_services_for_export(capability=capability)
+        # Removed await here as get_services_for_export is not async
+        services = get_services_for_export(capability=capability)
         logger.debug(f"Fetched services: {services}")
 
         # Check if no services are returned
