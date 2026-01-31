@@ -787,6 +787,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith(("tool_", "otp_", "service_", "esim_" )):
         await tools_callback(update, context)
         return
+    
+    if data.startswith("otp_usa_text_rental_monthly_"):
+        await tools_callback(update, context)
+        return
+
 
     
     await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
