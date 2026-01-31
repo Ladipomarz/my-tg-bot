@@ -235,7 +235,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data['rental_months'] = rental_months
 
         # Send the services list and proceed to the next flow
-        await get_services_for_export(update, context, plan="rental", capability="sms")
+        await get_services_for_export(update, context)
         return
     
 
