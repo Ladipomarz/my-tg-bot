@@ -37,6 +37,16 @@ from utils.validator import (
 )
 
 
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+# Example log for debugging
+logger.debug("Bot started, awaiting commands...")
+
+
 
 # ---------- UI HELPERS ----------
 
@@ -233,18 +243,14 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data.startswith("otp_usa_text_rental_monthly_"):
         # Extract the number part before 'm' (1m, 2m, or 3m)
         rental_months = int(data.split('_')[-1][0])  # Split the data and get the first digit (before 'm')
+        logger.debug(f"Rental duration selected: {rental_months} months")
+
         context.user_data['rental_months'] = rental_months
 
         # Send the services list and proceed to the next flow
         await send_service_list_with_buttons(update, context)
         return
     
-
-    # Handle top-up wallet button
-    if data == "top_up_wallet":
-        await start_service_list_flow (update, context)
-        return
-
         
     if data == "social_menu":
         await safe_edit_message(q, context, "📣 Social Services\n\n🚧 Coming soon.")
