@@ -19,6 +19,13 @@ from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
 from pricelist import get_otp_price_usd
 from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd 
+import logging
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
 
 
 
@@ -844,4 +851,40 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     )
 
     await _cleanup_otp_state(context.application, user_id)
+   
+   
+   
+   #RENTAL SHIT
+   
+
+# Function to send the service list with the buttons
+async def send_service_list_with_buttons(update, context):
+    try:
+        # Log the start of sending the service list
+        logger.info("Sending service list to user.")
+
+        # Assuming services are fetched from a function or DB
+        service_list_text = "Here are the available services:\n"  # Replace with dynamic service list
+
+        # Create the buttons: Yes, I have the Product ID and Universal
+        keyboard = [
+            [
+                InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_rental_product_id"),
+                InlineKeyboardButton("🌐 Universal", callback_data="otp_rental_universal")
+            ]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # Send the service list message with the buttons
+        await update.message.reply_text(service_list_text, reply_markup=reply_markup)
+
+        # Log successful message sending
+        logger.info("Service list and buttons sent successfully.")
+
+    except Exception as e:
+        # Log any error that occurs
+        logger.error(f"Error sending service list with buttons: {e}")
+
+
+   
    
