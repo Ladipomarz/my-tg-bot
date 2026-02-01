@@ -40,10 +40,6 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
             context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
             context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
             
-            # Ask the user for the state
-            await update.message.reply_text(
-                "Please enter the US state you want the rental number generated from (e.g., California)."
-            )
         else:
             # If the Product ID is invalid
             await update.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
