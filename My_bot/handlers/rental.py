@@ -40,6 +40,9 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
             context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
             context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
             
+             # Ask the user if they want to select a state or not
+            await ask_state_or_random(update, context)  # Call this function to ask the user for state or random selection
+            
         else:
             # If the Product ID is invalid
             await update.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
