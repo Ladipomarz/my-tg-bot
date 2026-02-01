@@ -19,13 +19,14 @@ from handlers.otp_handler import(
     otp_usa_rental_type_menu,
     otp_usa_monthly_duration_menu,
     show_usa_verification_menu,
-    send_service_list_with_buttons
 )
 
 from handlers.otp_handler import send_services_txt
 from handlers.service_list_flow import start_service_list_flow
 from handlers.otp_handler import otp_refund_now_cb
 from handlers.payments import safe_edit_message
+from handlers.rental import  send_service_list_with_buttons
+
 
 from utils.validator import (
     is_valid_email,
