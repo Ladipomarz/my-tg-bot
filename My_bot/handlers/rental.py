@@ -13,23 +13,42 @@ logger = logging.getLogger(__name__)
 
 
 # This is for validating the Product ID and transitioning to the next step
+
 async def handle_rental_product_id(update: Update, context: CallbackContext):
-    product_id = update.message.text.strip()  # Capture the Product ID
+    """
+    Handles the rental product ID input and asks for the state where the rental number will be generated.
+    """
+    # Check if it's a callback query (which is the case when the user clicks on "Yes, I have the Product ID")
+    if update.callback_query:
+        context.user_data["otp_step"] = "awaiting_rental_product_id"  # Indicate that we are waiting for the product ID
 
-    # Validate the Product ID
-    if len(product_id) in [3,4]  and product_id.isdigit():
-        context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
-        context.user_data["otp_step"] = "awaiting_rental_state"  # Move to the next step
-
-        # Ask the user for the state
-        await update.message.reply_text(
-            "Please enter the US state you want the rental number generated from (e.g., California)."
+        # Send the message asking for the product ID
+        await update.callback_query.message.reply_text(
+            "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
         )
-    else:
-        # If the Product ID is invalid
-        await update.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
 
-    
+        # Acknowledge the callback query to avoid waiting for it
+        await update.callback_query.answer()
+        return  # Stop here, the next step is when the user replies with the Product ID
+
+    # If it's a regular message, we handle the product ID input
+    if update.message:
+        product_id = update.message.text.strip()  # Capture the Product ID
+
+        # Validate the Product ID
+        if len(product_id) in [3,4] and product_id.isdigit():
+            context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
+            context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
+            
+            # Ask the user for the state
+            await update.message.reply_text(
+                "Please enter the US state you want the rental number generated from (e.g., California)."
+            )
+        else:
+            # If the Product ID is invalid
+            await update.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
+
+
 async def ask_state_or_random(update: Update, context: CallbackContext):
     """
     Ask the user if they want the number generated from a specific US state.
