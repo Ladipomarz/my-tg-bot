@@ -239,6 +239,14 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_refund_now_cb(update, context)
         return
     
+    
+    if data == " otp_rental_product_id":
+         # Next step: ask user to reply with the 4-digit Product ID
+        context.user_data["otp_step"] = "awaiting_product_id"
+        await update.callback_query.edit_message_text(
+        "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
+    )
+    
      
         # Fix: Correctly extract rental duration from the callback data
     if data.startswith("otp_usa_text_rental_monthly_"):
@@ -251,6 +259,8 @@ async def tools_callback(update: Update, context: CallbackContext):
         # Send the services list and proceed to the next flow
         await send_service_list_with_buttons(update, context)
         return
+    
+    
     
         
     if data == "social_menu":
