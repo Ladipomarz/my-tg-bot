@@ -106,12 +106,16 @@ async def handle_rental_state(update: Update, context: CallbackContext):
     else:
         # If invalid, suggest valid states
         suggestions = suggest_us_states_full_name(state)
+        logger.debug(f"Invalid state: {state}")
+
         suggestion_text = "Did you mean:\n" + "\n".join(suggestions) if suggestions else "❌ Invalid state. Please provide a valid state (e.g., California)."
         await update.message.reply_text(suggestion_text)
 
 
     
 async def final_confirmation(update: Update, context: CallbackContext):
+    logger.debug("Reached final confirmation step.")
+
     """
     Display the final confirmation with the selected service, state, and price.
     """
