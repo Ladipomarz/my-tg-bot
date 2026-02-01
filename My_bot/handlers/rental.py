@@ -100,6 +100,8 @@ async def handle_rental_state(update: Update, context: CallbackContext):
     if valid:
         # If valid, store the state and proceed to final confirmation
         context.user_data["otp_state"] = normalized_state
+        # Debug to check state transition
+        logger.debug(f"State validated and stored: {normalized_state}")
         await final_confirmation(update, context)
     else:
         # If invalid, suggest valid states
