@@ -1225,7 +1225,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if context.user_data.get("otp_step") == "awaiting_rental_state":
         # Ask for the state after validating product ID
-        await handle_rental_product_id(update, context)  # Your function to handle the state input
+        await handle_rental_state(update, context)  # Your function to handle the state input
         return
 
     

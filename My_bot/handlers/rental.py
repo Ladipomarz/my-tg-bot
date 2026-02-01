@@ -12,20 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 
-
-async def ask_for_rental_product_id(update: Update, context: CallbackContext):
-    """
-    Ask the user for the 4-digit Product ID in the rental flow.
-    """
-    context.user_data["otp_step"] = "awaiting_product_id"
-    await update.callback_query.edit_message_text(
-        "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
-    )
-    
-    
-
-
-
 async def handle_rental_product_id(update: Update, context: CallbackContext):
     """
     Handles the rental product ID input and asks for the state where the rental number will be generated.
