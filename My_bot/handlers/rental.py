@@ -12,57 +12,78 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
+async def ask_for_rental_product_id(update: Update, context: CallbackContext):
+    """
+    Ask the user for the 4-digit Product ID in the rental flow.
+    """
+    context.user_data["otp_step"] = "awaiting_product_id"
+    await update.callback_query.edit_message_text(
+        "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
+    )
+    
+    
 async def handle_rental_product_id(update: Update, context: CallbackContext):
     """
-    This function is called when the user enters a valid Product ID for rental.
-    It will ask for the state and then stop the flow before number reservation.
+    Handle the product ID input for rental.
     """
-    # Check if callback_query is not None
-    if update.callback_query:
-        product_id = update.callback_query.data.strip()  # Get Product ID from callback data
+    product_id = update.message.text.strip()  # Get the Product ID from the user input
 
-        # Ensure it's a 4-digit product ID
-        if not product_id.isdigit() or len(product_id) != 4:
-            await update.callback_query.edit_message_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
-            return
-
-        # Save the Product ID in the user data
-        context.user_data["otp_product_id"] = product_id
-
-        # Ask for the state for the rental
-        context.user_data["otp_step"] = "awaiting_state"
-        await update.callback_query.edit_message_text(
-            "Please enter the US state you want the number generated from (e.g., California)."
-        )
+    if not product_id.isdigit() or len(product_id) != 4:
+        await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
         return
-    else:
-        # Handle if callback_query is missing
-        await update.callback_query.edit_message_text("❌ No valid callback data received.")
+
+    # Save the Product ID in the user data
+    context.user_data["otp_product_id"] = product_id
+
+    # Ask for the state for the rental
+    context.user_data["otp_step"] = "awaiting_state"
+    await update.message.reply_text(
+        "Please enter the US state you want the number generated from (e.g., California)."
+    )
 
 
 
 async def handle_rental_state(update: Update, context: CallbackContext):
     """
-    This function handles the state input for rental flow and ends the flow without number reservation.
+    Handle the state input for rental.
     """
-    # Get the state from the user input
     state = update.message.text.strip()
 
     # Save the state in user data
     context.user_data["otp_state"] = state
 
-    # End the rental flow here without triggering number reservation
-    await update.message.reply_text(
-        f"✅ You have selected the state: {state}. We will now proceed without generating a number."
-    )
+    # Show final confirmation
+    service = context.user_data.get("otp_service_name", "Unknown Service")
+    price = 3.00  # This would typically be dynamic, depending on the service
 
-    # End the flow for now, or optionally send further information if needed
-    await update.message.reply_text("Your rental process has been completed without a number reservation.")
-    return
+    confirmation_message = f"""
+    FINAL CONFIRMATION:
 
+    Service: {service}
+    State: {state}
+    Price: ${price}
 
+    ⚠️Please reply with either yes or no to confirm.
+    """
+
+    await update.message.reply_text(confirmation_message)
+    
+    
+async def confirm_rental(update: Update, context: CallbackContext):
+    """
+    Final confirmation for rental flow.
+    """
+    text = update.message.text.strip().lower()
+
+    if text == "yes":
+        # Proceed with the rental logic (without reserving the number)
+        await update.message.reply_text("✅ Reserved number! We will now proceed with the rental.")
+
+        # You can store or process additional rental data here if necessary
+    elif text == "no":
+        await update.message.reply_text("❌ Rental not confirmed. The process has been cancelled.")
+    else:
+        await update.message.reply_text("❌ Invalid input. Please reply with 'yes' or 'no' to confirm.")
 
 
 
