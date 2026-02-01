@@ -43,6 +43,9 @@ async def handle_product_id_reply(update: Update, context: CallbackContext):
         context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
         context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
         
+        logger.debug("Entering handle_product_id_reply function.")
+
+        
         # Ask the user for the state
         await update.message.reply_text(
             "Please enter the US state you want the rental number generated from (e.g., California)."
@@ -55,6 +58,8 @@ async def handle_product_id_reply(update: Update, context: CallbackContext):
 
 
 async def handle_rental_state(update: Update, context: CallbackContext):
+    logger.debug("Entering handle_rental_state function.")
+
     """
     Handle the state input for rental.
     """

@@ -1358,6 +1358,8 @@ tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router), group=0)
 # Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rental_state))
+
 
 
 async def _background_telegram_bootstrap():
