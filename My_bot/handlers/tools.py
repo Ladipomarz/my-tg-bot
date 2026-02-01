@@ -240,7 +240,9 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     
-    if data == " otp_rental_product_id":
+    if data == "otp_rental_product_id":
+        
+        logger.debug(f"Received callback data: {data}")
          # Next step: ask user to reply with the 4-digit Product ID
         context.user_data["otp_step"] = "awaiting_product_id"
         await update.callback_query.edit_message_text(
