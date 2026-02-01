@@ -26,7 +26,7 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
     """
     Handle the product ID input for rental.
     """
-    product_id = update.message.text.strip()  # Get the Product ID from the user input
+    product_id = update.callback_query.message.text.strip()  # Get the Product ID from the callback message
 
     if not product_id.isdigit() or len(product_id) != 4:
         await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
