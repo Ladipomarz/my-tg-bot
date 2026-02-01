@@ -1,11 +1,12 @@
 import os
 import re
 import asyncio
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from handlers.otp_handler import send_services_txt
 import logging
+
 
 logger = logging.getLogger(__name__)
 
@@ -22,24 +23,25 @@ async def ask_for_rental_product_id(update: Update, context: CallbackContext):
     )
     
     
+
 async def handle_rental_product_id(update: Update, context: CallbackContext):
     """
-    Handle the product ID input for rental.
+    Handles the rental product ID input and asks for the state where the rental number will be generated.
     """
-    product_id = update.callback_query.message.text.strip()  # Get the Product ID from the callback message
-
-    if not product_id.isdigit() or len(product_id) != 4:
-        await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
-        return
-
-    # Save the Product ID in the user data
-    context.user_data["otp_product_id"] = product_id
-
-    # Ask for the state for the rental
-    context.user_data["otp_step"] = "awaiting_state"
-    await update.message.reply_text(
-        "Please enter the US state you want the number generated from (e.g., California)."
-    )
+    product_id = update.message.text.strip()  # Capture the Product ID
+    
+    # Validate the Product ID
+    if len(product_id) == 4 and product_id.isdigit():
+        context.user_data["otp_rental_product_id"] = product_id  # Store rental product ID
+        context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
+        
+        # Ask the user for the state for the rental
+        await update.callback_query.message.reply_text(
+            "Please enter the US state you want the rental number generated from (e.g., California)."
+        )
+    else:
+        # If the product ID is invalid
+        await update.callback_query.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
 
 
 
