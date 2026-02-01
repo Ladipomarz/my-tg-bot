@@ -44,7 +44,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Example log for debugging
+# Example log for debuggingg
 logger.debug("Bot started, awaiting commands...")
 
 
