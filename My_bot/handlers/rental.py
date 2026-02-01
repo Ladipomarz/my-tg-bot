@@ -2,10 +2,66 @@ import os
 import re
 import asyncio
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
+from telegram.ext import CallbackContext
 from handlers.otp_handler import send_services_txt
 import logging
 
 logger = logging.getLogger(__name__)
+
+
+
+
+
+
+
+
+
+
+async def handle_rental_product_id(update: Update, context: CallbackContext):
+    """
+    This function is called when the user enters a valid Product ID for rental.
+    It will ask for the state and then stop the flow before number reservation.
+    """
+    # Validate the Product ID
+    product_id = update.message.text.strip()  # Get the Product ID from the user input
+
+    # Ensure it's a 4-digit product ID
+    if not product_id.isdigit() or len(product_id) != 4:
+        await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
+        return
+
+    # Save the Product ID in the user data
+    context.user_data["otp_product_id"] = product_id
+
+    # Ask for the state for the rental
+    context.user_data["otp_step"] = "awaiting_state"
+    await update.message.reply_text(
+        "Please enter the US state you want the number generated from (e.g., California)."
+    )
+    return
+
+async def handle_rental_state(update: Update, context: CallbackContext):
+    """
+    This function handles the state input for rental flow and ends the flow without number reservation.
+    """
+    # Get the state from the user input
+    state = update.message.text.strip()
+
+    # Save the state in user data
+    context.user_data["otp_state"] = state
+
+    # End the rental flow here without triggering number reservation
+    await update.message.reply_text(
+        f"✅ You have selected the state: {state}. We will now proceed without generating a number."
+    )
+
+    # End the flow for now, or optionally send further information if needed
+    await update.message.reply_text("Your rental process has been completed without a number reservation.")
+    return
+
+
+
 
 
 

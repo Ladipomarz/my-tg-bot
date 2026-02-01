@@ -25,7 +25,7 @@ from handlers.otp_handler import send_services_txt
 from handlers.service_list_flow import start_service_list_flow
 from handlers.otp_handler import otp_refund_now_cb
 from handlers.payments import safe_edit_message
-from handlers.rental import  send_service_list_with_buttons
+from handlers.rental import  send_service_list_with_buttons,handle_rental_product_id,handle_rental_state
 
 
 from utils.validator import (
@@ -239,16 +239,20 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_refund_now_cb(update, context)
         return
     
+        # Handle different callback data
+    if data == "otp_usa_text_rental":
+        await otp_usa_rental_type_menu(update, context, "text")
+        return
     
     if data == "otp_rental_product_id":
-        
-        logger.debug(f"Received callback data: {data}")
-         # Next step: ask user to reply with the 4-digit Product ID
-        context.user_data["otp_step"] = "awaiting_product_id"
-        await update.callback_query.edit_message_text(
-        "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
-    )
+        # Call the rental product ID handler
+        await handle_rental_product_id(update, context)
+        return
     
+    if data == "otp_rental_state":
+        # Call the rental state handler
+        await handle_rental_state(update, context)
+        return
      
         # Fix: Correctly extract rental duration from the callback data
     if data.startswith("otp_usa_text_rental_monthly_"):
