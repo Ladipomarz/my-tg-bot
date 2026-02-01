@@ -58,6 +58,7 @@ from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
 from handlers.wallet_continue import open_wallet_menu
+from handlers.rental import handle_rental_product_id
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1215,7 +1216,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
         
 
-        
+      # Rental Product ID Step
+    if context.user_data.get("otp_step") == "awaiting_rental_product_id":
+        # Delegate to your rental handler for processing
+        await handle_rental_product_id(update, context)  # Your existing rental handler
+        return
+    
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
