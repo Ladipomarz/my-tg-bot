@@ -43,8 +43,8 @@ async def handle_product_id_reply(update: Update, context: CallbackContext):
         context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
         context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
         
-        logger.debug("Entering handle_product_id_reply function.")
 
+        logger.debug(f"otp_step updated to: {context.user_data['otp_step']}")
         
         # Ask the user for the state
         await update.message.reply_text(

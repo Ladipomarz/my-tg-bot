@@ -58,7 +58,7 @@ from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
 from handlers.wallet_continue import open_wallet_menu
-from handlers.rental import handle_rental_product_id,handle_rental_state
+from handlers.rental import handle_product_id_reply,handle_rental_state
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1215,11 +1215,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_delete_user_message(update)   # ✅ delete only if handled
             return
         
-
+      #RENTAL FLOWWWW
+        
       # Rental Product ID Step
     if context.user_data.get("otp_step") == "awaiting_rental_product_id":
         # Delegate to your rental handler for processing
-        await handle_rental_product_id(update, context)  # Your existing rental handler
+        await handle_product_id_reply(update, context)  # Your existing rental handler
         return
     
     
@@ -1358,7 +1359,6 @@ tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router), group=0)
 # Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_rental_state))
 
 
 
