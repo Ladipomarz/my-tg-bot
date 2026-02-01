@@ -24,25 +24,31 @@ async def ask_for_rental_product_id(update: Update, context: CallbackContext):
     
     
 
+# rental.py
+
+from telegram import Update
+from telegram.ext import CallbackContext
+
 async def handle_rental_product_id(update: Update, context: CallbackContext):
     """
     Handles the rental product ID input and asks for the state where the rental number will be generated.
     """
-    product_id = update.message.text.strip()  # Capture the Product ID
-    
-    # Validate the Product ID
-    if len(product_id) == 4 and product_id.isdigit():
-        context.user_data["otp_rental_product_id"] = product_id  # Store rental product ID
-        context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
+    # Since we're working with callback_query, access the message through callback_query.message
+    if update.callback_query:
+        product_id = update.callback_query.message.text.strip()  # Capture the Product ID
         
-        # Ask the user for the state for the rental
-        await update.callback_query.message.reply_text(
-            "Please enter the US state you want the rental number generated from (e.g., California)."
-        )
-    else:
-        # If the product ID is invalid
-        await update.callback_query.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
-
+        # Validate the Product ID
+        if len(product_id) == 4 and product_id.isdigit():
+            context.user_data["otp_rental_product_id"] = product_id  # Store rental product ID
+            context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
+            
+            # Ask the user for the state for the rental
+            await update.callback_query.message.reply_text(
+                "Please enter the US state you want the rental number generated from (e.g., California)."
+            )
+        else:
+            # If the product ID is invalid
+            await update.callback_query.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
 
 
 async def handle_rental_state(update: Update, context: CallbackContext):
