@@ -14,32 +14,34 @@ logger = logging.getLogger(__name__)
 
 
 
-
-
-
-
 async def handle_rental_product_id(update: Update, context: CallbackContext):
     """
     This function is called when the user enters a valid Product ID for rental.
     It will ask for the state and then stop the flow before number reservation.
     """
-    # Validate the Product ID
-    product_id = update.message.text.strip()  # Get the Product ID from the user input
+    # Check if callback_query is not None
+    if update.callback_query:
+        product_id = update.callback_query.data.strip()  # Get Product ID from callback data
 
-    # Ensure it's a 4-digit product ID
-    if not product_id.isdigit() or len(product_id) != 4:
-        await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
+        # Ensure it's a 4-digit product ID
+        if not product_id.isdigit() or len(product_id) != 4:
+            await update.callback_query.edit_message_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
+            return
+
+        # Save the Product ID in the user data
+        context.user_data["otp_product_id"] = product_id
+
+        # Ask for the state for the rental
+        context.user_data["otp_step"] = "awaiting_state"
+        await update.callback_query.edit_message_text(
+            "Please enter the US state you want the number generated from (e.g., California)."
+        )
         return
+    else:
+        # Handle if callback_query is missing
+        await update.callback_query.edit_message_text("❌ No valid callback data received.")
 
-    # Save the Product ID in the user data
-    context.user_data["otp_product_id"] = product_id
 
-    # Ask for the state for the rental
-    context.user_data["otp_step"] = "awaiting_state"
-    await update.message.reply_text(
-        "Please enter the US state you want the number generated from (e.g., California)."
-    )
-    return
 
 async def handle_rental_state(update: Update, context: CallbackContext):
     """
