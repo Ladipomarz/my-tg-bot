@@ -29,48 +29,71 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
         await update.callback_query.answer()
         
         return  # Stop here, the next step is when the user replies with the Product ID
-
-# Handling the user's reply for the Product ID
-async def handle_product_id_reply(update: Update, context: CallbackContext):
+    
+async def ask_state_or_random(update: Update, context: CallbackContext):
     """
-    Handles the user's reply with the Product ID.
+    Ask the user if they want the number generated from a specific US state.
     """
-    # Get the Product ID from the user's reply
-    product_id = update.message.text.strip()  # Capture the Product ID from the reply
+    context.user_data["otp_step"] = "awaiting_state_or_random"
+    
+    # Send the prompt asking if the user wants the number from a specific state or random
+    await update.message.reply_text(
+        "Do you want the number to be generated from a specific US state?\n\n"
+        "✅ Reply with: yes or no"
+    )
 
-    # Validate the Product ID
-    if len(product_id) == 4 and product_id.isdigit():
-        context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
-        context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
-        
+async def handle_state_or_random(update: Update, context: CallbackContext):
+    """
+    Handle the user's response for state or random selection.
+    """
+    response = update.message.text.strip().lower()
 
-        logger.debug(f"otp_step updated to: {context.user_data['otp_step']}")
-        
-        # Ask the user for the state
+    if response == "yes":
+        # If user wants to specify the state
+        context.user_data["otp_step"] = "awaiting_state"
         await update.message.reply_text(
             "Please enter the US state you want the rental number generated from (e.g., California)."
         )
+    elif response == "no":
+        # If user does not want to specify the state, pick a random state
+        context.user_data["otp_step"] = "random_state"
+        # Randomly select a state from a predefined list (or TextVerified API)
+        random_state = "California"  # Or any random state from a list of valid states
+        context.user_data["otp_state"] = random_state
+
+        # Proceed to final confirmation
+        await final_confirmation(update, context)
     else:
-        # If the Product ID is invalid
-        await update.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
+        # If the input is invalid, prompt the user again
+        await update.message.reply_text("❌ Please reply with either 'yes' or 'no' to confirm.")
+
 
             
-
-
 async def handle_rental_state(update: Update, context: CallbackContext):
-    logger.debug("Entering handle_rental_state function.")
-
     """
     Handle the state input for rental.
     """
     state = update.message.text.strip()
 
-    # Save the state in user data
-    context.user_data["otp_state"] = state
+    # Validate the state (this should be a state from TextVerified or your list of valid states)
+    valid_states = ["California", "Texas", "Florida", "New York", "Washington"]  # Example list of valid states
+    
+    if state in valid_states:
+        context.user_data["otp_state"] = state
+        # Proceed to final confirmation
+        await final_confirmation(update, context)
+    else:
+        await update.message.reply_text("❌ Invalid state. Please provide a valid state (e.g., California).")
 
-    # Show final confirmation
+
+    
+async def final_confirmation(update: Update, context: CallbackContext):
+    """
+    Display the final confirmation with the selected service, state, and price.
+    """
     service = context.user_data.get("otp_service_name", "Unknown Service")
-    price = 3.00  # This would typically be dynamic, depending on the service
+    state = context.user_data.get("otp_state", "Random")
+    price = 3.00  # You can adjust this as per your service's pricing.
 
     confirmation_message = f"""
     FINAL CONFIRMATION:
@@ -79,10 +102,11 @@ async def handle_rental_state(update: Update, context: CallbackContext):
     State: {state}
     Price: ${price}
 
-    ⚠️Please reply with either yes or no to confirm.
+    ⚠️ Please reply with either 'yes' or 'no' to confirm.
     """
 
     await update.message.reply_text(confirmation_message)
+    
     
     
 async def confirm_rental(update: Update, context: CallbackContext):
@@ -94,14 +118,12 @@ async def confirm_rental(update: Update, context: CallbackContext):
     if text == "yes":
         # Proceed with the rental logic (without reserving the number)
         await update.message.reply_text("✅ Reserved number! We will now proceed with the rental.")
-
         # You can store or process additional rental data here if necessary
     elif text == "no":
         await update.message.reply_text("❌ Rental not confirmed. The process has been cancelled.")
     else:
         await update.message.reply_text("❌ Invalid input. Please reply with 'yes' or 'no' to confirm.")
-
-
+    
 
 
 # Function to send the service list with the buttons

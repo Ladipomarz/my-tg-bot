@@ -58,7 +58,7 @@ from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
 from handlers.wallet_continue import open_wallet_menu
-from handlers.rental import handle_product_id_reply,handle_rental_state
+from handlers.rental import handle_rental_product_id,handle_state_or_random,handle_rental_state
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1220,16 +1220,29 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
       # Rental Product ID Step
     if context.user_data.get("otp_step") == "awaiting_rental_product_id":
         # Delegate to your rental handler for processing
-        await handle_product_id_reply(update, context)  # Your existing rental handler
+        await handle_rental_product_id(update, context)  # Your existing rental handler
         return
     
     
+      # Handle the state selection step for rental
     if context.user_data.get("otp_step") == "awaiting_rental_state":
         # Ask for the state after validating product ID
         await handle_rental_state(update, context)  # Your function to handle the state input
         return
-
     
+        # If the step is awaiting state or random state selection
+    if context.user_data.get("otp_step") == "awaiting_state_or_random":
+        # User response for choosing state or random
+        await handle_state_or_random(update, context)  # Handle the state or random input
+        return
+    
+        # Final confirmation step
+    if context.user_data.get("otp_step") == "final_confirmation":
+        # Handle confirmation (yes/no)
+        await confirm_rental(update, context)  # Confirm rental process
+        return
+
+    ## STOPHERE
 
     user_id = update.effective_user.id
     text = (update.message.text or "").strip()
