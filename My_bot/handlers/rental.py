@@ -5,6 +5,7 @@ from telegram import Update
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from handlers.otp_handler import send_services_txt
+from utils.validator import normalize_us_state_full_name,suggest_us_states_full_name
 import logging
 
 
@@ -93,15 +94,18 @@ async def handle_rental_state(update: Update, context: CallbackContext):
     """
     state = update.message.text.strip()
 
-    # Validate the state (this should be a state from TextVerified or your list of valid states)
-    valid_states = ["California", "Texas", "Florida", "New York", "Washington"]  # Example list of valid states
+    # Use the normalize function to validate the state
+    valid, normalized_state = normalize_us_state_full_name(state)
     
-    if state in valid_states:
-        context.user_data["otp_state"] = state
-        # Proceed to final confirmation
+    if valid:
+        # If valid, store the state and proceed to final confirmation
+        context.user_data["otp_state"] = normalized_state
         await final_confirmation(update, context)
     else:
-        await update.message.reply_text("❌ Invalid state. Please provide a valid state (e.g., California).")
+        # If invalid, suggest valid states
+        suggestions = suggest_us_states_full_name(state)
+        suggestion_text = "Did you mean:\n" + "\n".join(suggestions) if suggestions else "❌ Invalid state. Please provide a valid state (e.g., California)."
+        await update.message.reply_text(suggestion_text)
 
 
     
