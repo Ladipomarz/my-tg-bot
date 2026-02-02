@@ -28,12 +28,9 @@ from handlers.payments import safe_edit_message
 from handlers.rental import  (
     send_service_list_with_buttons,
     handle_rental_product_id,
-    handle_state_or_random,
     handle_rental_state,
     final_confirmation
-    
-    
-    
+     
 )
 
 
