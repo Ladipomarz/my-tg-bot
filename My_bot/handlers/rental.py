@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext
 from handlers.otp_handler import send_services_txt
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
+import requests
 from utils.auto_delete import safe_send
 import logging
 
@@ -147,13 +148,23 @@ async def confirm_rental(update: Update, context: CallbackContext):
     text = update.message.text.strip().lower()
 
     if text == "yes":
-        # Proceed with the rental logic (without reserving the number)
-        await update.message.reply_text("✅ Reserved number! We will now proceed with the rental.")
-        # You can store or process additional rental data here if necessary
+        # Proceed with fetching rental number from TextVerified API
+        service = context.user_data.get("otp_service_name", "Unknown Service")
+        state = context.user_data.get("otp_state", "Random")
+
+        rental_number = fetch_rental_number_from_textverified(service, state)
+
+        if rental_number:
+            await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
+            # Proceed to further steps if needed (e.g., OTP verification or others)
+        else:
+            await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
+        
     elif text == "no":
         await update.message.reply_text("❌ Rental not confirmed. The process has been cancelled.")
     else:
         await update.message.reply_text("❌ Invalid input. Please reply with 'yes' or 'no' to confirm.")
+
     
 
 
@@ -182,3 +193,34 @@ async def send_service_list_with_buttons(update, context):
         logger.error(f"Error sending service list with buttons: {e}")
         if update.callback_query:
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
+
+
+
+###FETCH FLOW 
+
+
+# Assuming TextVerified API has a function to get a rental number
+def fetch_rental_number_from_textverified(service_name: str, state: str):
+    """
+    This function sends a request to TextVerified API to fetch a rental number
+    for a specific service and state.
+    """
+    url = "https://api.textverified.com/rental_number"
+    payload = {
+        "service_name": service_name,
+        "state": state
+    }
+    
+    try:
+        # Make the API call to fetch the rental number
+        response = requests.post(url, json=payload)
+        
+        if response.status_code == 200:
+            # Assuming the response contains the rental number in this format
+            rental_data = response.json()
+            return rental_data.get('rental_number')
+        else:
+            return None
+    except Exception as e:
+        print(f"Error fetching rental number: {e}")
+        return None

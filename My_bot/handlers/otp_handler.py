@@ -137,8 +137,6 @@ async def reserve_number_for_otp(service_name: str, country="USA"):
     return number
 
 
-from handlers.servicelist import fetch_and_save_services  # Ensure correct import path
-
 # ---------- OTP MENUS ----------
 
 async def otp_usa_one_time_or_rental_menu(update, context, method: str):
