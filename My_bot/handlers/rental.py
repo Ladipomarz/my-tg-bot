@@ -54,6 +54,8 @@ async def ask_state_or_random(update: Update, context: CallbackContext):
     Ask the user if they want the number generated from a specific US state.
     """
     context.user_data["otp_step"] = "awaiting_state_or_random"
+    await final_confirmation(update, context)  # Call this function to ask the user for state or random selection
+
     
     # Send the prompt asking if the user wants the number from a specific state or random
     await update.message.reply_text(
