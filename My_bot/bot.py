@@ -58,7 +58,7 @@ from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
 from handlers.wallet_continue import open_wallet_menu
-from handlers.rental import handle_rental_product_id,handle_state_or_random,handle_rental_state,confirm_rental
+from handlers.rental import handle_rental_product_id,final_confirmation,handle_rental_state,confirm_rental
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1233,7 +1233,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # If the step is awaiting state or random state selection
     if context.user_data.get("otp_step") == "awaiting_state_or_random":
         # User response for choosing state or random
-        await handle_state_or_random(update, context)  # Handle the state or random input
+        await final_confimation(update, context)  # Handle the state or random input
         return
     
         # Final confirmation step

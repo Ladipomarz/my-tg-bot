@@ -61,40 +61,17 @@ async def ask_state_or_random(update: Update, context: CallbackContext):
         "✅ Reply with: yes or no"
     )
 
-async def handle_state_or_random(update: Update, context: CallbackContext):
-    """
-    Handle the user's response for state or random selection.
-    """
-    response = update.message.text.strip().lower()
-
-    if response == "yes":
-        # If user wants to specify the state
-        context.user_data["otp_step"] = "awaiting_state"
-        await update.message.reply_text(
-            "Please enter the US state you want the rental number generated from (e.g., California)."
-        )
-    elif response == "no":
-        # If user does not want to specify the state, pick a random state
-        context.user_data["otp_step"] = "random_state"
-        # Randomly select a state from a predefined list (or TextVerified API)
-        random_state = "California"  # Or any random state from a list of valid states
-        context.user_data["otp_state"] = random_state
-
-        # Proceed to final confirmation
-        await final_confirmation(update, context)
-    else:
-        # If the input is invalid, prompt the user again
-        await update.message.reply_text("❌ Please reply with either 'yes' or 'no' to confirm.")
-
-
-            
-            
+                        
             
 async def handle_rental_state(update: Update, context: CallbackContext):
     state = update.message.text.strip()
+    
+    # Normalize the input state (convert to lowercase and remove extra spaces)
+    state = state.lower()
 
     # Validate the state (match it with valid states)
     valid_states = US_STATE_NAMES  # You already have this list in your project
+    
 
     if state in valid_states:
         context.user_data["otp_state"] = state
