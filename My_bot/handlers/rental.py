@@ -5,7 +5,7 @@ from telegram import Update
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
 from handlers.otp_handler import send_services_txt
-from utils.validator import normalize_us_state_full_name,suggest_us_states_full_name
+from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import logging
 
 
@@ -88,34 +88,30 @@ async def handle_state_or_random(update: Update, context: CallbackContext):
 
 
             
+            
+            
 async def handle_rental_state(update: Update, context: CallbackContext):
-    """
-    Handle the state input for rental.
-    """
     state = update.message.text.strip()
 
-    # Use the normalize function to validate the state
-    valid, normalized_state = normalize_us_state_full_name(state)
-    
-    if valid:
-        # If valid, store the state and proceed to final confirmation
-        context.user_data["otp_state"] = normalized_state
-        # Debug to check state transition
-        logger.debug(f"State validated and stored: {normalized_state}")
+    # Validate the state (match it with valid states)
+    valid_states = US_STATE_NAMES  # You already have this list in your project
+
+    if state in valid_states:
+        context.user_data["otp_state"] = state
+        # Proceed to final confirmation
         await final_confirmation(update, context)
     else:
+        
+        await update.message.reply_text("❌ Invalid state. Please provide a valid state (e.g., California).")
+
         # If invalid, suggest valid states
         suggestions = suggest_us_states_full_name(state)
-        logger.debug(f"Invalid state: {state}")
-
         suggestion_text = "Did you mean:\n" + "\n".join(suggestions) if suggestions else "❌ Invalid state. Please provide a valid state (e.g., California)."
         await update.message.reply_text(suggestion_text)
 
 
     
 async def final_confirmation(update: Update, context: CallbackContext):
-    logger.debug("Reached final confirmation step.")
-
     """
     Display the final confirmation with the selected service, state, and price.
     """

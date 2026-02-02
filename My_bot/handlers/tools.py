@@ -25,7 +25,16 @@ from handlers.otp_handler import send_services_txt
 from handlers.service_list_flow import start_service_list_flow
 from handlers.otp_handler import otp_refund_now_cb
 from handlers.payments import safe_edit_message
-from handlers.rental import  send_service_list_with_buttons,handle_rental_product_id,handle_state_or_random
+from handlers.rental import  (
+    send_service_list_with_buttons,
+    handle_rental_product_id,
+    handle_state_or_random,
+    handle_rental_state,
+    final_confirmation
+    
+    
+    
+)
 
 
 from utils.validator import (
@@ -251,7 +260,18 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     if data == "otp_rental_state":
         # Call the rental state handler
+        await handle_rental_state(update, context)
+        return
+    
+    
+    if data == "otp_rental_state_or_random":
+        # Ask if they want to choose a state or go with random
         await handle_state_or_random(update, context)
+        return
+
+    if data == "otp_rental_final_confirmation":
+        # Handle the final confirmation step
+        await final_confirmation(update, context)
         return
      
         # Fix: Correctly extract rental duration from the callback data
