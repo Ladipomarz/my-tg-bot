@@ -7,6 +7,7 @@ from telegram.ext import CallbackContext
 from handlers.otp_handler import send_services_txt
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
+from utils.auto_delete import safe_send
 import logging
 
 
@@ -172,6 +173,8 @@ async def send_service_list_with_buttons(update, context):
             ]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await safe_send(update, context, "hmm", reply_markup)
 
         # Send the buttons after the file is sent
         if update.callback_query:
