@@ -1221,6 +1221,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("otp_step") == "awaiting_rental_product_id":
         # Delegate to your rental handler for processing
         await handle_rental_product_id(update, context)  # Your existing rental handler
+        await safe_delete_user_message(update) # best-effort delete user message
         return
     
     
@@ -1228,10 +1229,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("otp_step") == "awaiting_state":
         # Ask for the state after validating product ID
         await handle_rental_state(update, context)  # Your function to handle the state input
+        await safe_delete_user_message(update) # best-effort delete user message
+
         return
     
     if context.user_data.get("otp_step") == "awaiting_state_or_random":
         await handle_state_or_random(update, context)
+        await safe_delete_user_message(update) # best-effort delete user message
         return
         
     
@@ -1239,6 +1243,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("otp_step") == "final_confirmation":
         # Handle confirmation (yes/no)
         await confirm_rental(update, context)  # Confirm rental process
+        await safe_delete_user_message(update) # best-effort delete user message
         return
     
     ## STOPHERE
