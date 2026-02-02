@@ -1671,6 +1671,38 @@ async def plisio_webhook(req: Request):
     return {"ok": True}
 
 
+
+
+
+
+
+async def call_rental_number(update: Update, context: CallbackContext):
+    """
+    Command handler for reserving a rental number.
+    """
+    # Get the service and state (you can either hardcode them or get from user input)
+    service = "some_service"  # Replace with actual logic to get service
+    state = "California"  # Replace with actual logic to get state
+
+    # Call the function to fetch rental number
+    rental_number = await fetch_rental_number_from_textverified(service, state)
+
+    # Send the result to the user
+    if rental_number:
+        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
+    else:
+        await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
+        
+        
+def main():
+    # Add your other handlers...
+    tg_app.add_handler(CommandHandler("call_rental_number", call_rental_number))
+
+
+
+
+
+
 @app.get("/health")
 async def health():
     return {"ok": True}
