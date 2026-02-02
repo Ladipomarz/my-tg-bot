@@ -69,7 +69,7 @@ US_STATE_NAMES = [
     "Virginia", "Washington", "West Virginia", "Wisconsin", "Wyoming",
 ]
 
-# normalized -> canonical
+# normalized -> canonicall
 _US_STATE_NORM_TO_CANON = {s.lower(): s for s in US_STATE_NAMES}
 
 
