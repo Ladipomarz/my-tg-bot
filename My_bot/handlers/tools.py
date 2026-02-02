@@ -260,11 +260,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         await handle_rental_state(update, context)
         return
     
-    
-    if data == "otp_rental_state_or_random":
-        # Ask if they want to choose a state or go with random
-        await handle_state_or_random(update, context)
-        return
 
     if data == "otp_rental_final_confirmation":
         # Handle the final confirmation step

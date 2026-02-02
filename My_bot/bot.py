@@ -1230,18 +1230,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_rental_state(update, context)  # Your function to handle the state input
         return
     
-        # If the step is awaiting state or random state selection
-    if context.user_data.get("otp_step") == "awaiting_state_or_random":
-        # User response for choosing state or random
-        await final_confimation(update, context)  # Handle the state or random input
-        return
     
-        # Final confirmation step
+    # Final confirmation step
     if context.user_data.get("otp_step") == "final_confirmation":
         # Handle confirmation (yes/no)
         await confirm_rental(update, context)  # Confirm rental process
         return
-
+    
     ## STOPHERE
 
     user_id = update.effective_user.id
