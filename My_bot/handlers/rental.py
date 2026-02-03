@@ -13,16 +13,11 @@ import requests
 import httpx
 import time
 from utils.auto_delete import safe_send
+from utils.textverified_client import get_textverified_client
 import logging
 
 
 logger = logging.getLogger(__name__)
-
-def get_textverified_client():
-    from textverified import TextVerified,reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration
-    return TextVerified(api_key=API_KEY, api_username=API_USERNAME)
-
-
 
 # This is for validating the Product ID and transitioning to the next step
 
@@ -207,10 +202,6 @@ async def send_service_list_with_buttons(update, context):
 
 
 # Initialize the TextVerified client
-API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
-API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
-
-provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
 async def reserve_rental_number(
     service_name: str,
@@ -251,6 +242,9 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
     This function fetches a rental number from TextVerified API
     and makes the number active by sending a wake request.
     """
+    # Get client and other components from the utility function
+    client, reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
+
     try:
         # 1. Create a rental reservation
         reservation = reservations.create(
