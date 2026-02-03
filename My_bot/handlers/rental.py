@@ -8,6 +8,7 @@ from handlers.otp_handler import send_services_txt
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
 import requests
+import httpx
 from utils.auto_delete import safe_send
 import logging
 
@@ -200,7 +201,7 @@ async def send_service_list_with_buttons(update, context):
 
 
 # Assuming TextVerified API has a function to get a rental number
-def fetch_rental_number_from_textverified(service_name: str, state: str):
+async def fetch_rental_number_from_textverified(service_name: str, state: str):
     """
     This function sends a request to TextVerified API to fetch a rental number
     for a specific service and state.
@@ -210,17 +211,17 @@ def fetch_rental_number_from_textverified(service_name: str, state: str):
         "service_name": service_name,
         "state": state
     }
-    
+
     try:
-        # Make the API call to fetch the rental number
-        response = requests.post(url, json=payload)
-        
-        if response.status_code == 200:
-            # Assuming the response contains the rental number in this format
-            rental_data = response.json()
-            return rental_data.get('rental_number')
-        else:
-            return None
+        # Use an async HTTP library like httpx or aiohttp to make the request asynchronously
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, json=payload)
+
+            if response.status_code == 200:
+                rental_data = response.json()
+                return rental_data.get('rental_number')
+            else:
+                return None
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
