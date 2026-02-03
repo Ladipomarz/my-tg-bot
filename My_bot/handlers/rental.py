@@ -241,18 +241,35 @@ async def reserve_rental_number(
     return await asyncio.to_thread(_do)
 
 
-async def fetch_rental_number_from_textverified(service_name: str, state: str):
-    """
-    Fetches a rental number for a service from TextVerified API.
-    """
-    try:
-        rental_number_verification = await reserve_rental_number(service_name, state)
-        rental_number = rental_number_verification.get("phone_number")  # Extract the number
-        return rental_number
+import requests
 
+def fetch_rental_number_from_textverified(service_name: str, state: str):
+    url = "https://api.textverified.com/rental_number"
+    payload = {
+        "service_name": service_name,
+        "state": state
+    }
+    
+    try:
+        # Make the API call to fetch the rental number
+        response = requests.post(url, json=payload)
+        
+        # Check if the response is successful
+        if response.status_code == 200:
+            rental_data = response.json()
+            rental_number = rental_data.get('rental_number')
+            if rental_number:
+                return rental_number
+            else:
+                print("Error: Rental number not returned in the response.")
+                return None
+        else:
+            print(f"Error: Failed to fetch rental number. HTTP Status: {response.status_code}")
+            return None
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
+
 
 
 async def call_rental_number(update: Update, context: CallbackContext):
