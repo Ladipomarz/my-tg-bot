@@ -1,4 +1,3 @@
-from textverified import reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration
 import datetime
 import os
 import os
@@ -18,6 +17,10 @@ import logging
 
 
 logger = logging.getLogger(__name__)
+
+def get_textverified_client():
+    from textverified import TextVerified,reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration
+    return TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
 
 
