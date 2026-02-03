@@ -298,7 +298,7 @@ async def call_rental_number(update: Update, context: CallbackContext):
     service_name = context.user_data.get("otp_service_name", "Unknown Service")  # Example, dynamically fetch this
     state = context.user_data.get("otp_state", "Random")  # Example, dynamically fetch state or set as "Random"
     
-    # Fetch rental number
+    # Fetch rental numberrr
     rental_number = await fetch_rental_number_from_textverified(service_name, state)
 
     if rental_number:
