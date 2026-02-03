@@ -302,6 +302,6 @@ async def call_rental_number(update: Update, context: CallbackContext):
     rental_number = await fetch_rental_number_from_textverified(service_name, state)
 
     if rental_number:
-        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service_name}\nState: {state}")
+        await update.message.reply_text(f"✅ Reeeserved number!\n\nRental Number: {rental_number}\nService: {service_name}\nState: {state}")
     else:
         await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
