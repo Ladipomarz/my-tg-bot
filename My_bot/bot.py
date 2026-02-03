@@ -58,7 +58,7 @@ from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
 from handlers.wallet_continue import open_wallet_menu
-from handlers.rental import handle_rental_product_id,handle_state_or_random,handle_rental_state,confirm_rental
+from handlers.rental import handle_rental_product_id,handle_state_or_random,handle_rental_state,confirm_rental,call_rental_number
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1671,28 +1671,6 @@ async def plisio_webhook(req: Request):
     return {"ok": True}
 
 
-
-
-
-
-
-async def call_rental_number(update: Update, context: CallbackContext):
-    """
-    Command handler for reserving a rental number.
-    """
-    # Get the service and state (you can either hardcode them or get from user input)
-    service = "some_service"  # Replace with actual logic to get service
-    state = "California"  # Replace with actual logic to get state
-
-    # Call the function to fetch rental number
-    rental_number = await fetch_rental_number_from_textverified(service, state)
-
-    # Send the result to the user
-    if rental_number:
-        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
-    else:
-        await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
-        
         
 def main():
     # Add your other handlers...

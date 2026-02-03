@@ -224,3 +224,17 @@ def fetch_rental_number_from_textverified(service_name: str, state: str):
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
+
+
+async def call_rental_number(update: Update, context: CallbackContext):
+    print("Command received: /call_rental_number")  # Debug line to confirm command is triggering
+
+    service = "some_service"
+    state = "California"
+
+    rental_number = await fetch_rental_number_from_textverified(service, state)
+
+    if rental_number:
+        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
+    else:
+        await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
