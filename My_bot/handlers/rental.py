@@ -1,3 +1,5 @@
+from textverified import TextVerified ,NumberType, ReservationType, ReservationCapability
+import os
 import os
 import re
 import asyncio
@@ -201,44 +203,49 @@ async def send_service_list_with_buttons(update, context):
 ###FETCH FLOW 
 
 
-import httpx
-import time
+
+# Initialize the TextVerified API client with correct credentials
+API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
+API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
+
+provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
+    """
+    This function sends a request to the TextVerified API to fetch a rental number
+    for a specific service and state.
+    """
     url = "https://api.textverified.com/rental_number"
     payload = {
         "service_name": service_name,
         "state": state
     }
 
-    retries = 3
-    for attempt in range(retries):
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.post(url, json=payload)
+    try:
+        # Make the API call to fetch the rental number
+        response = requests.post(url, json=payload, auth=(API_USERNAME, API_KEY))
 
-                if response.status_code == 200:
-                    rental_data = response.json()
-                    return rental_data.get('rental_number')
-                else:
-                    return None
-        except httpx.RequestError as e:
-            print(f"Request failed: {e}")
-            time.sleep(2)  # Retry after a short delay
-
-    return None
-
-
+        if response.status_code == 200:
+            # Assuming the response contains the rental number in this format
+            rental_data = response.json()
+            return rental_data.get('rental_number')
+        else:
+            return None
+    except Exception as e:
+        print(f"Error fetching rental number: {e}")
+        return None
 
 async def call_rental_number(update: Update, context: CallbackContext):
-    print("Command received: /call_rental_number")  # Debug line to confirm command is triggering
-
-    service = "some_service"
-    state = "California"
-
-    rental_number = await fetch_rental_number_from_textverified(service, state)
+    """
+    Function to trigger rental number reservation.
+    """
+    service_name = "sample_service"  # Get this dynamically based on context or user input
+    state = "California"  # Get state either from user input or random selection
+    
+    # Fetch rental number
+    rental_number = await fetch_rental_number_from_textverified(service_name, state)
 
     if rental_number:
-        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
+        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service_name}\nState: {state}")
     else:
         await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
