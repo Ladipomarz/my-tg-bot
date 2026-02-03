@@ -9,6 +9,7 @@ from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
 import requests
 import httpx
+import time
 from utils.auto_delete import safe_send
 import logging
 
@@ -200,31 +201,33 @@ async def send_service_list_with_buttons(update, context):
 ###FETCH FLOW 
 
 
-# Assuming TextVerified API has a function to get a rental number
+import httpx
+import time
+
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
-    """
-    This function sends a request to TextVerified API to fetch a rental number
-    for a specific service and state.
-    """
     url = "https://api.textverified.com/rental_number"
     payload = {
         "service_name": service_name,
         "state": state
     }
 
-    try:
-        # Use an async HTTP library like httpx or aiohttp to make the request asynchronously
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload)
+    retries = 3
+    for attempt in range(retries):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(url, json=payload)
 
-            if response.status_code == 200:
-                rental_data = response.json()
-                return rental_data.get('rental_number')
-            else:
-                return None
-    except Exception as e:
-        print(f"Error fetching rental number: {e}")
-        return None
+                if response.status_code == 200:
+                    rental_data = response.json()
+                    return rental_data.get('rental_number')
+                else:
+                    return None
+        except httpx.RequestError as e:
+            print(f"Request failed: {e}")
+            time.sleep(2)  # Retry after a short delay
+
+    return None
+
 
 
 async def call_rental_number(update: Update, context: CallbackContext):
