@@ -203,44 +203,64 @@ async def send_service_list_with_buttons(update, context):
 ###FETCH FLOW 
 
 
-
-# Initialize the TextVerified API client with correct credentials
+# Initialize the TextVerified client
 API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
 API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
+async def reserve_rental_number(
+    service_name: str,
+    state: str | None,
+    service_not_listed_name: str | None = None,
+):
+    """
+    Creates a rental number and returns the verification object.
+    TextVerified SDK handles reservations differently for rental numbers.
+    """
+    def _do():
+        kwargs = {
+            "service_name": service_name,
+            "capability": ReservationCapability.SMS,
+            "reservation_type": "rental",  # Specify that it's a rental number
+        }
+
+        # For "not listed" flow (for example, when the service is not listed on the API)
+        if service_not_listed_name and service_name == "servicenotlisted":
+            kwargs["service_not_listed_name"] = service_not_listed_name
+
+        # If state is provided, map it to area codes for rental
+        if state:
+            acs = _area_codes_for_state(state)
+            if acs:
+                kwargs["area_code_select_option"] = acs[:15]  # Pick the first 15 area codes
+
+        # Make the reservation
+        return provider.verifications.create(**kwargs)
+
+    return await asyncio.to_thread(_do)
+
+
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
     """
-    This function sends a request to the TextVerified API to fetch a rental number
-    for a specific service and state.
+    Fetches a rental number for a service from TextVerified API.
     """
-    url = "https://api.textverified.com/rental_number"
-    payload = {
-        "service_name": service_name,
-        "state": state
-    }
-
     try:
-        # Make the API call to fetch the rental number
-        response = requests.post(url, json=payload, auth=(API_USERNAME, API_KEY))
+        rental_number_verification = await reserve_rental_number(service_name, state)
+        rental_number = rental_number_verification.get("phone_number")  # Extract the number
+        return rental_number
 
-        if response.status_code == 200:
-            # Assuming the response contains the rental number in this format
-            rental_data = response.json()
-            return rental_data.get('rental_number')
-        else:
-            return None
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
 
+
 async def call_rental_number(update: Update, context: CallbackContext):
     """
-    Function to trigger rental number reservation.
+    Function to trigger rental number reservation and send to user.
     """
-    service_name = "sample_service"  # Get this dynamically based on context or user input
-    state = "California"  # Get state either from user input or random selection
+    service_name = context.user_data.get("otp_service_name", "Unknown Service")  # Example, dynamically fetch this
+    state = context.user_data.get("otp_state", "Random")  # Example, dynamically fetch state or set as "Random"
     
     # Fetch rental number
     rental_number = await fetch_rental_number_from_textverified(service_name, state)
