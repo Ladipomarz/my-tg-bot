@@ -1369,6 +1369,8 @@ tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
+tg_app.add_handler(CommandHandler("call_rental_number", call_rental_number))
+
 
 
 # IMPORTANT: media before text (QR upload wizard)
@@ -1672,9 +1674,6 @@ async def plisio_webhook(req: Request):
 
 
         
-def main():
-    # Add your other handlers...
-    tg_app.add_handler(CommandHandler("call_rental_number", call_rental_number))
 
 
 
