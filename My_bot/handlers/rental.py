@@ -1,4 +1,5 @@
-from textverified import TextVerified ,NumberType, ReservationType, ReservationCapability
+from textverified import reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration
+import datetime
 import os
 import os
 import re
@@ -156,11 +157,10 @@ async def confirm_rental(update: Update, context: CallbackContext):
         service = context.user_data.get("otp_service_name", "Unknown Service")
         state = context.user_data.get("otp_state", "Random")
 
-        rental_number = fetch_rental_number_from_textverified(service, state)
+        rental_number = await fetch_rental_number_from_textverified(service, state)
 
         if rental_number:
             await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
-            # Proceed to further steps if needed (e.g., OTP verification or others)
         else:
             await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
         
@@ -241,34 +241,56 @@ async def reserve_rental_number(
     return await asyncio.to_thread(_do)
 
 
-import requests
 
-def fetch_rental_number_from_textverified(service_name: str, state: str):
-    url = "https://api.textverified.com/rental_number"
-    payload = {
-        "service_name": service_name,
-        "state": state
-    }
-    
+# Function to reserve rental number and handle the wake request
+async def fetch_rental_number_from_textverified(service_name: str, state: str):
+    """
+    This function fetches a rental number from TextVerified API
+    and makes the number active by sending a wake request.
+    """
     try:
-        # Make the API call to fetch the rental number
-        response = requests.post(url, json=payload)
+        # 1. Create a rental reservation
+        reservation = reservations.create(
+            service_name=service_name,
+            number_type=NumberType.MOBILE,
+            capability=ReservationCapability.SMS,
+            is_renewable=False,
+            always_on=False,
+            duration=RentalDuration.THIRTY_DAY,  # Rental duration is 30 days
+            allow_back_order_reservations=False,
+        ).reservations[0]
         
-        # Check if the response is successful
-        if response.status_code == 200:
-            rental_data = response.json()
-            rental_number = rental_data.get('rental_number')
-            if rental_number:
-                return rental_number
-            else:
-                print("Error: Rental number not returned in the response.")
-                return None
-        else:
-            print(f"Error: Failed to fetch rental number. HTTP Status: {response.status_code}")
-            return None
+        rental = reservations.details(reservation)
+        rental_number = rental.number
+        rental_id = rental.id
+        print(f"Reserved number {rental_number} with id {rental_id}")
+
+        # 2. Send wake request to make the rental number active
+        print("Sending wake request and waiting for active window...")
+        wake_request = wake_requests.create(rental)
+        duration = wake_request.usage_window_end - wake_request.usage_window_start
+        
+        print(
+            f"Number {rental_number} is active from {wake_request.usage_window_start}"
+            f" to {wake_request.usage_window_end} (duration: {duration})"
+        )
+
+        # 3. Wait for the wake request to complete and start polling for SMS
+        time_until_start = wake_request.usage_window_start - datetime.datetime.now(datetime.timezone.utc)
+        print(f"Waiting for the number to become active... ({time_until_start})")
+        wake_response = wake_requests.wait_for_wake_request(wake_request)
+
+        print(f"Polling SMS messages for number {rental_number}...")
+        messages = sms.incoming(rental, timeout=duration.total_seconds())
+        for msg in messages:
+            print(f"Received SMS from {msg.from_value}: {msg.sms_content}")
+        
+        return rental_number  # return the rental number on success
+
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
+
 
 
 
