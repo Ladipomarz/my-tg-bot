@@ -235,7 +235,6 @@ async def reserve_rental_number(
     return await asyncio.to_thread(_do)
 
 
-
 # Function to reserve rental number and handle the wake request
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
     """
@@ -257,11 +256,19 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
             duration=RentalDuration.THIRTY_DAY,  # Rental duration is 30 days
             allow_back_order_reservations=False
         )
+
+        # Log the full reservation object
+        print(f"Full reservation object: {reservation}")
         
-        rental = reservation.reservations[0]  # Get the first reservation from the response
-        rental_number = rental.number
-        rental_id = rental.id
-        print(f"Reserved number {rental_number} with id {rental_id}")
+        # Make sure the reservation object contains the expected structure
+        if hasattr(reservation, 'reservations') and len(reservation.reservations) > 0:
+            rental = reservation.reservations[0]  # Get the first reservation from the response
+            rental_number = rental.number
+            rental_id = rental.id
+            print(f"Reserved number {rental_number} with id {rental_id}")
+        else:
+            print(f"Reservation object doesn't contain expected data: {reservation}")
+            return None  # If no reservation found, return None
 
         # 2. Send wake request to make the rental number active
         print(f"Sending wake request for rental: {rental_id}")
@@ -288,6 +295,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
+
 
 
 
