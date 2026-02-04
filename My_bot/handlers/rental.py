@@ -247,26 +247,27 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
 
     try:
         # 1. Create a rental reservation
-        reservation = reservations.create(
+        print(f"Creating reservation for service: {service_name}, state: {state}")
+        reservation = await asyncio.to_thread(reservations.create, 
             service_name=service_name,
             number_type=NumberType.MOBILE,
             capability=ReservationCapability.SMS,
             is_renewable=False,
             always_on=False,
             duration=RentalDuration.THIRTY_DAY,  # Rental duration is 30 days
-            allow_back_order_reservations=False,
-        ).reservations[0]
+            allow_back_order_reservations=False
+        )
         
-        rental = reservations.details(reservation)
+        rental = reservation.reservations[0]  # Get the first reservation from the response
         rental_number = rental.number
         rental_id = rental.id
         print(f"Reserved number {rental_number} with id {rental_id}")
 
         # 2. Send wake request to make the rental number active
-        print("Sending wake request and waiting for active window...")
-        wake_request = wake_requests.create(rental)
+        print(f"Sending wake request for rental: {rental_id}")
+        wake_request = await asyncio.to_thread(wake_requests.create, rental)
         duration = wake_request.usage_window_end - wake_request.usage_window_start
-        
+
         print(
             f"Number {rental_number} is active from {wake_request.usage_window_start}"
             f" to {wake_request.usage_window_end} (duration: {duration})"
@@ -275,10 +276,10 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
         # 3. Wait for the wake request to complete and start polling for SMS
         time_until_start = wake_request.usage_window_start - datetime.datetime.now(datetime.timezone.utc)
         print(f"Waiting for the number to become active... ({time_until_start})")
-        wake_response = wake_requests.wait_for_wake_request(wake_request)
+        await asyncio.to_thread(wake_requests.wait_for_wake_request, wake_request)
 
         print(f"Polling SMS messages for number {rental_number}...")
-        messages = sms.incoming(rental, timeout=duration.total_seconds())
+        messages = await asyncio.to_thread(sms.incoming, rental, timeout=duration.total_seconds())
         for msg in messages:
             print(f"Received SMS from {msg.from_value}: {msg.sms_content}")
         
@@ -287,7 +288,6 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
     except Exception as e:
         print(f"Error fetching rental number: {e}")
         return None
-
 
 
 
