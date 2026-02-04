@@ -295,7 +295,7 @@ async def call_rental_number(update: Update, context: CallbackContext):
     """
     Function to trigger rental number reservation and send to user.
     """
-    service_name = context.user_data.get("otp_service_name", "Unknown Service")  # Example, dynamically fetch this
+    service_name ="whatsapp"
     state = context.user_data.get("otp_state", "Random")  # Example, dynamically fetch state or set as "Random"
     
     # Fetch rental numberrr
