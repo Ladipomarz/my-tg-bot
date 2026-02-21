@@ -141,7 +141,7 @@ async def final_confirmation(update: Update, context: CallbackContext):
 
     await update.message.reply_text(confirmation_message)
     # Handle user response for confirmation
-    context.user_data["otp_step"] = "final_confirmation_step"    
+    context.user_data["otp_step"] = "final_confirm"    
     
     
 async def confirm_rental(update: Update, context: CallbackContext):
