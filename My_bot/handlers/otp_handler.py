@@ -461,6 +461,18 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     return False
 
 
+# INSIDE YOUR OTP MESSAGE HANDLER
+async def handle_otp_messages(update, context):
+    step = context.user_data.get("otp_step", "")
+    
+    # THE SURGICAL FIX: 
+    # If the step is for rentals, STOP and leave this function immediately
+    if "rental" in step:
+        return 
+
+    # ... all your old OTP code stays exactly the same below ...
+
+
 
 US_STATES_EXAMPLE = "California"
 
