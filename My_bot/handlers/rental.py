@@ -215,7 +215,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
             reservations.create,
             service_name=service_name,
             number_type=NumberType.MOBILE,
-            capability=ReservationCapability.SMS,
+            capability=ReservationCapability.RENTAL,
             duration=RentalDuration.ONE_DAY
         )
 
