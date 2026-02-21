@@ -329,8 +329,6 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             return True
 
 
-
-    # ---- step: final confirm yes/no ----
         # ---- step: final confirm yes/no ----
     if step == "final_confirm":
 

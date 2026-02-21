@@ -141,7 +141,7 @@ async def final_confirmation(update: Update, context: CallbackContext):
 
     await update.message.reply_text(confirmation_message)
     # Handle user response for confirmation
-    context.user_data["otp_step"] = "final_confirm"    
+    context.user_data["otp_step"] = "rental_final_confirm"  
     
     
 async def confirm_rental(update: Update, context: CallbackContext):
@@ -176,7 +176,7 @@ async def send_service_list_with_buttons(update, context):
         logger.info("Sending service list to user.")
         
         # Fetch the service list and send the .txt file using your existing function
-        await send_services_txt(update, context, capability="sms")
+        await send_services_txt(update, context, capability="rental")
 
         # Create the buttons for the user to choose
         keyboard = [
@@ -198,43 +198,6 @@ async def send_service_list_with_buttons(update, context):
 
 
 
-###FETCH FLOW 
-
-
-# Initialize the TextVerified client
-
-async def reserve_rental_number(
-    service_name: str,
-    state: str | None,
-    service_not_listed_name: str | None = None,
-):
-    """
-    Creates a rental number and returns the verification object.
-    TextVerified SDK handles reservations differently for rental numbers.
-    """
-    def _do():
-        kwargs = {
-            "service_name": service_name,
-            "capability": ReservationCapability.SMS,
-            "reservation_type": "rental",  # Specify that it's a rental number
-        }
-
-        # For "not listed" flow (for example, when the service is not listed on the API)
-        if service_not_listed_name and service_name == "servicenotlisted":
-            kwargs["service_not_listed_name"] = service_not_listed_name
-
-        # If state is provided, map it to area codes for rental
-        if state:
-            acs = _area_codes_for_state(state)
-            if acs:
-                kwargs["area_code_select_option"] = acs[:15]  # Pick the first 15 area codes
-
-        # Make the reservation
-        return provider.verifications.create(**kwargs)
-
-    return await asyncio.to_thread(_do)
-
-
 # Function to reserve rental number and handle the wake request
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
     """
@@ -253,7 +216,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
             service_name=service_name,
             number_type=NumberType.MOBILE,
             capability=ReservationCapability.SMS,
-            duration=RentalDuration.THIRTY_DAY
+            duration=RentalDuration.ONE_DAY
         )
 
         # 3. FIX: Handle the SDK's weird object structure
@@ -279,21 +242,3 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
         logger.error(f"💥 TextVerified Rental Error: {e}")
         return None
 
-
-
-
-
-async def call_rental_number(update: Update, context: CallbackContext):
-    """
-    Function to trigger rental number reservation and send to user.
-    """
-    service_name ="whatsapp"
-    state = context.user_data.get("otp_state", "Random")  # Example, dynamically fetch state or set as "Random"
-    
-    # Fetch rental numberrr
-    rental_number = await fetch_rental_number_from_textverified(service_name, state)
-
-    if rental_number:
-        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service_name}\nState: {state}")
-    else:
-        await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")

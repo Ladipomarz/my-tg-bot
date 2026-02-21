@@ -1246,11 +1246,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_delete_user_message(update) # best-effort delete user message
         return
     
-    if update.message.text.lower() == "/call_rental_number":
-        await call_rental_number(update, context)
-        return
-
-    
+   
     ## STOPHERE
 
     user_id = update.effective_user.id

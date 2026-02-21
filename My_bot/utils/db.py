@@ -152,7 +152,57 @@ def create_tables():
 
     migrate_users_schema()
     migrate_orders_schema()
+    
+    
+    
+    # Create rental table
+    
+def create_rentals_table():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rentals (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    order_code TEXT REFERENCES orders(order_code),
+                    phone_number TEXT,
+                    external_rental_id TEXT UNIQUE, -- ID from TextVerified
+                    service_name TEXT,
+                    start_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    expires_at TIMESTAMP NOT NULL,
+                    status TEXT DEFAULT 'active' -- 'active', 'expired', 'cancelled'
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_user ON rentals(user_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_expiry ON rentals(expires_at);")
+        conn.commit()    
+        
+        
+# Run this once or add to your startup script
+def update_service_capabilities():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # This ensures your 'capability' column can accept the 'rental' string
+            # If you are using a Check Constraint, you might need to update it.
+            cur.execute("SELECT DISTINCT capability FROM services;")
+            print(f"Current capabilities: {cur.fetchall()}")        
 
+
+def log_rental_purchase(user_id, phone, ext_id, service, order_code):
+    """
+    Saves the successful rental to the DB so you can 
+    show it in the 'My Numbers' menu later.
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # Set expiry to 24 hours from now by default
+            expires_at = datetime.datetime.now() + datetime.timedelta(days=1)
+            
+            cur.execute("""
+                INSERT INTO rentals (user_id, phone_number, external_rental_id, service_name, order_code, expires_at)
+                VALUES (%s, %s, %s, %s, %s, %s)
+            """, (user_id, phone, ext_id, service, order_code, expires_at))
+        conn.commit()
 
 def create_wallet_transactions_table():
     with get_connection() as conn:

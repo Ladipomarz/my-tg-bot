@@ -29,7 +29,8 @@ from handlers.rental import  (
     send_service_list_with_buttons,
     handle_rental_product_id,
     handle_rental_state,
-    final_confirmation
+    final_confirmation,
+    confirm_rental
      
 )
 
@@ -278,6 +279,11 @@ async def tools_callback(update: Update, context: CallbackContext):
         await send_service_list_with_buttons(update, context)
         return
     
+    if data == "rental_final_confirm":
+        await confirm_rental(update, context) # Call the RENTAL confirmation, not OTP
+    
+    
+    
     
     
         
@@ -308,6 +314,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_back_usa_rental_type":
         await otp_usa_rental_type_menu(update, context, "text")
         return
+    
     
     
     if data.startswith("service_"):
@@ -541,3 +548,5 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
     )
 
     await ask_order_confirmation(update, context, display_text, order_description)
+
+
