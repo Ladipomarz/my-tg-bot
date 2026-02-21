@@ -238,63 +238,47 @@ async def reserve_rental_number(
 # Function to reserve rental number and handle the wake request
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
     """
-    This function fetches a rental number from TextVerified API
-    and makes the number active by sending a wake request.
+    FIXED: Fetches rental number without freezing the bot.
     """
-    # Get client and other components from the utility function
-    client, reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
+    # 1. Get the SDK clients
+    client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
 
     try:
-        # 1. Create a rental reservation
-        print(f"Creating reservation for service: {service_name}, state: {state}")
-        reservation = await asyncio.to_thread(reservations.create, 
+        logger.info(f"🚀 Starting Rental for: {service_name}")
+
+        # 2. Create the Reservation (Running in a thread so it doesn't block)
+        # Note: We use duration=RentalDuration.THIRTY_DAY as per your requirement
+        reservation = await asyncio.to_thread(
+            reservations.create,
             service_name=service_name,
             number_type=NumberType.MOBILE,
             capability=ReservationCapability.SMS,
-            is_renewable=False,
-            always_on=False,
-            duration=RentalDuration.THIRTY_DAY,  # Rental duration is 30 days
-            allow_back_order_reservations=False
+            duration=RentalDuration.THIRTY_DAY
         )
 
-        # Log the full reservation object
-        print(f"Full reservation object: {reservation}")
-        
-        # Make sure the reservation object contains the expected structure
-        if hasattr(reservation, 'reservations') and len(reservation.reservations) > 0:
-            rental = reservation.reservations[0]  # Get the first reservation from the response
-            rental_number = rental.number
-            rental_id = rental.id
-            print(f"Reserved number {rental_number} with id {rental_id}")
-        else:
-            print(f"Reservation object doesn't contain expected data: {reservation}")
-            return None  # If no reservation found, return None
+        # 3. FIX: Handle the SDK's weird object structure
+        # The SDK returns a 'ReservationResponse' which has a list called 'reservations'
+        if not hasattr(reservation, 'reservations') or len(reservation.reservations) == 0:
+            logger.error("❌ No reservation found in API response.")
+            return None
 
-        # 2. Send wake request to make the rental number active
-        print(f"Sending wake request for rental: {rental_id}")
-        wake_request = await asyncio.to_thread(wake_requests.create, rental)
-        duration = wake_request.usage_window_end - wake_request.usage_window_start
+        rental_obj = reservation.reservations[0]
+        rental_id = rental_obj.id
+        rental_number = rental_obj.number
 
-        print(
-            f"Number {rental_number} is active from {wake_request.usage_window_start}"
-            f" to {wake_request.usage_window_end} (duration: {duration})"
-        )
+        # 4. WAKE THE NUMBER (Crucial for Rentals)
+        # We start the wake request but WE DO NOT 'wait_for_wake_request' 
+        # because that freezes the bot for 2 minutes.
+        logger.info(f"⏰ Waking up Rental ID: {rental_id}")
+        await asyncio.to_thread(wake_requests.create, rental_obj)
 
-        # 3. Wait for the wake request to complete and start polling for SMS
-        time_until_start = wake_request.usage_window_start - datetime.datetime.now(datetime.timezone.utc)
-        print(f"Waiting for the number to become active... ({time_until_start})")
-        await asyncio.to_thread(wake_requests.wait_for_wake_request, wake_request)
-
-        print(f"Polling SMS messages for number {rental_number}...")
-        messages = await asyncio.to_thread(sms.incoming, rental, timeout=duration.total_seconds())
-        for msg in messages:
-            print(f"Received SMS from {msg.from_value}: {msg.sms_content}")
-        
-        return rental_number  # return the rental number on success
+        # 5. Return immediately so the user gets their number
+        return rental_number
 
     except Exception as e:
-        print(f"Error fetching rental number: {e}")
+        logger.error(f"💥 TextVerified Rental Error: {e}")
         return None
+
 
 
 
@@ -310,6 +294,6 @@ async def call_rental_number(update: Update, context: CallbackContext):
     rental_number = await fetch_rental_number_from_textverified(service_name, state)
 
     if rental_number:
-        await update.message.reply_text(f"✅ Reeeserved number!\n\nRental Number: {rental_number}\nService: {service_name}\nState: {state}")
+        await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service_name}\nState: {state}")
     else:
         await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
