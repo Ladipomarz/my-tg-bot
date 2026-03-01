@@ -212,7 +212,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
             "service_name": service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
-            "duration": RentalDuration.THIRTY_DAY, # Adjusted based on your 1 Month requirement
+            "duration": RentalDuration.ONE_DAY, # Adjusted based on your 1 Month requirement
             "always_on": False,
             "is_renewable": False
         }
