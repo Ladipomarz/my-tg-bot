@@ -1241,7 +1241,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     
     # Final confirmation step
-    if context.user_data.get("otp_step") == "final_confirmation":
+    if context.user_data.get("otp_step") == "rental_final_confirm":
         # Handle confirmation (yes/no)
         await confirm_rental(update, context)  # Confirm rental process
         await safe_delete_user_message(update) # best-effort delete user message
@@ -1693,12 +1693,14 @@ async def plisio_webhook_post(req: Request):
 
 
 
+'''
 def _log_task_result(task):
     """Helper to catch any errors if the background fetch fails"""
     try:
         task.result()
     except Exception as e:
         logger.error(f"Background task failed: {e}")
+'''
 
 @app.on_event("startup")
 async def on_startup():
@@ -1711,8 +1713,8 @@ async def on_startup():
 
     # ✅ 2. START THE DOUBLE FETCH IN THE BACKGROUND
     # Using asyncio.to_thread prevents the bot from freezing while it downloads the massive lists
-    fetch_task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
-    fetch_task.add_done_callback(_log_task_result)
+    #fetch_task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
+    #fetch_task.add_done_callback(_log_task_result)
 
     # 3. Start telegram bootstrap
     asyncio.create_task(_background_telegram_bootstrap())
