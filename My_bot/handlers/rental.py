@@ -6,7 +6,7 @@ import asyncio
 from telegram import Update
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
-from handlers.otp_handler import send_services_txt
+from handlers.otp_handler import send_services_txt, _area_codes_for_state
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
 import requests
@@ -176,7 +176,7 @@ async def send_service_list_with_buttons(update, context):
         logger.info("Sending service list to user.")
         
         # Fetch the service list and send the .txt file using your existing function
-        await send_services_txt(update, context, capability="rental")
+        await send_services_txt(update, context, capability="sms", is_rental=True)
 
         # Create the buttons for the user to choose
         keyboard = [
@@ -198,29 +198,38 @@ async def send_service_list_with_buttons(update, context):
 
 
 
+
 # Function to reserve rental number and handle the wake request
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
-    """
-    FIXED: Fetches rental number without freezing the bot.
-    """
     # 1. Get the SDK clients
     client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
 
     try:
-        logger.info(f"🚀 Starting Rental for: {service_name}")
+        logger.info(f"🚀 Starting Rental for: {service_name} in {state}")
 
-        # 2. Create the Reservation (Running in a thread so it doesn't block)
-        # Note: We use duration=RentalDuration.THIRTY_DAY as per your requirement
+        # 2. Build the exact arguments for the API
+        kwargs = {
+            "service_name": service_name,
+            "number_type": NumberType.MOBILE,
+            "capability": ReservationCapability.RENTAL,
+            "duration": RentalDuration.THIRTY_DAY # Adjusted based on your 1 Month requirement
+        }
+
+        # 3. IF the user selected a state (and not "Random"), convert it to area codes
+        if state and state.lower() != "random":
+            acs = _area_codes_for_state(state)
+            if acs:
+                # The TextVerified API accepts up to 15 area codes to search through
+                kwargs["area_code_select_option"] = acs[:15]
+
+        # 4. Create the Reservation (Running in a thread so it doesn't block)
+        # We use **kwargs to pass the area codes only if they were set
         reservation = await asyncio.to_thread(
             reservations.create,
-            service_name=service_name,
-            number_type=NumberType.MOBILE,
-            capability=ReservationCapability.RENTAL,
-            duration=RentalDuration.ONE_DAY
+            **kwargs
         )
 
-        # 3. FIX: Handle the SDK's weird object structure
-        # The SDK returns a 'ReservationResponse' which has a list called 'reservations'
+        # 5. Handle the SDK's object structure
         if not hasattr(reservation, 'reservations') or len(reservation.reservations) == 0:
             logger.error("❌ No reservation found in API response.")
             return None
@@ -229,16 +238,13 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
         rental_id = rental_obj.id
         rental_number = rental_obj.number
 
-        # 4. WAKE THE NUMBER (Crucial for Rentals)
-        # We start the wake request but WE DO NOT 'wait_for_wake_request' 
-        # because that freezes the bot for 2 minutes.
+        # 6. WAKE THE NUMBER (Crucial for Rentals)
         logger.info(f"⏰ Waking up Rental ID: {rental_id}")
         await asyncio.to_thread(wake_requests.create, rental_obj)
 
-        # 5. Return immediately so the user gets their number
+        # 7. Return immediately so the user gets their number
         return rental_number
 
     except Exception as e:
         logger.error(f"💥 TextVerified Rental Error: {e}")
         return None
-

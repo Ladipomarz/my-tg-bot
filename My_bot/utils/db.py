@@ -746,6 +746,32 @@ def create_service_fetch_status_table():
                     END IF;
                 END$$;
             """)
+            
+            # ✅ NEW: Create the totally separate rental_services table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rental_services (
+                    local_code INT UNIQUE NOT NULL,
+                    service_name TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT NOW()
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_rental_services_local_code ON rental_services(local_code);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_rental_services_name ON rental_services(service_name);")
+            cur.execute("ALTER TABLE rental_services DROP CONSTRAINT IF EXISTS rental_services_service_name_key;")
+            cur.execute("""
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1
+                        FROM pg_constraint
+                        WHERE conname = 'rental_services_service_name_key'
+                    ) THEN
+                        ALTER TABLE rental_services
+                        ADD CONSTRAINT rental_services_service_name_key
+                        UNIQUE (service_name);
+                    END IF;
+                END$$;
+            """)
 
         conn.commit()
         
@@ -857,6 +883,50 @@ def store_services_in_db(services):
         conn.commit()
 
     print(f"✅ Services saved. Inserted new rows: {inserted} | Existing rows seen: {updated}")
+    
+    
+    
+    
+def store_rental_services_in_db(rental_services):
+    """
+    Stores ONLY rental services in the isolated rental_services table.
+    """
+    if not rental_services:
+        print("No rental services provided.")
+        return
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            # We will start rental codes at 5000. 
+            # This is a cool trick: if a user types a code starting with 0, 1, or 2, 
+            # the bot instantly knows they accidentally used the One-Time list!
+            cur.execute("SELECT COALESCE(MAX(local_code), 4999) FROM rental_services;")
+            next_code = int(cur.fetchone()[0]) + 1
+
+            inserted = 0
+            updated = 0
+
+            for s in rental_services:
+                name = (getattr(s, "service_name", None) or "").strip()
+                if not name:
+                    continue
+
+                # Check if it already exists
+                cur.execute("SELECT local_code FROM rental_services WHERE service_name = %s;", (name,))
+                if cur.fetchone():
+                    updated += 1
+                    continue
+
+                # Insert new rental service
+                cur.execute(
+                    "INSERT INTO rental_services (local_code, service_name) VALUES (%s, %s);",
+                    (next_code, name),
+                )
+                next_code += 1
+                inserted += 1
+
+        conn.commit()
+    print(f"✅ Rental Services saved. Inserted: {inserted} | Existing: {updated}")
 
 
 # ---------------- MARK FETCHED STATUS ----------------
@@ -1016,6 +1086,45 @@ def get_service_name_by_code(code: str) -> str | None:
                 return None
     return None
 
+
+def build_rental_services_txt_bytes() -> tuple[bytes, str]:
+    """
+    Builds the specific .txt list for Rentals only.
+    """
+    with get_connection() as conn:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT local_code, service_name FROM rental_services ORDER BY local_code ASC;")
+            rows = cur.fetchall()
+
+    lines = ["Long-Term Rental Services Catalog", ""]
+    
+    for r in rows:
+        lines.append(f"Product ID: {str(r['local_code']).zfill(4)}")
+        lines.append(f"Service: {r['service_name']}")
+        lines.append("______________________\n")
+
+    content = "\n".join(lines) + "\n"
+    return content.encode("utf-8"), "rental_services.txt"
+
+
+def get_rental_service_name_by_code(code: str) -> str | None:
+    """
+    Looks up the service name EXCLUSIVELY in the rental table.
+    """
+    code = (code or "").strip()
+    if not code.isdigit() or len(code) not in (3, 4):
+        return None
+
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT service_name FROM rental_services WHERE local_code = %s LIMIT 1;",
+                (int(code),),
+            )
+            row = cur.fetchone()
+            if row:
+                return row[0]
+    return None
                  
 
 def get_user_balance_usd(user_id: int) -> float:

@@ -281,6 +281,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     if data == "rental_final_confirm":
         await confirm_rental(update, context) # Call the RENTAL confirmation, not OTP
+        
     
     
     

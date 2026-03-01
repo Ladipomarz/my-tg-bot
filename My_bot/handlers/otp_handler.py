@@ -9,7 +9,7 @@ from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from io import BytesIO
 from telegram import InputFile
-from utils.db import build_services_txt_bytes
+from utils.db import build_services_txt_bytes,build_rental_services_txt_bytes
 from utils.db import get_services_for_export, get_service_name_by_code
 from utils.auto_delete import safe_send,safe_delete_user_message
 from utils.validator import normalize_us_state_full_name
@@ -18,7 +18,7 @@ from typing import Optional
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
 from pricelist import get_otp_price_usd
-from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd 
+from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd,get_service_name_by_code
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -208,23 +208,24 @@ async def _edit(update, text, keyboard):
         raise
 
 
-async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms") -> None:
-    """
-    Fetches the service list, builds the .txt in memory, and sends it to the user.
-    """
-    # Call the helper to build the txt content
-    data_bytes, filename = build_services_txt_bytes(capability=capability)
 
-    # Create a BytesIO object from the data
+
+async def send_services_txt(update: Update, context: CallbackContext, *, capability: str = "sms", is_rental: bool = False) -> None:
+    """
+    Fetches the service list (Rental OR One-Time), builds the .txt in memory, and sends it.
+    """
+    if is_rental:
+        data_bytes, filename = build_rental_services_txt_bytes()
+    else:
+        data_bytes, filename = build_services_txt_bytes(capability=capability)
+
     bio = BytesIO(data_bytes)
-    bio.name = filename  # Telegram uses this as filename
+    bio.name = filename 
 
-    # Send the file as a document to the user
     await update.callback_query.message.reply_document(
         document=InputFile(bio, filename=filename),
         caption="✅ Here’s the service list.\nReply with the CODE you want.",
-        parse_mode="HTML"  # Ensures HTML tags like <b> are properly interpreted
-
+        parse_mode="HTML"
     )
  
 async def handle_otp_text_input(update: Update, context: CallbackContext) -> bool:
@@ -460,17 +461,6 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     
     return False
 
-
-# INSIDE YOUR OTP MESSAGE HANDLER
-async def handle_otp_messages(update, context):
-    step = context.user_data.get("otp_step", "")
-    
-    # THE SURGICAL FIX: 
-    # If the step is for rentals, STOP and leave this function immediately
-    if "rental" in step:
-        return 
-
-    # ... all your old OTP code stays exactly the same below ...
 
 
 

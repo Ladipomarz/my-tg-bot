@@ -5,6 +5,7 @@ from utils.db import (
     create_service_fetch_status_table,
     has_services_been_fetched,
     store_services_in_db,
+    store_rental_services_in_db,
     save_service_fetch_status,
 )
 
@@ -28,8 +29,18 @@ def fetch_and_save_services():
         number_type=NumberType.MOBILE,
         reservation_type=ReservationType.VERIFICATION,
     )
+    
+    
+    print("Fetching Rental services...")
+    rental_services = provider.services.list(
+        number_type=NumberType.MOBILE,
+        reservation_type=ReservationType.RENTAL,
+    )
 
     print(f"Storing {len(services)} services in the database...")
+    print(f"Storing {len(rental_services)} rental services in the database...")
+
     store_services_in_db(services)
+    store_rental_services_in_db(rental_services)
     save_service_fetch_status()
-    print("✅ Services fetched + stored.")
+    print("✅ All Services fetched + stored.")
