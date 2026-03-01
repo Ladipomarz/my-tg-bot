@@ -93,9 +93,8 @@ async def handle_state_or_random(update: Update, context: CallbackContext):
     elif response == "no":
         # If user does not want to specify the state, pick a random state
         context.user_data["otp_step"] = "random_state"
-        # Randomly select a state from a predefined list (or TextVerified API)
-        random_state = random.choice(US_STATE_NAMES)  # Randomly select a state from the list
-        context.user_data["otp_state"] = random_state
+        # Randomly choose a state 
+        context.user_data["otp_state"] = "Random"
 
         # Proceed to final confirmation
         await final_confirmation(update, context)
