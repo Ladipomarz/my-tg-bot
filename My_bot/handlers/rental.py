@@ -14,6 +14,7 @@ import httpx
 import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
+from utils.db import get_rental_service_name_by_code
 import logging
 
 
@@ -41,9 +42,17 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
     # If it's a regular message, we handle the product ID input
     if update.message:
         product_id = update.message.text.strip()  # Capture the Product ID
+        
+        # ✅ THE FIX: Look up the real service name from your Rental Database!
+        service_name = get_rental_service_name_by_code(product_id)
+        
+        if not service_name:
+            await update.message.reply_text("❌ Invalid Product ID. Please check the Rental Services list.")
+            return
 
         # Validate the Product ID
         if len(product_id) in [3,4] and product_id.isdigit():
+            context.user_data["otp_service_name"] = service_name
             context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
             context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
             
@@ -216,10 +225,10 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
 
         # 2. Build the exact arguments for the API
         kwargs = {
-            "service_name": "whatsapp",
+            "service_name": service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
-            "duration": RentalDuration.oneDay, # Adjusted based on your 1 Month requirement
+            "duration": RentalDuration.ONE_DAY, # Adjusted based on your 1 Month requirement
             "always_on": False,
             "is_renewable": False,
             "allow_back_order_reservations": False
