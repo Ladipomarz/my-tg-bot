@@ -24,23 +24,56 @@ def fetch_and_save_services():
         print("Service list already fetched. Skipping.")
         return
 
-    print("Fetching services...")
-    services = provider.services.list(
+    print("Fetching One-Time Verification services...")
+    verification_services = provider.services.list(
         number_type=NumberType.MOBILE,
         reservation_type=ReservationType.VERIFICATION,
     )
-    
-    
+
     print("Fetching Rental services...")
-    rental_services = provider.services.list(
-        number_type=NumberType.MOBILE,
-        reservation_type=ReservationType.RENTAL,
-    )
+    
+    # ✅ DYNAMIC ENUM FIX: Scan the SDK for the correct Rental name
+    rental_enum = None
+    possible_names = ["RESERVATION", "RENEWABLE_RENTAL", "NONRENEWABLE_RENTAL", "RENTALS", "LINE_RESERVATION"]
+    
+    for name in possible_names:
+        if hasattr(ReservationType, name):
+            rental_enum = getattr(ReservationType, name)
+            print(f"✅ Found exact Rental Enum in SDK: {name}")
+            break
 
-    print(f"Storing {len(services)} services in the database...")
-    print(f"Storing {len(rental_services)} rental services in the database...")
+    rental_services = []
+    
+    if rental_enum:
+        # Use the enum we just found
+        rental_services = provider.services.list(
+            number_type=NumberType.MOBILE,
+            reservation_type=rental_enum,
+        )
+    else:
+        # ⚠️ FALLBACK: If the Enum is completely missing, we bypass it with strings
+        print("⚠️ Rental Enum not found. Attempting string bypass...")
+        try:
+            rental_services = provider.services.list(
+                number_type=NumberType.MOBILE,
+                reservation_type="rental"
+            )
+        except Exception:
+            try:
+                rental_services = provider.services.list(
+                    number_type=NumberType.MOBILE,
+                    reservation_type="reservation"
+                )
+            except Exception as e:
+                print(f"❌ Could not fetch rentals separately. Error: {e}")
 
-    store_services_in_db(services)
-    store_rental_services_in_db(rental_services)
+    print(f"Storing {len(verification_services)} Verification and {len(rental_services)} Rental services in DB...")
+    
+    # Save them into their totally separate tables
+    store_services_in_db(verification_services)
+    
+    if rental_services:
+        store_rental_services_in_db(rental_services)
+    
     save_service_fetch_status()
-    print("✅ All Services fetched + stored.")
+    print("✅ All services fetched + stored.")
