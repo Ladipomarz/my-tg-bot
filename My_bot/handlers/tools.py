@@ -245,7 +245,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     
     
-    # 1. Handle the new Short-Term Rentals (1 to 14 days)
+ # 1. Handle ONLY the new Short-Term Rentals (1 to 14 days)
     short_term_durations = {
         "otp_usa_text_rental_1_day": ("ONE_DAY", "1 Day"),
         "otp_usa_text_rental_3_days": ("THREE_DAY", "3 Days"),
@@ -256,7 +256,6 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data in short_term_durations:
         api_duration, text_duration = short_term_durations[data]
         
-        # Save the duration settings
         context.user_data["otp_duration_api"] = api_duration
         context.user_data["otp_duration_text"] = text_duration
         
@@ -264,21 +263,9 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data["otp_always_on"] = True
         context.user_data["otp_is_renewable"] = False
         
-        # Send them to the service selection menu
-        await start_service_list_flow(update, context, plan="rental", capability="sms")
-        return
-        
-    # 2. Handle the "Forever" Rental (30 Days + Auto-Renew)
-    if data == "otp_usa_text_rental_forever":
-        context.user_data["otp_duration_api"] = "THIRTY_DAY"
-        context.user_data["otp_duration_text"] = "Forever"
-        
-        # ✅ THE MAGIC FLAG: Long-term rentals CAN sleep (Wakeable)
-        context.user_data["otp_always_on"] = False
-        context.user_data["otp_is_renewable"] = True
-        
-        # Send them to the service selection menu
-        await start_service_list_flow(update, context, plan="rental", capability="sms")
+        # 🛑 LOOK HERE: Change this line to be EXACTLY the same line of code 
+        # that your "Monthly" button uses to send the user to the next step!
+        await send_service_list_with_buttons(update, context)
         return
 
 
