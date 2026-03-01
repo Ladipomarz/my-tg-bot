@@ -158,6 +158,29 @@ async def otp_usa_one_time_or_rental_menu(update, context, method: str):
 
 async def otp_usa_rental_type_menu(update, context, method: str):
     keyboard = [
+        # First row: Shortest term
+        [
+            InlineKeyboardButton(
+                "1 Day",
+                callback_data=f"otp_usa_{method}_rental_1_day",
+            ),
+            InlineKeyboardButton(
+                "3 Days",
+                callback_data=f"otp_usa_{method}_rental_3_days",
+            ),
+        ],
+        # Second row: Medium term
+        [
+            InlineKeyboardButton(
+                "7 Days",
+                callback_data=f"otp_usa_{method}_rental_7_days",
+            ),
+            InlineKeyboardButton(
+                "14 Days",
+                callback_data=f"otp_usa_{method}_rental_14_days",
+            ),
+        ],
+        # Third row: Long term / Existing buttons
         [
             InlineKeyboardButton(
                 "Monthly Rental",
@@ -168,8 +191,10 @@ async def otp_usa_rental_type_menu(update, context, method: str):
                 callback_data=f"otp_usa_{method}_rental_forever",
             ),
         ],
+        # Bottom row: Navigation
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_one_time_rental")],
     ]
+    
     await _edit(update, "Choose rental duration:", keyboard)
 
 

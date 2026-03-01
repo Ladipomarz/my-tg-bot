@@ -221,6 +221,8 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_usa_monthly_duration_menu(update, context, "voice")
         return
     
+    
+    
     if data == "otp_have_id":
     # Next step: ask user to reply with the 4-digit Product ID
         context.user_data["otp_step"] = "awaiting_product_id"
@@ -239,6 +241,44 @@ async def tools_callback(update: Update, context: CallbackContext):
             "Do you want the number to be generated from a specific US state?\n\n"
             "✅ Reply with: yes or no"
         )
+        return
+    
+    
+    
+    # 1. Handle the new Short-Term Rentals (1 to 14 days)
+    short_term_durations = {
+        "otp_usa_text_rental_1_day": ("ONE_DAY", "1 Day"),
+        "otp_usa_text_rental_3_days": ("THREE_DAY", "3 Days"),
+        "otp_usa_text_rental_7_days": ("SEVEN_DAY", "7 Days"),
+        "otp_usa_text_rental_14_days": ("FOURTEEN_DAY", "14 Days"),
+    }
+
+    if data in short_term_durations:
+        api_duration, text_duration = short_term_durations[data]
+        
+        # Save the duration settings
+        context.user_data["otp_duration_api"] = api_duration
+        context.user_data["otp_duration_text"] = text_duration
+        
+        # ✅ THE MAGIC FLAG: Short-term rentals MUST be Always On!
+        context.user_data["otp_always_on"] = True
+        context.user_data["otp_is_renewable"] = False
+        
+        # Send them to the service selection menu
+        await start_service_list_flow(update, context, plan="rental", capability="sms")
+        return
+        
+    # 2. Handle the "Forever" Rental (30 Days + Auto-Renew)
+    if data == "otp_usa_text_rental_forever":
+        context.user_data["otp_duration_api"] = "THIRTY_DAY"
+        context.user_data["otp_duration_text"] = "Forever"
+        
+        # ✅ THE MAGIC FLAG: Long-term rentals CAN sleep (Wakeable)
+        context.user_data["otp_always_on"] = False
+        context.user_data["otp_is_renewable"] = True
+        
+        # Send them to the service selection menu
+        await start_service_list_flow(update, context, plan="rental", capability="sms")
         return
 
 
@@ -549,5 +589,7 @@ async def handle_esim_email_input(update: Update, context: ContextTypes.DEFAULT_
     )
 
     await ask_order_confirmation(update, context, display_text, order_description)
+
+
 
 

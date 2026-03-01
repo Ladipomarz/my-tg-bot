@@ -162,8 +162,16 @@ async def confirm_rental(update: Update, context: CallbackContext):
         # Proceed with fetching rental number from TextVerified API
         service = context.user_data.get("otp_service_name", "Unknown Service")
         state = context.user_data.get("otp_state", "Random")
-
-        rental_number = await fetch_rental_number_from_textverified(service, state)
+        
+        # Extract the values from context
+        duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
+        always_on = context.user_data.get("otp_always_on", True)
+        is_renewable = context.user_data.get("otp_is_renewable", False)
+        
+        # Pass them safely into the fetch function
+        rental_number, error_msg = await fetch_rental_number_from_textverified(
+            service, state, duration_api, always_on, is_renewable
+        )
 
         if rental_number:
             await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
@@ -208,9 +216,8 @@ async def send_service_list_with_buttons(update, context):
 
 
 # Function to reserve rental number and handle the wake request
-async def fetch_rental_number_from_textverified(service_name: str, state: str):
+async def fetch_rental_number_from_textverified(service_name: str, state: str, duration_api: str, always_on: bool, is_renewable: bool):
     client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
-
     try:
         logger.info(f"🚀 User requested DB Name: '{service_name}' in {state}")
         
@@ -222,16 +229,16 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
             api_service_name = service_name
             logger.info("✅ No Universal keywords found. Keeping original name.")
 
-        # ✅ THE PROOF: This prints the EXACT name being sent to the billing server
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
         
+        # ✅ THE FIX: Use the raw variables we passed into the function, NOT context!
         kwargs = {
             "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
-            "duration": RentalDuration.ONE_DAY, 
-            "always_on": False,
-            "is_renewable": False,
+            "duration": getattr(RentalDuration, duration_api), 
+            "always_on": always_on,  
+            "is_renewable": is_renewable,
             "allow_back_order_reservations": False
         }
         
@@ -250,8 +257,12 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
         rental_id = rental_obj.id
         rental_number = rental_obj.number
 
-        logger.info(f"⏰ Waking up Rental ID: {rental_id}")
-        await asyncio.to_thread(wake_requests.create, rental_obj)
+        # ✅ SMART AUTO-WAKE LOGIC
+        if not always_on:
+            logger.info(f"⏰ Line is sleeping. Waking up Rental ID: {rental_id}")
+            await asyncio.to_thread(wake_requests.create, rental_obj)
+        else:
+            logger.info(f"⚡ Line is Always On. Skipping wake request for Rental ID: {rental_id}")
 
         return rental_number, None
 
