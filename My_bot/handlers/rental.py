@@ -254,9 +254,10 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
         await asyncio.to_thread(wake_requests.create, rental_obj)
 
         # 7. Return immediately so the user gets their number
-        return rental_number
+        return rental_number, None
 
     except Exception as e:
+        error_msg = str(e)
         logger.error(f"💥 TextVerified Rental Error: {e}")
         
         # ✅ SMART ERROR TRANSLATOR: Translate API errors into customer-friendly messages
