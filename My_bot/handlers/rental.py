@@ -215,10 +215,16 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
 
     try:
         logger.info(f"🚀 Starting Rental for: {service_name} in {state}")
-        
+            
+            # ✅ THE FIX 1: Safely define the API name based on what the user picked
+        if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"]):
+            api_service_name = "allservices"
+        else:
+            api_service_name = service_name
+            
         # 2. Build the exact arguments for the API
         kwargs = {
-            "service_name": service_name,
+            "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
             "duration": RentalDuration.ONE_DAY, # Adjusted based on your 1 Month requirement
