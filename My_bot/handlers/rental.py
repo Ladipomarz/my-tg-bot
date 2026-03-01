@@ -214,9 +214,11 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
             "capability": ReservationCapability.SMS,
             "duration": RentalDuration.ONE_DAY, # Adjusted based on your 1 Month requirement
             "always_on": False,
-            "is_renewable": False
+            "is_renewable": False,
+            "allow_back_order_reservations": False
         }
-
+        
+        
         # 3. IF the user selected a state (and not "Random"), convert it to area codes
         if state and state.lower() != "random":
             acs = _area_codes_for_state(state)
