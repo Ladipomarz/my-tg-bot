@@ -14,6 +14,16 @@ API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
 provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
 
+
+
+# ✅ THE PYTHON HACK: 
+# We create a fake Enum object to bypass the SDK's missing Enum error.
+# The TextVerified API expects the word "reservation" for rental lines.
+class FakeRentalEnum:
+    @property
+    def value(self):
+        return "reservation"
+
 def fetch_and_save_services():
     create_service_fetch_status_table()
 
@@ -30,42 +40,17 @@ def fetch_and_save_services():
         reservation_type=ReservationType.VERIFICATION,
     )
 
-    print("Fetching Rental services...")
-    
-    # ✅ DYNAMIC ENUM FIX: Scan the SDK for the correct Rental name
-    rental_enum = None
-    possible_names = ["RESERVATION", "RENEWABLE_RENTAL", "NONRENEWABLE_RENTAL", "RENTALS", "LINE_RESERVATION"]
-    
-    for name in possible_names:
-        if hasattr(ReservationType, name):
-            rental_enum = getattr(ReservationType, name)
-            print(f"✅ Found exact Rental Enum in SDK: {name}")
-            break
-
-    rental_services = []
-    
-    if rental_enum:
-        # Use the enum we just found
+    print("Fetching Rental services using Enum Bypass...")
+    try:
+        # We pass our fake enum here to trick the SDK into building the perfect URL
         rental_services = provider.services.list(
             number_type=NumberType.MOBILE,
-            reservation_type=rental_enum,
+            reservation_type=FakeRentalEnum()
         )
-    else:
-        # ⚠️ FALLBACK: If the Enum is completely missing, we bypass it with strings
-        print("⚠️ Rental Enum not found. Attempting string bypass...")
-        try:
-            rental_services = provider.services.list(
-                number_type=NumberType.MOBILE,
-                reservation_type="rental"
-            )
-        except Exception:
-            try:
-                rental_services = provider.services.list(
-                    number_type=NumberType.MOBILE,
-                    reservation_type="reservation"
-                )
-            except Exception as e:
-                print(f"❌ Could not fetch rentals separately. Error: {e}")
+        print(f"✅ Successfully downloaded {len(rental_services)} Rental services.")
+    except Exception as e:
+        print(f"❌ Failed to fetch rentals. Error: {e}")
+        rental_services = []
 
     print(f"Storing {len(verification_services)} Verification and {len(rental_services)} Rental services in DB...")
     
