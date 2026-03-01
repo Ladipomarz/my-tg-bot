@@ -1199,6 +1199,36 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # TEXT ROUTER
 # ------------------------------
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    
+    text = update.message.text.strip()
+    
+    # 🛑 THE GLOBAL INTERCEPTOR 🛑
+    # Put your exact button names here in all lowercase
+    global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 wallet", "🏠 home"] 
+    
+    if text.lower() in global_menu_buttons:
+        # 1. Instantly wipe whatever process they were stuck in (Rental, OTP, etc.)
+        context.user_data.pop("otp_step", None)
+        
+        # 2. Let the bot naturally continue down to your NORMAL menu handlers!
+        # By wiping the 'otp_step' above, we broke them out of the trap.
+        # Now we just let the rest of your router handle the button click exactly like it normally does.
+        
+        # We DO NOT put 'return' here anymore. We want the code to keep flowing downwards!
+
+    # 👇 ... The rest of your normal routing logic continues down here ... 👇
+    step = context.user_data.get("otp_step")
+    
+    # If they clicked "🧰 Tools", 'step' is now None, so it safely skips this rental block!
+    if step == "rental_final_confirm":
+        await confirm_rental(update, context)
+        return  # Stop here if they are in the rental flow
+        
+    elif step == "awaiting_rental_product_id":
+        await handle_rental_product_id(update, context)
+        return
+        
+
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
         await safe_delete_user_message(update) # best-effort delete user message
@@ -1246,6 +1276,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await confirm_rental(update, context)  # Confirm rental process
         await safe_delete_user_message(update) # best-effort delete user message
         return
+    
+    
+    
     
    
     ## STOPHERE
