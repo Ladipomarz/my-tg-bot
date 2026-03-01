@@ -1691,17 +1691,28 @@ async def plisio_webhook_post(req: Request):
     return await plisio_webhook(req)
 
 
+
+
+def _log_task_result(task):
+    """Helper to catch any errors if the background fetch fails"""
+    try:
+        task.result()
+    except Exception as e:
+        logger.error(f"Background task failed: {e}")
+
 @app.on_event("startup")
 async def on_startup():
     print("Fast API up")
 
+    # 1. Create all databases
     create_tables()
     create_service_fetch_status_table()
-    
-    # Call the function to create the table when the bot starts
     create_wallet_transactions_table()
 
-    #task.add_done_callback(_log_task_result)
+    # ✅ 2. START THE DOUBLE FETCH IN THE BACKGROUND
+    # Using asyncio.to_thread prevents the bot from freezing while it downloads the massive lists
+    fetch_task = asyncio.create_task(asyncio.to_thread(fetch_and_save_services))
+    fetch_task.add_done_callback(_log_task_result)
 
-    # Start telegram bootstrap too
+    # 3. Start telegram bootstrap
     asyncio.create_task(_background_telegram_bootstrap())
