@@ -210,65 +210,56 @@ async def send_service_list_with_buttons(update, context):
 
 # Function to reserve rental number and handle the wake request
 async def fetch_rental_number_from_textverified(service_name: str, state: str):
-    # 1. Get the SDK clients
     client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
 
     try:
-        logger.info(f"🚀 Starting Rental for: {service_name} in {state}")
-            
-            # ✅ THE FIX 1: Safely define the API name based on what the user picked
+        logger.info(f"🚀 User requested DB Name: '{service_name}' in {state}")
+        
+        # ✅ THE HYBRID CHECK
         if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"]):
             api_service_name = "allservices"
+            logger.info("⚠️ Bot spotted a Universal keyword. Overriding to 'allservices'.")
         else:
             api_service_name = service_name
-            
-        # 2. Build the exact arguments for the API
+            logger.info("✅ No Universal keywords found. Keeping original name.")
+
+        # ✅ THE PROOF: This prints the EXACT name being sent to the billing server
+        logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
+        
         kwargs = {
             "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
-            "duration": RentalDuration.ONE_DAY, # Adjusted based on your 1 Month requirement
+            "duration": RentalDuration.ONE_DAY, 
             "always_on": False,
             "is_renewable": False,
             "allow_back_order_reservations": False
         }
         
-        
-        # 3. IF the user selected a state (and not "Random"), convert it to area codes
         if state and state.lower() != "random":
             acs = _area_codes_for_state(state)
             if acs:
-                # The TextVerified API accepts up to 15 area codes to search through
                 kwargs["area_code_select_option"] = acs[:15]
 
-        # 4. Create the Reservation (Running in a thread so it doesn't block)
-        # We use **kwargs to pass the area codes only if they were set
-        reservation = await asyncio.to_thread(
-            reservations.create,
-            **kwargs
-        )
+        reservation = await asyncio.to_thread(reservations.create, **kwargs)
 
-        # 5. Handle the SDK's object structure
         if not hasattr(reservation, 'reservations') or len(reservation.reservations) == 0:
             logger.error("❌ No reservation found in API response.")
-            return None
+            return None, "Provider returned an empty reservation."
 
         rental_obj = reservation.reservations[0]
         rental_id = rental_obj.id
         rental_number = rental_obj.number
 
-        # 6. WAKE THE NUMBER (Crucial for Rentals)
         logger.info(f"⏰ Waking up Rental ID: {rental_id}")
         await asyncio.to_thread(wake_requests.create, rental_obj)
 
-        # 7. Return immediately so the user gets their number
         return rental_number, None
 
     except Exception as e:
         error_msg = str(e)
-        logger.error(f"💥 TextVerified Rental Error: {e}")
+        logger.error(f"💥 TextVerified Rental Error: {error_msg}")
         
-        # ✅ SMART ERROR TRANSLATOR: Translate API errors into customer-friendly messages
         if "Invalid service name" in error_msg:
             return None, "This specific service is not available for Long-Term Rentals. Please try a different service, or use the 'Universal' option."
         elif "balance" in error_msg.lower():
