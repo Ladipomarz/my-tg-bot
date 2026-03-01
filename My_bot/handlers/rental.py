@@ -216,13 +216,6 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
     try:
         logger.info(f"🚀 Starting Rental for: {service_name} in {state}")
         
-        # ✅ THE FIX: Crush the name into lowercase with no spaces for the strict API
-        api_service_name = service_name.lower().replace(" ", "") if service_name else "allservices"
-        
-        # If it's a general/unlisted service, Rentals require the keyword 'allservices'
-        if "general" in api_service_name or "notlisted" in api_service_name:
-            api_service_name = "allservices"
-
         # 2. Build the exact arguments for the API
         kwargs = {
             "service_name": service_name,
