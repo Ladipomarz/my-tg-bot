@@ -216,7 +216,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str):
 
         # 2. Build the exact arguments for the API
         kwargs = {
-            "service_name": service_name,
+            "service_name": yahoo,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
             "duration": RentalDuration.ONE_DAY, # Adjusted based on your 1 Month requirement
