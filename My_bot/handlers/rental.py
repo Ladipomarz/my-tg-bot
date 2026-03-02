@@ -15,6 +15,7 @@ import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
 from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals,get_rental_details
+from telegram.constants import ParseMode
 import logging
 
 
@@ -415,7 +416,8 @@ async def manage_rental_menu(update, context):
         f"<b>**⚠️ Please note this number will expire in - {countdown_str}**</b>\n\n"
         f"Click the button below to connect to the network and fetch your messages."
     )
-    
+    parse_mode=ParseMode.HTML,
+
     await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)   
         
 
