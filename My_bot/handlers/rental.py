@@ -177,12 +177,23 @@ async def confirm_rental(update: Update, context: CallbackContext):
         
         await update.message.reply_text("⏳ Requesting your rental line from the provider... please wait.")
         
-        # Pass them safely into the fetch function
-        rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
-            service, state, duration_api, always_on, is_renewable
-        )
-            
         
+        # --- 🛑 TEST MODE INJECTION START 🛑 ---
+        TEST_MODE = True 
+
+        if TEST_MODE:
+            # Fake data to test your database safely
+            rental_number = "9995551234"
+            rental_id = "fake_rental_999"
+            error_msg = None
+        else:
+            # The REAL API call (will run when TEST_MODE is set to False)
+            rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
+                service, state, duration_api, always_on, is_renewable
+            )
+        # --- 🛑 TEST MODE INJECTION END 🛑 ---
+        
+            
         if rental_number and rental_id:
             # 2. ✅ Convert the API duration string into an actual number of days
             days_to_expire = 1
@@ -242,8 +253,6 @@ async def send_service_list_with_buttons(update, context):
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
 
 
-
-
 # Function to reserve rental number and handle the wake request
 async def fetch_rental_number_from_textverified(service_name: str, state: str, duration_api: str, always_on: bool, is_renewable: bool):
     client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
@@ -260,7 +269,6 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
 
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
         
-        # ✅ THE FIX: Use the raw variables we passed into the function, NOT context!
         kwargs = {
             "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
@@ -276,39 +284,46 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             if acs:
                 kwargs["area_code_select_option"] = acs[:15]
 
+        # 1. Buy the number and get the "mini-receipt"
         reservation = await asyncio.to_thread(reservations.create, **kwargs)
-        # 1. Safely extract the rental object 
+        
         if hasattr(reservation, 'reservations') and len(reservation.reservations) > 0:
-            rental_obj = reservation.reservations[0]
+            mini_receipt = reservation.reservations[0]
         else:
-            # If the API returned the object directly instead of a list wrapper
-            rental_obj = reservation
+            mini_receipt = reservation
             
-        rental_id = getattr(rental_obj, "id", None)
+        rental_id = getattr(mini_receipt, "id", None)
+        
+        if not rental_id:
+            # FIXED: Returning 3 items to prevent Python crashing
+            return None, None, "The provider failed to assign a Rental ID."
 
-        # 2. ✅ THE ROBUST NUMBER EXTRACTOR
-        # Smartly check all standard SDK property names for the phone number
-        if hasattr(rental_obj, "phone_number"):
-            rental_number = rental_obj.phone_number
-        elif hasattr(rental_obj, "target_number"):
-            rental_number = rental_obj.target_number
-        elif hasattr(rental_obj, "target"):
-            rental_number = rental_obj.target
-        elif hasattr(rental_obj, "line"):
-            rental_number = rental_obj.line
-        elif hasattr(rental_obj, "number"):
-            rental_number = rental_obj.number
+        # 2. ✅ THE FIX: Ask TextVerified for the FULL receipt using the ID
+        logger.info(f"🔍 Fetching full details for Rental ID: {rental_id}")
+        full_rental_obj = await asyncio.to_thread(reservations.details, rental_id)
+
+        # 3. Safely extract the number from the FULL receipt
+        if hasattr(full_rental_obj, "phone_number"):
+            rental_number = full_rental_obj.phone_number
+        elif hasattr(full_rental_obj, "target_number"):
+            rental_number = full_rental_obj.target_number
+        elif hasattr(full_rental_obj, "target"):
+            rental_number = full_rental_obj.target
+        elif hasattr(full_rental_obj, "line"):
+            rental_number = full_rental_obj.line
+        elif hasattr(full_rental_obj, "number"):
+            rental_number = full_rental_obj.number
         else:
-            # If the SDK hid the number under a weird name, print all properties to the console safely!
-            available_props = [p for p in dir(rental_obj) if not p.startswith("_")]
-            logger.error(f"❌ Hidden SDK Attributes: {available_props}")
-            return None, "The provider generated your number, but the bot couldn't read the format. Check console!"
-
+            available_props = [p for p in dir(full_rental_obj) if not p.startswith("_")]
+            logger.error(f"❌ Hidden SDK Attributes on FULL object: {available_props}")
+            # FIXED: Returning 3 items to prevent Python crashing
+            return None, None, "The provider generated your number, but the bot couldn't read the format. Check console!"
 
         # ✅ SMART AUTO-WAKE LOGIC
         if not always_on:
             logger.info(f"⏰ Line is sleeping. Waking up Rental ID: {rental_id}")
-            await asyncio.to_thread(wake_requests.create, rental_obj)
+            # We must pass the full object to the wake request
+            await asyncio.to_thread(wake_requests.create, full_rental_obj)
         else:
             logger.info(f"⚡ Line is Always On. Skipping wake request for Rental ID: {rental_id}")
 
@@ -319,11 +334,12 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         logger.error(f"💥 TextVerified Rental Error: {error_msg}")
         
         if "Invalid service name" in error_msg:
-            return None, "This specific service is not available for Long-Term Rentals. Please try a different service, or use the 'Universal' option."
+            # FIXED: Returning 3 items
+            return None, None, "This specific service is not available for Long-Term Rentals. Please try a different service."
         elif "balance" in error_msg.lower():
-            return None, "Our provider is currently out of balance. Please try again later."
+            return None, None, "Our provider is currently out of balance. Please try again later."
         else:
-            return None, "The provider could not fulfill this request at this time."
+            return None, None, "The provider could not fulfill this request at this time."
         
         
 
