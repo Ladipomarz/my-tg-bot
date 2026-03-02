@@ -1257,8 +1257,8 @@ async def rescue_my_number(update, context):
     
     query = """
         INSERT INTO active_rentals 
-        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
-        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
+        (id,user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
+        VALUES (%s,%s, %s, %s, %s, %s, %s, 'active', %s)
     """
     
     try:
