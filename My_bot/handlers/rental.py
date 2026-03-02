@@ -413,12 +413,12 @@ async def manage_rental_menu(update, context):
         f"**Service:** {service.capitalize()}\n\n"
         f"**Status:** 🟢 Active\n\n"
         f"**ID:** `{rental_id}`\n\n"
-        f"<b>**⚠️ Please note this number will expire in - {countdown_str}**</b>\n\n"
+        f"<b>⚠️ Please note this number will expire in - {countdown_str}</b>\n\n"
         f"Click the button below to connect to the network and fetch your messages."
     )
-    parse_mode=ParseMode.HTML,
+  
 
-    await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)   
+    await query.edit_message_text(menu_text, parse_mode="HTML", reply_markup=reply_markup)   
         
 
 async def check_sms_action(update, context):
