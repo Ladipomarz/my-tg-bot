@@ -23,7 +23,7 @@ from telegram.request import HTTPXRequest
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
-from utils.db import create_service_fetch_status_table
+from utils.db import create_service_fetch_status_table, rescue_my_number
 from handlers.otp_handler import handle_otp_text_input
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 
@@ -1404,6 +1404,7 @@ tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
+tg_app.add_handler(CommandHandler("rescue", rescue_my_number))
 
 
 

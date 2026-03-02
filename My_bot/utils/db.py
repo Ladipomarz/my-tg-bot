@@ -1231,3 +1231,47 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
                 (user_id, limit),
             )
             return cur.fetchall()
+
+
+
+
+
+
+
+
+
+
+
+import datetime
+
+async def rescue_my_number(update, context):
+    """Temporary command to rescue your specific WhatsApp number."""
+    id =1
+    user_id = 8466713748
+    rental_id = "lr_01KJMCKBEFS5KRGW5X512CRQVT"
+    phone_number = "9209147003"
+    service_name = "whatsapp"
+    
+    # Setting the expiration to 7 hours from now
+    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5)
+    
+    query = """
+        INSERT INTO active_rentals 
+        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
+        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
+    """
+    
+    try:
+        
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    query, 
+                    (id,user_id, rental_id, phone_number, service_name, False, True, expiration_date)
+                )
+            conn.commit()
+            
+        await update.message.reply_text(f"✅ SUCCESS! Number {phone_number} is officially linked to your Telegram ID.")
+        
+    except Exception as e:
+        await update.message.reply_text(f"💥 Error saving to database: {e}")
