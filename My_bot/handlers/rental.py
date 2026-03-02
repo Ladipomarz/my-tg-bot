@@ -248,14 +248,33 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
                 kwargs["area_code_select_option"] = acs[:15]
 
         reservation = await asyncio.to_thread(reservations.create, **kwargs)
+        # 1. Safely extract the rental object 
+        if hasattr(reservation, 'reservations') and len(reservation.reservations) > 0:
+            rental_obj = reservation.reservations[0]
+        else:
+            # If the API returned the object directly instead of a list wrapper
+            rental_obj = reservation
+            
+        rental_id = getattr(rental_obj, "id", None)
 
-        if not hasattr(reservation, 'reservations') or len(reservation.reservations) == 0:
-            logger.error("❌ No reservation found in API response.")
-            return None, "Provider returned an empty reservation."
+        # 2. ✅ THE ROBUST NUMBER EXTRACTOR
+        # Smartly check all standard SDK property names for the phone number
+        if hasattr(rental_obj, "phone_number"):
+            rental_number = rental_obj.phone_number
+        elif hasattr(rental_obj, "target_number"):
+            rental_number = rental_obj.target_number
+        elif hasattr(rental_obj, "target"):
+            rental_number = rental_obj.target
+        elif hasattr(rental_obj, "line"):
+            rental_number = rental_obj.line
+        elif hasattr(rental_obj, "number"):
+            rental_number = rental_obj.number
+        else:
+            # If the SDK hid the number under a weird name, print all properties to the console safely!
+            available_props = [p for p in dir(rental_obj) if not p.startswith("_")]
+            logger.error(f"❌ Hidden SDK Attributes: {available_props}")
+            return None, "The provider generated your number, but the bot couldn't read the format. Check console!"
 
-        rental_obj = reservation.reservations[0]
-        rental_id = rental_obj.id
-        rental_number = rental_obj.number
 
         # ✅ SMART AUTO-WAKE LOGIC
         if not always_on:

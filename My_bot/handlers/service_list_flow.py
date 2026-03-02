@@ -16,7 +16,7 @@ def _yes_skip_keyboard(*, back_callback: str) -> InlineKeyboardMarkup:
 
 async def start_service_list_flow(update, context, *, plan: str, capability: str = "sms") -> None:
     """
-    plan: 'one_time' or 'rental' (stored in user_data)
+    plan: 'one_time'  (stored in user_data)
     Sends:
       1) message: sending file
       2) txt document (from DB)
