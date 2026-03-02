@@ -396,4 +396,65 @@ async def manage_rental_menu(update, context):
     
     await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)        
         
+
+async def check_sms_action(update, context):
+    """The engine that pulls SMS from TextVerified for a specific rental."""
+    query = update.callback_query
+    await query.answer()
+    
+    # 1. Grab the ID and tell the user we are working on it
+    rental_id = query.data.split(":")[1]
+    await query.edit_message_text("⏳ Connecting to provider and checking inbox... please wait.")
+
+    # 2. Fetch the DB details so we know if we need to wake it
+    details = get_rental_details(rental_id)
+    if not details:
+        await query.edit_message_text("❌ This rental is no longer active.")
+        return
+
+    phone, service, always_on, expiration_time = details
+
+    # 3. Connect to the API
+    try:
+        # NOTE: Make sure your TextVerified client import is at the top of rental.py!
+        # from your_api_file import get_textverified_client
+        client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
         
+        # Pull the current status from TextVerified
+        rental_obj = await asyncio.to_thread(reservations.get, rental_id)
+
+        # ✅ THE SMART WAKE
+        if not always_on and getattr(rental_obj, 'status', '').lower() == 'sleeping':
+            await query.edit_message_text("⏰ Line is sleeping. Sending Wake command... (This takes ~3 seconds)")
+            await asyncio.to_thread(wake_requests.create, rental_obj)
+            await asyncio.sleep(3) # Give the cellular network a moment to connect
+            rental_obj = await asyncio.to_thread(reservations.get, rental_id) # Re-fetch after waking
+
+        # ✅ THE MESSAGE EXTRACTOR
+        messages = getattr(rental_obj, "messages", []) or getattr(rental_obj, "sms", []) or getattr(rental_obj, "texts", [])
+
+        # 4. Build the Refresh Keyboard
+        keyboard = [
+            [InlineKeyboardButton("🔄 Check Again", callback_data=f"check_sms:{rental_id}")],
+            [InlineKeyboardButton("🔙 Back to Number", callback_data=f"manage_rental:{rental_id}")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+
+        # 5. Display the Inbox
+        if not messages:
+            text = f"📭 **Inbox for {phone}:**\n\nNo messages yet. If you just requested the code on {service.capitalize()}, wait 10 seconds and click Check Again."
+        else:
+            formatted_texts = []
+            for msg in messages:
+                # Safely grab the text whether it's an object or a dictionary
+                msg_text = msg.get('text') if isinstance(msg, dict) else getattr(msg, 'text', 'Unknown')
+                formatted_texts.append(f"💬 `{msg_text}`")
+                
+            text = f"📩 **Inbox for {phone}:**\n\n" + "\n\n".join(formatted_texts)
+
+        # Send it!
+        await query.edit_message_text(text, parse_mode="Markdown", reply_markup=reply_markup)
+
+    except Exception as e:
+        # If the API crashes or the Rental ID expired on TextVerified's end
+        await query.edit_message_text(f"💥 Provider Error: {e}")        

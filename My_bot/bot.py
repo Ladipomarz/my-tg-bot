@@ -66,6 +66,7 @@ confirm_rental,
 my_rentals_menu,
 manage_rental_menu,
 my_rentals_menu,
+check_sms_action,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -807,6 +808,15 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if data.startswith("manage_rental:"):
         await manage_rental_menu(update, context)
+        return
+    
+    # ✅ ADD THIS: Catches the Check SMS button!
+    elif data.startswith("check_sms:"):
+        await check_sms_action(update, context)
+        return
+
+    elif data == "my_rentals_back":
+        await my_rentals_menu(update, context)
         return
     
 
