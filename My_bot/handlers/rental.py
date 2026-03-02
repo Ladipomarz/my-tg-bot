@@ -408,7 +408,7 @@ async def manage_rental_menu(update, context):
     # 5. Show the beautiful UI
     menu_text = (
         f"📱 **Number Details**\n\n",
-        f"**Number:** `{phone}`\n"
+        f"**Number:** `{phone}`\n",
         f"**Service:** {service.capitalize()}\n"
         f"**Status:** 🟢 Active\n\n"
         f"**ID:** `{rental_id}`\n"
