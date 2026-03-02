@@ -459,25 +459,30 @@ async def check_sms_action(update, context):
             await asyncio.sleep(3)
             rental_obj = await asyncio.to_thread(reservations.details, rental_id) 
 
-        # 4. 📥 THE MASTER FETCH (Grab all history)
+        # 4. 📥 THE MASTER FETCH (Deep Scan)
         raw_messages = []
         try:
-            # Attempt 1: Messages attached directly to the rental object
-            if hasattr(rental_obj, 'messages') and rental_obj.messages:
-                raw_messages = list(rental_obj.messages)
+            # Fetch the global SMS inbox
+            history = await asyncio.to_thread(sms_client.list)
+            all_msgs = list(getattr(history, 'data', history)) if history else []
             
-            # Attempt 2: Fetch the global SMS inbox and filter locally
-            elif hasattr(sms_client, 'list'):
-                # Look! We removed the 'reservation_id' keyword that caused the crash
-                history = await asyncio.to_thread(sms_client.list)
-                all_msgs = list(getattr(history, 'data', history)) if history else []
-                
-                # Filter the global inbox to ONLY keep messages sent to this specific phone number
-                for m in all_msgs:
-                    # The SDK hides the receiving number under different names
-                    target = getattr(m, 'target_number', getattr(m, 'target', getattr(m, 'line', getattr(m, 'to_number', ''))))
-                    if target and str(phone) in str(target):
-                        raw_messages.append(m)
+            # 🛑 X-RAY THE INBOX 🛑
+            print(f"🕵️ X-RAY INBOX: Found {len(all_msgs)} total messages in your account.")
+            if all_msgs:
+                # Print the exact dictionary of the very first message so we can see the secret variable names
+                first_msg_dict = all_msgs[0].__dict__ if hasattr(all_msgs[0], '__dict__') else str(all_msgs[0])
+                print(f"🕵️ X-RAY FIRST MSG: {first_msg_dict}")
+
+            # The Brute-Force Filter
+            # Instead of guessing the variable name, we turn the entire message into a string
+            # and search for the last 10 digits of your phone number anywhere inside it!
+            phone_str = str(phone)[-10:] 
+            
+            for m in all_msgs:
+                msg_data = str(m.__dict__ if hasattr(m, '__dict__') else m)
+                if phone_str in msg_data:
+                    raw_messages.append(m)
+                    print(f"✅ Found a match for {phone_str}!")
                         
         except Exception as e:
             print(f"Failed to fetch history: {e}")
