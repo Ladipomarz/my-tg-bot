@@ -72,11 +72,23 @@ async def ask_state_or_random(update: Update, context: CallbackContext):
     """
     context.user_data["otp_step"] = "awaiting_state_or_random"
     
-    # Send the prompt asking if the user wants the number from a specific state or random
-    await update.message.reply_text(
+    # 🕵️ THE FIX: Identify the source (Message or Button)
+    if update.message:
+        # User typed the ID
+        target = update.message
+    else:
+        # User clicked the Universal button
+        target = update.callback_query.message
+
+    # Send the prompt using the correct target
+    await target.reply_text(
         "Do you want the number to be generated from a specific US state?\n\n"
-        "✅ Reply with: yes or no"
+        "✅ Reply with: <b>yes</b> or <b>no</b>",
+        parse_mode="HTML"
     )
+    
+    # Ensure you return the state if you're using a ConversationHandler
+    # return ASK_STATE
     
     
     
