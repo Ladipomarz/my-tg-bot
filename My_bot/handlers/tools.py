@@ -274,11 +274,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_refund_now_cb(update, context)
         return
     
-    
-    if data == "manage_rental":
-        await manage_rental_menu(update, context)
-        return
-    
     # Handle different callback data
     if data == "otp_usa_text_rental":
         await otp_usa_rental_type_menu(update, context, "text")
@@ -315,9 +310,13 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "rental_final_confirm":
         await confirm_rental(update, context) # Call the RENTAL confirmation, not OTP
         
+        
+         
+    if data.startswith("manage_rental:"):
+        await manage_rental_menu(update, context)
+        return
     
-    
-    
+        
     
     
         
