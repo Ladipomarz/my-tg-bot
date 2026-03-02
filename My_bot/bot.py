@@ -41,7 +41,8 @@ from utils.db import (
     add_user_balance_usd,
     get_user_balance_usd,
     mark_order_wallet_credited,
-    create_wallet_transactions_table
+    create_wallet_transactions_table,
+    fix_db_sequence
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -1735,7 +1736,8 @@ async def plisio_webhook(req: Request):
 
         
 
-
+# Don't forget to register it with your handlers!
+tg_app.add_handler(CommandHandler("fixdb", fix_db_sequence))
 
 
 

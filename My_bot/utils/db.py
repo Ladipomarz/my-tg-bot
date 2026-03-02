@@ -32,6 +32,20 @@ def test_connection():
 test_connection()
 
 
+async def fix_db_sequence(update, context):
+    """Temporary command to resync the PostgreSQL ID counter."""
+    # This SQL command fast-forwards the sequence to match the highest ID in the table
+    query = "SELECT setval(pg_get_serial_sequence('active_rentals', 'id'), coalesce(max(id),0) + 1, false) FROM active_rentals;"
+    
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+            conn.commit()
+        await update.message.reply_text("✅ Database ID counter successfully resynced!")
+    except Exception as e:
+        await update.message.reply_text(f"💥 Error fixing sequence: {e}")
+
 
 # ---------------- MIGRATIONS ----------------
 
@@ -198,6 +212,7 @@ def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_
 
     migrate_users_schema()
     migrate_orders_schema()
+    
     
     
         
