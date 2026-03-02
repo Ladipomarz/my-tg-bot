@@ -10,6 +10,7 @@ from handlers.otp_handler import send_services_txt, _area_codes_for_state
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
 import requests
+import html
 import httpx
 import time
 from utils.auto_delete import safe_send
@@ -493,8 +494,18 @@ async def check_sms_action(update, context):
         now = datetime.datetime.now(datetime.timezone.utc)
 
         for msg in raw_messages:
-            # Safely extract text and sender
-            msg_text = getattr(msg, 'sms_content', getattr(msg, 'text', str(msg)))
+            # 1. 🧹 THE SMART EXTRACTOR
+            parsed = getattr(msg, 'parsed_code', None)
+            
+            if parsed:
+                # If they found the code, format it exactly how you want it!
+                clean_text = f"{parsed} is your verification code"
+            else:
+                # FALLBACK: grab the first line and strip <#>
+                raw_text = getattr(msg, 'sms_content', getattr(msg, 'text', str(msg)))
+                clean_text = raw_text.replace('<#>', '').strip().split('\n')[0]
+                
+            msg_text = html.escape(clean_text)
             sender = getattr(msg, 'from_value', 'Unknown')
             
             # Safely extract and parse the API timestamp
