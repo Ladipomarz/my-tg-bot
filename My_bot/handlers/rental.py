@@ -421,14 +421,14 @@ async def check_sms_action(update, context):
         client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
         
         # Pull the current status from TextVerified
-        rental_obj = await asyncio.to_thread(reservations.get, rental_id)
+        rental_obj = await asyncio.to_thread(reservations.details, rental_id)
 
         # ✅ THE SMART WAKE
         if not always_on and getattr(rental_obj, 'status', '').lower() == 'sleeping':
             await query.edit_message_text("⏰ Line is sleeping. Sending Wake command... (This takes ~3 seconds)")
             await asyncio.to_thread(wake_requests.create, rental_obj)
             await asyncio.sleep(3) # Give the cellular network a moment to connect
-            rental_obj = await asyncio.to_thread(reservations.get, rental_id) # Re-fetch after waking
+            rental_obj = await asyncio.to_thread(reservations.details, rental_id) # Re-fetch after waking
 
         # ✅ THE MESSAGE EXTRACTOR
         messages = getattr(rental_obj, "messages", []) or getattr(rental_obj, "sms", []) or getattr(rental_obj, "texts", [])
