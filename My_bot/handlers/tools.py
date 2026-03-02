@@ -311,13 +311,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         await confirm_rental(update, context) # Call the RENTAL confirmation, not OTP
         
         
-         
-    if data.startswith("manage_rental:"):
-        await manage_rental_menu(update, context)
-        return
-    
-        
-    
     
         
     if data == "social_menu":
