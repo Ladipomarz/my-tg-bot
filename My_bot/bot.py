@@ -58,7 +58,15 @@ from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
 from handlers.admin import admin_command, admin_callback
 from handlers.wallet_continue import open_wallet_menu
-from handlers.rental import handle_rental_product_id,handle_state_or_random,handle_rental_state,confirm_rental,my_rentals_menu
+from handlers.rental import (
+handle_rental_product_id,
+handle_state_or_random
+,handle_rental_state,
+confirm_rental,
+my_rentals_menu,
+manage_rental_menu,
+my_rentals_menu,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
@@ -1406,6 +1414,8 @@ tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(CommandHandler("rescue", rescue_my_number))
 tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
+tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_rental:"))
+tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
 
 
 

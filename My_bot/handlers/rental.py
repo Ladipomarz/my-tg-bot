@@ -14,7 +14,7 @@ import httpx
 import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
-from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals 
+from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals,get_rental_details
 import logging
 
 
@@ -357,6 +357,43 @@ async def my_rentals_menu(update, context):
         
         
         
+
+
+async def manage_rental_menu(update, context):
+    """Displays the management screen for a specific rental number."""
+    query = update.callback_query
+    await query.answer() # Stops the loading wheel on the button
+    
+    # 1. Extract the specific rental_id from the button they clicked
+    # The callback_data looks like "manage_rental:lr_01KJMCK..."
+    rental_id = query.data.split(":")[1]
+    
+    # 2. Fetch the details from the database
+    details = get_rental_details(rental_id)
+    if not details:
+        await query.edit_message_text("❌ This rental is no longer active or could not be found.")
+        return
         
+    phone, service, always_on, expiration_time = details
+    
+    # 3. Build the Management Keyboard
+    keyboard = [
+        # This is the magic button we will build next!
+        [InlineKeyboardButton("📥 Check SMS", callback_data=f"check_sms:{rental_id}")],
+        # A button to go back to the main list
+        [InlineKeyboardButton("🔙 Back to List", callback_data="my_rentals_back")]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    # 4. Show the beautiful UI
+    menu_text = (
+        f"📱 **Number Details**\n\n"
+        f"**Number:** `{phone}`\n"
+        f"**Service:** {service.capitalize()}\n"
+        f"**Status:** 🟢 Active\n\n"
+        f"Click the button below to connect to the network and fetch your messages."
+    )
+    
+    await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)        
         
         

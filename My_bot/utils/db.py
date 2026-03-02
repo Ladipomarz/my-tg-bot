@@ -1254,6 +1254,22 @@ def get_user_active_rentals(user_id: int):
     except Exception as e:
         print(f"💥 Database Error (get_user_active_rentals): {e}")
         return []  # Return an empty list if it fails so the bot doesn't crash
+    
+    
+    
+    
+def get_rental_details(rental_id: str):
+    """Fetches the details of a specific active rental."""
+    query = "SELECT phone_number, service_name, always_on, expiration_time FROM active_rentals WHERE rental_id = %s AND status = 'active'"
+    try:
+        # Make sure get_connection() is accessible here!
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (rental_id,))
+                return cur.fetchone()
+    except Exception as e:
+        print(f"💥 Database Error (get_rental_details): {e}")
+        return None
 
 async def rescue_my_number(update, context):
     """Temporary command to rescue your specific WhatsApp number."""
