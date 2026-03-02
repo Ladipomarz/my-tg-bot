@@ -14,7 +14,7 @@ import httpx
 import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
-from utils.db import get_rental_service_name_by_code
+from utils.db import get_rental_service_name_by_code,save_active_rental
 import logging
 
 
@@ -169,19 +169,39 @@ async def confirm_rental(update: Update, context: CallbackContext):
         is_renewable = context.user_data.get("otp_is_renewable", False)
         
         # Pass them safely into the fetch function
-        rental_number, error_msg = await fetch_rental_number_from_textverified(
+        rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
             service, state, duration_api, always_on, is_renewable
         )
-
-        if rental_number:
-            await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
-        else:
-            await update.message.reply_text("❌ Failed to fetch rental number. Please try again later.")
+    
         
-    elif text == "no":
-        await update.message.reply_text("❌ Rental not confirmed. The process has been cancelled.")
-    else:
-        await update.message.reply_text("❌ Invalid input. Please reply with 'yes' or 'no' to confirm.")
+        if rental_number and rental_id:
+            # 2. ✅ Convert the API duration string into an actual number of days
+            days_to_expire = 1
+            if duration_api == "THREE_DAY": days_to_expire = 3
+            elif duration_api == "SEVEN_DAY": days_to_expire = 7
+            elif duration_api == "FOURTEEN_DAY": days_to_expire = 14
+            elif duration_api == "THIRTY_DAY": days_to_expire = 30
+            
+            # Grab the user's Telegram ID
+            user_id = update.effective_user.id
+            
+            # 3. ✅ Lock it into the PostgreSQL Database (Synchronous call!)
+            save_active_rental(
+                user_id=user_id,
+                rental_id=rental_id,
+                phone_number=rental_number,
+                service_name=service,
+                always_on=always_on,
+                is_renewable=is_renewable,
+                days_to_expire=days_to_expire
+            )
+            
+            await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
+            context.user_data.pop("otp_step", None)
+            
+        else:
+            await update.message.reply_text(f"❌ Failed to fetch rental number:\n\n{error_msg}")
+            context.user_data.pop("otp_step", None)
 
     
 
@@ -283,7 +303,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         else:
             logger.info(f"⚡ Line is Always On. Skipping wake request for Rental ID: {rental_id}")
 
-        return rental_number, None
+        return rental_number, rental_id, None
 
     except Exception as e:
         error_msg = str(e)

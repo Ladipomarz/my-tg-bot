@@ -144,7 +144,54 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
             
+            
+            # Create the 'active_rentals' table
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS active_rentals (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT REFERENCES users(user_id),
+                    rental_id TEXT UNIQUE,
+                    phone_number TEXT,
+                    service_name TEXT,
+                    always_on BOOLEAN DEFAULT FALSE,
+                    is_renewable BOOLEAN DEFAULT FALSE,
+                    status TEXT DEFAULT 'active',
+                    expiration_time TIMESTAMP WITH TIME ZONE
+                );
+            """)
+
+            # Create necessary indexes for speed
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_user_id ON active_rentals(user_id);")
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_status ON active_rentals(status);")
+            
         conn.commit()
+        
+        
+
+def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
+    """Locks the purchased rental number to the Telegram user in the database."""
+    
+    # Calculate the exact expiration timestamp
+    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=days_to_expire)
+    
+    query = """
+        INSERT INTO active_rentals 
+        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
+        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
+    """
+    
+    try:
+        # Using your exact connection style
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    query, 
+                    (user_id, rental_id, phone_number, service_name, always_on, is_renewable, expiration_date)
+                )
+            conn.commit()  # Lock it into the database
+            print(f"✅ Saved Rental {phone_number} to DB for User {user_id}")
+    except Exception as e:
+        print(f"💥 Database Insert Error: {e}")        
 
 
     # Now that the users and orders tables exist, create the wallet_transactions table
@@ -154,28 +201,6 @@ def create_tables():
     migrate_orders_schema()
     
     
-    
-    # Create rental table
-    
-def create_rentals_table():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS rentals (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT REFERENCES users(user_id),
-                    order_code TEXT REFERENCES orders(order_code),
-                    phone_number TEXT,
-                    external_rental_id TEXT UNIQUE, -- ID from TextVerified
-                    service_name TEXT,
-                    start_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    expires_at TIMESTAMP NOT NULL,
-                    status TEXT DEFAULT 'active' -- 'active', 'expired', 'cancelled'
-                );
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_user ON rentals(user_id);")
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_rentals_expiry ON rentals(expires_at);")
-        conn.commit()    
         
         
 # Run this once or add to your startup script
