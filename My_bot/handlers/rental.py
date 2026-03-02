@@ -427,7 +427,7 @@ async def manage_rental_menu(update, context):
         
 
 async def check_sms_action(update, context):
-    """The engine that pulls SMS using the official TextVerified incoming iterator."""
+    """The smart engine that pulls SMS history and sorts by time."""
     query = update.callback_query
     await query.answer()
     
@@ -442,49 +442,110 @@ async def check_sms_action(update, context):
     phone, service, always_on, expiration_time = details
 
     try:
-        # 1. Connect to the API
+        # 1. Connect to API
         client, reservations, wake_requests, sms_client, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
         
-        # 2. Fetch the Rental Object
+        # 2. Fetch the current rental object
         rental_obj = await asyncio.to_thread(reservations.details, rental_id)
 
-        # 3. Smart Wake (If sleeping)
+        # 3. Smart Wake for sleeping lines
         if not always_on and getattr(rental_obj, 'status', '').lower() == 'sleeping':
-            await query.edit_message_text("⏰ Line is sleeping. Sending Wake command... (This takes ~3 seconds)")
+            await query.edit_message_text("⏰ Line is sleeping. Sending Wake command... (Takes ~3 seconds)")
             await asyncio.to_thread(wake_requests.create, rental_obj)
             await asyncio.sleep(3)
             rental_obj = await asyncio.to_thread(reservations.details, rental_id) 
 
-        # 4. ✅ THE OFFICIAL DOCS METHOD (Adapted for Telegram)
+        # 4. 📥 THE MASTER FETCH (Grab all history)
+        raw_messages = []
         try:
-            # We use a 2-second timeout so the bot doesn't freeze!
-            raw_messages = await asyncio.to_thread(sms_client.incoming, rental_obj, timeout=2)
-            # We use list() instead of next() so it doesn't crash if it's empty
-            messages = list(raw_messages)
+            if hasattr(rental_obj, 'messages') and rental_obj.messages:
+                raw_messages = list(rental_obj.messages)
+            elif hasattr(sms_client, 'list'):
+                history = await asyncio.to_thread(sms_client.list, reservation_id=rental_id)
+                raw_messages = list(getattr(history, 'data', history)) if history else []
         except Exception as e:
-            print(f"SMS Iterator empty or failed: {e}")
-            messages = []
+            print(f"Failed to fetch history: {e}")
 
-        # 5. Build the Refresh Keyboard
+        # 5. ⏱️ THE TIME SORTER
+        recent_msgs = []
+        history_msgs = []
+        now = datetime.datetime.now(datetime.timezone.utc)
+
+        for msg in raw_messages:
+            # Safely extract text and sender
+            msg_text = getattr(msg, 'sms_content', getattr(msg, 'text', str(msg)))
+            sender = getattr(msg, 'from_value', 'Unknown')
+            
+            # Safely extract and parse the API timestamp
+            msg_time = None
+            for attr in ['created_at', 'date_received', 'timestamp', 'date']:
+                val = getattr(msg, attr, None)
+                if val:
+                    if isinstance(val, str):
+                        try:
+                            # Convert ISO string to Python datetime
+                            msg_time = datetime.datetime.fromisoformat(val.replace('Z', '+00:00'))
+                        except: pass
+                    elif isinstance(val, datetime.datetime):
+                        msg_time = val
+                    break
+            
+            # Calculate "Seconds Ago" or "Mins Ago"
+            time_str = "Just now"
+            age_mins = 0
+            
+            if msg_time:
+                # Ensure timezone math matches
+                if msg_time.tzinfo is None:
+                    msg_time = msg_time.replace(tzinfo=datetime.timezone.utc)
+                    
+                diff = now - msg_time
+                age_seconds = int(diff.total_seconds())
+                age_mins = age_seconds // 60
+                
+                if age_seconds < 60:
+                    time_str = f"{max(0, age_seconds)} seconds ago"
+                elif age_mins == 1:
+                    time_str = "1 min ago"
+                else:
+                    time_str = f"{age_mins} mins ago"
+
+            # Format the individual message
+            formatted_msg = f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code> ({time_str})"
+            
+            # Drop it into the correct time bucket!
+            if age_mins <= 5:
+                recent_msgs.append(formatted_msg)
+            elif age_mins <= 30:
+                history_msgs.append(formatted_msg)
+
+        # 6. 🏗️ THE UI BUILDER (Decision Tree)
+        if not recent_msgs and not history_msgs:
+            # Scenario 3: Brand New Line (Clean & Simple)
+            text = f"📭 <b>Inbox for {phone}:</b>\n\nNo messages yet. If you just requested the code on {service.capitalize()}, wait 10 seconds and click Check Again."
+        
+        else:
+            # Scenario 1 & 2: Build the Trust UI
+            text = f"📱 <b>Inbox for {phone}:</b>\n\n"
+            
+            text += "🟢 <b>NEW (Last 5 Mins):</b>\n"
+            if recent_msgs:
+                text += "\n\n".join(recent_msgs) + "\n\n"
+            else:
+                text += f"📭 <i>No new messages yet. If you just requested the code, wait 10 seconds and click Check Again.</i>\n\n"
+            
+            text += "⏳ <b>HISTORY (Last 30 Mins):</b>\n"
+            if history_msgs:
+                text += "\n\n".join(history_msgs)
+            else:
+                text += "<i>No older history for this line.</i>"
+
+        # 7. Build Keyboard & Send
         keyboard = [
             [InlineKeyboardButton("🔄 Check Again", callback_data=f"check_sms:{rental_id}")],
             [InlineKeyboardButton("🔙 Back to Number", callback_data=f"manage_rental:{rental_id}")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-
-        # 6. Display the Inbox (Safe HTML format)
-        if not messages:
-            text = f"📭 <b>Inbox for {phone}:</b>\n\nNo messages yet. If you just requested the code on {service.capitalize()}, wait 10 seconds and click Check Again."
-        else:
-            formatted_texts = []
-            for msg in messages:
-                # The SDK might hide the text in 'sms_content' or 'text'
-                msg_text = getattr(msg, 'sms_content', getattr(msg, 'text', str(msg)))
-                sender = getattr(msg, 'from_value', 'Unknown')
-                
-                formatted_texts.append(f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code>")
-                
-            text = f"📩 <b>Inbox for {phone}:</b>\n\n" + "\n\n".join(formatted_texts)
 
         await query.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup)
 
