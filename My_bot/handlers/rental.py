@@ -159,20 +159,28 @@ async def confirm_rental(update: Update, context: CallbackContext):
     text = update.message.text.strip().lower()
 
     if text == "yes":
-        # Proceed with fetching rental number from TextVerified API
-        service = context.user_data.get("otp_service_name", "Unknown Service")
-        state = context.user_data.get("otp_state", "Random")
+        # 1. 🛑 STRICT VALIDATION: If the bot forgot the critical data, ABORT!
+        if "otp_service_name" not in context.user_data or "otp_duration_api" not in context.user_data:
+            await update.message.reply_text("❌ Your session expired or the data was lost. Please restart your purchase.")
+            context.user_data.pop("otp_step", None)
+            return
+
+        # 2. Grab the exact choices (No guessing allowed)
+        service = context.user_data["otp_service_name"]
+        duration_api = context.user_data["otp_duration_api"]
         
-        # Extract the values from context
-        duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
+        # We can safely default these because they don't change the price
+        state = context.user_data.get("otp_state", "Random")
         always_on = context.user_data.get("otp_always_on", True)
         is_renewable = context.user_data.get("otp_is_renewable", False)
+        
+        await update.message.reply_text("⏳ Requesting your rental line from the provider... please wait.")
         
         # Pass them safely into the fetch function
         rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
             service, state, duration_api, always_on, is_renewable
         )
-    
+            
         
         if rental_number and rental_id:
             # 2. ✅ Convert the API duration string into an actual number of days
@@ -356,19 +364,15 @@ async def my_rentals_menu(update, context):
         await update.message.reply_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)      
         
         
-        
-
-
 async def manage_rental_menu(update, context):
-    """Displays the management screen for a specific rental number."""
+    """Displays the management screen with a live expiration countdown."""
     query = update.callback_query
-    await query.answer() # Stops the loading wheel on the button
+    await query.answer() 
     
-    # 1. Extract the specific rental_id from the button they clicked
-    # The callback_data looks like "manage_rental:lr_01KJMCK..."
+    # 1. Extract the rental_id
     rental_id = query.data.split(":")[1]
     
-    # 2. Fetch the details from the database
+    # 2. Fetch details
     details = get_rental_details(rental_id)
     if not details:
         await query.edit_message_text("❌ This rental is no longer active or could not be found.")
@@ -376,25 +380,43 @@ async def manage_rental_menu(update, context):
         
     phone, service, always_on, expiration_time = details
     
-    # 3. Build the Management Keyboard
+    # 3. Calculate the exact time remaining
+    # We use timezone.utc to perfectly match PostgreSQL's TIMESTAMP WITH TIME ZONE
+    now = datetime.datetime.now(datetime.timezone.utc)
+    time_left = expiration_time - now
+    
+    if time_left.total_seconds() > 0:
+        days = time_left.days
+        hours, remainder = divmod(time_left.seconds, 3600)
+        minutes, seconds = divmod(remainder, 60)
+        
+        # Format it cleanly based on how much time is left
+        if days > 0:
+            countdown_str = f"{days} days, {hours} hours, {minutes} mins"
+        else:
+            countdown_str = f"{hours} hours, {minutes} mins, {seconds} seconds"
+    else:
+        countdown_str = "0 hours, 0 mins (Expired)"
+    
+    # 4. Build the Keyboard
     keyboard = [
-        # This is the magic button we will build next!
         [InlineKeyboardButton("📥 Check SMS", callback_data=f"check_sms:{rental_id}")],
-        # A button to go back to the main list
         [InlineKeyboardButton("🔙 Back to List", callback_data="my_rentals_back")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # 4. Show the beautiful UI
+    # 5. Show the beautiful UI
     menu_text = (
         f"📱 **Number Details**\n\n"
+        f"**ID:** `{rental_id}`\n"
         f"**Number:** `{phone}`\n"
         f"**Service:** {service.capitalize()}\n"
         f"**Status:** 🟢 Active\n\n"
+        f"**⚠️ Please note this number will expire in - {countdown_str}**\n\n"
         f"Click the button below to connect to the network and fetch your messages."
     )
     
-    await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)        
+    await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)   
         
 
 async def check_sms_action(update, context):
