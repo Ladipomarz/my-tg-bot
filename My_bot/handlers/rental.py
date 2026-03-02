@@ -178,20 +178,12 @@ async def confirm_rental(update: Update, context: CallbackContext):
         await update.message.reply_text("⏳ Requesting your rental line from the provider... please wait.")
         
         
-        # --- 🛑 TEST MODE INJECTION START 🛑 ---
-        TEST_MODE = True 
-
-        if TEST_MODE:
-            # Fake data to test your database safely
-            rental_number = "9995551234"
-            rental_id = "fake_rental_999"
-            error_msg = None
-        else:
-            # The REAL API call (will run when TEST_MODE is set to False)
-            rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
-                service, state, duration_api, always_on, is_renewable
-            )
-        # --- 🛑 TEST MODE INJECTION END 🛑 ---
+        await update.message.reply_text("⏳ Requesting your rental line from the provider... please wait.")
+        
+        # The REAL API call (Training wheels are off!)
+        rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
+            service, state, duration_api, always_on, is_renewable
+        )
         
             
         if rental_number and rental_id:
