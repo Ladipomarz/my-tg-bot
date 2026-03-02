@@ -31,9 +31,7 @@ from handlers.rental import  (
     handle_rental_state,
     final_confirmation,
     confirm_rental,
-    manage_rental_menu,
-    ask_state_or_random
-     
+    manage_rental_menu,     
 )
 
 

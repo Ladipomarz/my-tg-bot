@@ -68,6 +68,7 @@ my_rentals_menu,
 manage_rental_menu,
 my_rentals_menu,
 check_sms_action,
+ask_state_or_random
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -793,6 +794,18 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await open_wallet_menu(update, context)
         return
     
+    
+    if data == "otp_rental_universal":
+            # 1. Answer the click so the loading spinner disappears
+            await q.answer()
+
+            # 2. Inject the ID into memory
+            # MAKE SURE this key matches what your other rental functions look for!
+            context.user_data['rental_service'] = "allservices" 
+
+            # 3. Call your state function. 
+            # Note: We pass 'update' and 'context' just like any other handler.
+            return await ask_state_or_random(update, context)
 
     # Route OTP/tools/service callbacks into tools_callback
     if data.startswith(("tool_", "otp_", "service_", "esim_" )):
