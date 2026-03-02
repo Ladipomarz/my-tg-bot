@@ -116,10 +116,9 @@ def migrate_orders_schema():
 
         
 def create_tables():
-    # Ensure 'users' table is created first
     with get_connection() as conn:
         with conn.cursor() as cur:
-            # Create the 'users' table
+            # 1. Create the 'users' table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
                     id SERIAL PRIMARY KEY,
@@ -127,7 +126,7 @@ def create_tables():
                 );
             """)
 
-            # Create the 'orders' table after 'users' table is created
+            # 2. Create the 'orders' table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS orders (
                     id SERIAL PRIMARY KEY,
@@ -144,8 +143,7 @@ def create_tables():
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_orders_order_code ON orders(order_code);")
             
-            
-            # Create the 'active_rentals' table
+            # 3. Create the 'active_rentals' table
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS active_rentals (
                     id SERIAL PRIMARY KEY,
@@ -155,17 +153,18 @@ def create_tables():
                     service_name TEXT,
                     always_on BOOLEAN DEFAULT FALSE,
                     is_renewable BOOLEAN DEFAULT FALSE,
-                    status TEXT DEFAULT 'active',
+                    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
                     expiration_time TIMESTAMP WITH TIME ZONE
                 );
             """)
 
-            # Create necessary indexes for speed
+            # Create necessary indexes for 'active_rentals'
             cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_user_id ON active_rentals(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_status ON active_rentals(status);")
-            
+
+        # Lock all the changes into PostgreSQL
         conn.commit()
-        
+        print("✅ Database tables verified and created successfully.")
         
 
 def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
