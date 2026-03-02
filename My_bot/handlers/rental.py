@@ -458,11 +458,23 @@ async def check_sms_action(update, context):
         # 4. 📥 THE MASTER FETCH (Grab all history)
         raw_messages = []
         try:
+            # Attempt 1: Messages attached directly to the rental object
             if hasattr(rental_obj, 'messages') and rental_obj.messages:
                 raw_messages = list(rental_obj.messages)
+            
+            # Attempt 2: Fetch the global SMS inbox and filter locally
             elif hasattr(sms_client, 'list'):
-                history = await asyncio.to_thread(sms_client.list, reservation_id=rental_id)
-                raw_messages = list(getattr(history, 'data', history)) if history else []
+                # Look! We removed the 'reservation_id' keyword that caused the crash
+                history = await asyncio.to_thread(sms_client.list)
+                all_msgs = list(getattr(history, 'data', history)) if history else []
+                
+                # Filter the global inbox to ONLY keep messages sent to this specific phone number
+                for m in all_msgs:
+                    # The SDK hides the receiving number under different names
+                    target = getattr(m, 'target_number', getattr(m, 'target', getattr(m, 'line', getattr(m, 'to_number', ''))))
+                    if target and str(phone) in str(target):
+                        raw_messages.append(m)
+                        
         except Exception as e:
             print(f"Failed to fetch history: {e}")
 
@@ -483,19 +495,15 @@ async def check_sms_action(update, context):
                 if val:
                     if isinstance(val, str):
                         try:
-                            # Convert ISO string to Python datetime
                             msg_time = datetime.datetime.fromisoformat(val.replace('Z', '+00:00'))
                         except: pass
                     elif isinstance(val, datetime.datetime):
                         msg_time = val
                     break
             
-            # Calculate "Seconds Ago" or "Mins Ago"
-            time_str = "Just now"
+            # Calculate "Seconds", "Mins", "Hours", or "Days"
             age_mins = 0
-            
             if msg_time:
-                # Ensure timezone math matches
                 if msg_time.tzinfo is None:
                     msg_time = msg_time.replace(tzinfo=datetime.timezone.utc)
                     
@@ -503,29 +511,39 @@ async def check_sms_action(update, context):
                 age_seconds = int(diff.total_seconds())
                 age_mins = age_seconds // 60
                 
+                # Dynamic Time String Generator
                 if age_seconds < 60:
-                    time_str = f"{max(0, age_seconds)} seconds ago"
-                elif age_mins == 1:
-                    time_str = "1 min ago"
+                    time_str = f"{max(0, age_seconds)} seconds"
+                elif age_mins < 60:
+                    time_str = f"{age_mins} mins"
+                elif age_mins < 1440:
+                    hours = age_mins // 60
+                    time_str = f"{hours} hour{'s' if hours > 1 else ''}"
                 else:
-                    time_str = f"{age_mins} mins ago"
+                    days = age_mins // 1440
+                    time_str = f"{days} day{'s' if days > 1 else ''}"
 
-            # Format the individual message
-            formatted_msg = f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code> ({time_str})"
-            
-            # Drop it into the correct time bucket!
+            # 🪣 DROP INTO THE CORRECT BUCKET
             if age_mins <= 5:
+                # Bucket 1: Live Code!
+                formatted_msg = f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code> ({time_str} ago)"
                 recent_msgs.append(formatted_msg)
             elif age_mins <= 30:
+                # Bucket 2: Recent History
+                formatted_msg = f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code> ({time_str} ago)"
+                history_msgs.append(formatted_msg)
+            else:
+                # Bucket 3: The "Old Faithful" (Over 30 mins)
+                formatted_msg = f"💬 <b>From {sender}:</b>\n<i>Last received <code>{msg_text}</code> over {time_str} ago</i>"
                 history_msgs.append(formatted_msg)
 
         # 6. 🏗️ THE UI BUILDER (Decision Tree)
         if not recent_msgs and not history_msgs:
-            # Scenario 3: Brand New Line (Clean & Simple)
+            # Scenario: Brand New Line (Clean & Simple)
             text = f"📭 <b>Inbox for {phone}:</b>\n\nNo messages yet. If you just requested the code on {service.capitalize()}, wait 10 seconds and click Check Again."
         
         else:
-            # Scenario 1 & 2: Build the Trust UI
+            # Scenario: Build the Trust UI
             text = f"📱 <b>Inbox for {phone}:</b>\n\n"
             
             text += "🟢 <b>NEW (Last 5 Mins):</b>\n"
@@ -534,9 +552,10 @@ async def check_sms_action(update, context):
             else:
                 text += f"📭 <i>No new messages yet. If you just requested the code, wait 10 seconds and click Check Again.</i>\n\n"
             
-            text += "⏳ <b>HISTORY (Last 30 Mins):</b>\n"
+            text += "⏳ <b>HISTORY:</b>\n"
             if history_msgs:
-                text += "\n\n".join(history_msgs)
+                # SLICE IT: We only show the top 1 oldest messages so we don't crash Telegram!
+                text += "\n\n".join(history_msgs[:1])
             else:
                 text += "<i>No older history for this line.</i>"
 
