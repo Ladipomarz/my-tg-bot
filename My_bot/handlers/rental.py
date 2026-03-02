@@ -447,6 +447,10 @@ async def check_sms_action(update, context):
         
         # 2. Fetch the current rental object
         rental_obj = await asyncio.to_thread(reservations.details, rental_id)
+        # 🛑 DROP THIS X-RAY PRINT RIGHT HERE 🛑
+        print(f"🕵️ X-RAY RENTAL OBJ: {[p for p in dir(rental_obj) if not p.startswith('_')]}")
+        if hasattr(rental_obj, '__dict__'):
+            print(f"🕵️ X-RAY DICT: {rental_obj.__dict__.keys()}")
 
         # 3. Smart Wake for sleeping lines
         if not always_on and getattr(rental_obj, 'status', '').lower() == 'sleeping':
