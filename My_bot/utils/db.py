@@ -1242,7 +1242,18 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
 
 
 
-import datetime
+def get_user_active_rentals(user_id: int):
+    """Fetches all active rentals for a specific user from the database."""
+    query = "SELECT rental_id, phone_number, service_name FROM active_rentals WHERE user_id = %s AND status = 'active'"
+    try:
+        # Assuming get_connection() is already defined in this file
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (user_id,))
+                return cur.fetchall()
+    except Exception as e:
+        print(f"💥 Database Error (get_user_active_rentals): {e}")
+        return []  # Return an empty list if it fails so the bot doesn't crash
 
 async def rescue_my_number(update, context):
     """Temporary command to rescue your specific WhatsApp number."""
@@ -1267,7 +1278,7 @@ async def rescue_my_number(update, context):
             with conn.cursor() as cur:
                 cur.execute(
                     query, 
-                    (id,user_id, rental_id, phone_number, service_name, False, True, expiration_date)
+                    (id,user_id, rental_id, phone_number, service_name, False, False, expiration_date)
                 )
             conn.commit()
             
@@ -1275,3 +1286,4 @@ async def rescue_my_number(update, context):
         
     except Exception as e:
         await update.message.reply_text(f"💥 Error saving to database: {e}")
+        

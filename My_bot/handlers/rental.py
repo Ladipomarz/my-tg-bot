@@ -14,7 +14,7 @@ import httpx
 import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
-from utils.db import get_rental_service_name_by_code,save_active_rental
+from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals 
 import logging
 
 
@@ -315,3 +315,48 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             return None, "Our provider is currently out of balance. Please try again later."
         else:
             return None, "The provider could not fulfill this request at this time."
+        
+        
+
+async def my_rentals_menu(update, context):
+    """Displays a list of the user's active rental numbers."""
+    user_id = update.effective_user.id
+    query = update.callback_query
+
+    # 1. Fetch their active numbers using the clean DB function
+    rentals = get_user_active_rentals(user_id)
+
+    # 2. If they have no active numbers, tell them cleanly
+    if not rentals:
+        empty_text = "📭 You don't have any active rental numbers right now."
+        if query:
+            await query.edit_message_text(empty_text)
+        else:
+            await update.message.reply_text(empty_text)
+        return
+
+    # 3. Build the dynamic inline keyboard
+    keyboard = []
+    for rental_id, phone, service in rentals:
+        # Formats the button: "🟢 Whatsapp - 9209147003"
+        button_text = f"🟢 {service.capitalize()} - {phone}"
+        
+        # We attach the specific TextVerified rental_id directly to the button
+        callback_data = f"manage_rental:{rental_id}" 
+        
+        keyboard.append([InlineKeyboardButton(button_text, callback_data=callback_data)])
+        
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    menu_text = "📱 **Your Active Rentals:**\n\nClick a number below to manage it or check for new SMS:"
+    
+    # 4. Send the menu
+    if query:
+        await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)
+    else:
+        await update.message.reply_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)      
+        
+        
+        
+        
+        
+        

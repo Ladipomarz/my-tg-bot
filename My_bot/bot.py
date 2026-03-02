@@ -1405,6 +1405,7 @@ tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
 tg_app.add_handler(CommandHandler("debug_payload", debug_payload))
 tg_app.add_handler(CallbackQueryHandler(callback_router))
 tg_app.add_handler(CommandHandler("rescue", rescue_my_number))
+tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
 
 
 
