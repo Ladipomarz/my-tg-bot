@@ -5,7 +5,7 @@ import re
 import asyncio
 from telegram import Update
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import CallbackContext
+from telegram.ext import CallbackContext,ConversationHandler
 from handlers.otp_handler import send_services_txt, _area_codes_for_state
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
 import random
@@ -183,6 +183,11 @@ async def confirm_rental(update: Update, context: CallbackContext):
             service, state, duration_api, always_on, is_renewable
         )
         
+        # 🛑 THIS IS THE MAGIC CATCHER 🛑
+        if error_msg:
+            await update.message.reply_text(f"❌ Purchase Failed: {error_msg}")
+            return ConversationHandler.END
+        
             
         if rental_number and rental_id:
             # 2. ✅ Convert the API duration string into an actual number of days
@@ -241,6 +246,21 @@ async def send_service_list_with_buttons(update, context):
         logger.error(f"Error sending service list with buttons: {e}")
         if update.callback_query:
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
+            
+            
+            
+async def handle_universal_button(update, context):
+    """Bypasses the Product ID step and jumps straight to State selection for All Services."""
+    query = update.callback_query
+    await query.answer()
+    
+    # 1. Silently inject the 'allservices' target into the user's session memory
+    # (Use whatever dictionary key your bot normally uses to save the service name/ID)
+    context.user_data['rental_service'] = "allservices" 
+    
+    # 2. Instantly hand the user over to your existing State function!
+    # By returning the function itself, it perfectly merges back into your ConversationHandler
+    return await ask_state_or_random(update, context)           
 
 
 # Function to reserve rental number and handle the wake request
@@ -492,22 +512,28 @@ async def check_sms_action(update, context):
         recent_msgs = []
         history_msgs = []
         now = datetime.datetime.now(datetime.timezone.utc)
+        
+        # Capitalize the service name (e.g., "whatsapp" becomes "Whatsapp")
+        svc_name = service.capitalize()
 
         for msg in raw_messages:
             # 1. 🧹 THE SMART EXTRACTOR
             parsed = getattr(msg, 'parsed_code', None)
+            raw_text = getattr(msg, 'sms_content', getattr(msg, 'text', str(msg)))
             
-            if parsed:
-                # If they found the code, format it exactly how you want it!
-                clean_text = f"{parsed} is your verification code"
-            else:
-                # FALLBACK: grab the first line and strip <#>
-                raw_text = getattr(msg, 'sms_content', getattr(msg, 'text', str(msg)))
-                clean_text = raw_text.replace('<#>', '').strip().split('\n')[0]
-                
-            msg_text = html.escape(clean_text)
-            sender = getattr(msg, 'from_value', 'Unknown')
+            # Split the raw text to separate the code from the warnings and garbage hashes
+            lines = raw_text.replace('<#>', '').strip().split('\n')
             
+            # If TextVerified already parsed it, use that. Otherwise, use the first line.
+            code_to_show = parsed if parsed else lines[0].strip()
+            
+            # Grab the second line (the warning message) if it exists, ignoring the hash at the end!
+            extra_text = lines[1].strip() if len(lines) > 1 else ""
+            
+            # Escape HTML to prevent Telegram crashes
+            safe_code = html.escape(code_to_show)
+            safe_extra = f"{html.escape(extra_text)} " if extra_text else ""
+
             # Safely extract and parse the API timestamp
             msg_time = None
             for attr in ['created_at', 'date_received', 'timestamp', 'date']:
@@ -521,8 +547,9 @@ async def check_sms_action(update, context):
                         msg_time = val
                     break
             
-            # Calculate "Seconds", "Mins", "Hours", or "Days"
+            # Calculate Time
             age_mins = 0
+            time_str = "Just now"
             if msg_time:
                 if msg_time.tzinfo is None:
                     msg_time = msg_time.replace(tzinfo=datetime.timezone.utc)
@@ -531,7 +558,6 @@ async def check_sms_action(update, context):
                 age_seconds = int(diff.total_seconds())
                 age_mins = age_seconds // 60
                 
-                # Dynamic Time String Generator
                 if age_seconds < 60:
                     time_str = f"{max(0, age_seconds)} seconds"
                 elif age_mins < 60:
@@ -545,36 +571,46 @@ async def check_sms_action(update, context):
 
             # 🪣 DROP INTO THE CORRECT BUCKET
             if age_mins <= 5:
-                # Bucket 1: Live Code!
-                formatted_msg = f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code> ({time_str} ago)"
+                # Bucket 1: Live Code! (Includes the warning text below it)
+                formatted_msg = (
+                    f"💬 <b>From {svc_name}:</b>\n"
+                    f"<b>Your {svc_name} code is <code>{safe_code}</code></b>\n"
+                    f"{safe_extra}({time_str} ago)"
+                )
                 recent_msgs.append(formatted_msg)
             elif age_mins <= 30:
-                # Bucket 2: Recent History
-                formatted_msg = f"💬 <b>From {sender}:</b>\n<code>{msg_text}</code> ({time_str} ago)"
+                # Bucket 2: Recent History (Clean, no warning text)
+                formatted_msg = (
+                    f"💬 <b>From {svc_name}:</b>\n"
+                    f"<b>Your {svc_name} code is <code>{safe_code}</code></b>\n"
+                    f"({time_str} ago)"
+                )
                 history_msgs.append(formatted_msg)
             else:
-                # Bucket 3: The "Old Faithful" (Over 30 mins)
-                formatted_msg = f"💬 <b>From {sender}:</b>\n<i>Last received <code>{msg_text}</code> over {time_str} ago</i>"
+                # Bucket 3: The "Old Faithful" (Over 30 mins, Clean inline format)
+                formatted_msg = (
+                    f"💬 <b>From {svc_name}:</b>\n"
+                    f"<i>Last received</i> <b>Your {svc_name} code is <code>{safe_code}</code></b> <i>over {time_str} ago</i>"
+                )
                 history_msgs.append(formatted_msg)
 
         # 6. 🏗️ THE UI BUILDER (Decision Tree)
         if not recent_msgs and not history_msgs:
-            # Scenario: Brand New Line (Clean & Simple)
-            text = f"📭 <b>Inbox for {phone}:</b>\n\nNo messages yet. If you just requested the code on {service.capitalize()}, wait 10 seconds and click Check Again."
-        
+            # Scenario: Brand New Line
+            text = f"📭 <b>Inbox for {phone}:</b>\n\nNo messages yet. If you just requested the code on {svc_name}, wait 10 seconds and click Check Again."
         else:
-            # Scenario: Build the Trust UI
+            # Scenario: Build the Trust UI (WITH THE ARROWS!)
             text = f"📱 <b>Inbox for {phone}:</b>\n\n"
             
-            text += "🟢 <b>NEW (Last 5 Mins):</b>\n"
+            text += "🟢 <b>NEW (Last 5 Mins):</b> ⤵\n"
             if recent_msgs:
                 text += "\n\n".join(recent_msgs) + "\n\n"
             else:
                 text += f"📭 <i>No new messages yet. If you just requested the code, wait 10 seconds and click Check Again.</i>\n\n"
             
-            text += "⏳ <b>HISTORY:</b>\n"
+            text += "⏳ <b>HISTORY:</b> ⤵\n"
             if history_msgs:
-                # SLICE IT: We only show the top 1 oldest messages so we don't crash Telegram!
+                # Shows ONLY the absolute most recent historical message
                 text += "\n\n".join(history_msgs[:1])
             else:
                 text += "<i>No older history for this line.</i>"

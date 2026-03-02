@@ -31,7 +31,8 @@ from handlers.rental import  (
     handle_rental_state,
     final_confirmation,
     confirm_rental,
-    manage_rental_menu
+    manage_rental_menu,
+    ask_state_or_random
      
 )
 
@@ -309,6 +310,15 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     if data == "rental_final_confirm":
         await confirm_rental(update, context) # Call the RENTAL confirmation, not OTP
+        
+        
+    if data == "otp_rental_universal":
+            await q.answer()
+            # 1. Inject the ID into memory silently
+            context.user_data['rental_service'] = "allservices" # Make sure this key matches your actual variable name!
+            
+            # 2. Hand the wheel directly to your existing state function
+            return await ask_state_or_random(update, context)    
         
         
     
