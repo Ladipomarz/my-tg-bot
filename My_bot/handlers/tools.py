@@ -30,7 +30,8 @@ from handlers.rental import  (
     handle_rental_product_id,
     handle_rental_state,
     final_confirmation,
-    confirm_rental
+    confirm_rental,
+    manage_rental_menu
      
 )
 
@@ -271,6 +272,11 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     if data == "otp_refund_now":
         await otp_refund_now_cb(update, context)
+        return
+    
+    
+    if data == "manage_rental":
+        await manage_rental_menu(update, context)
         return
     
     # Handle different callback data
