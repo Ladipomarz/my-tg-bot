@@ -234,7 +234,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
         bal = get_user_balance_usd(user_id)
         remainder = price - bal  # Calculate exactly how much they are missing
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet")],
+            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_topup")],
         ])
         
         await target.reply_text(
@@ -336,18 +336,38 @@ async def send_service_list_with_buttons(update, context):
             
             
             
-async def handle_universal_button(update, context):
-    """Bypasses the Product ID step and jumps straight to State selection for All Services."""
-    query = update.callback_query
-    await query.answer()
+async def handle_rental_universal(update: Update, context: CallbackContext):
+    """
+    Handles the 'Universal' button click. Blocks 1-day universal rentals and forwards to state selection.
+    """
+    q = update.callback_query
+    await q.answer()
+
+    # 🛑 THE 1-DAY UNIVERSAL BLOCKER 🛑
+    duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
+    if duration_api == "ONE_DAY":
+        msg = (
+            "⚠️ <b>Minimum Duration Required</b>\n\n"
+            "Premium Universal (All-Services) numbers require a minimum rental period of <b>3 Days</b>. "
+            "The provider does not offer 1-Day leases for this specific line.\n\n"
+            "<i>Please restart and select a longer duration, or choose a specific service (like WhatsApp or Telegram) for a 1-Day rental.</i>"
+        )
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅ Back to Main Menu", callback_data="back_main")]])
+        
+        try:
+            await q.edit_message_text(msg, parse_mode="HTML", reply_markup=kb)
+        except Exception:
+            await q.message.reply_text(msg, parse_mode="HTML", reply_markup=kb)
+        
+        # Wipe their memory so they don't get stuck
+        context.user_data.pop("otp_step", None)
+        return
+
+    # 2. Inject the ID into memory
+    context.user_data["otp_service_name"] = "allservices"
     
-    # 1. Silently inject the 'allservices' target into the user's session memory
-    # (Use whatever dictionary key your bot normally uses to save the service name/ID)
-    context.user_data['rental_service'] = "allservices" 
-    
-    # 2. Instantly hand the user over to your existing State function!
-    # By returning the function itself, it perfectly merges back into your ConversationHandler
-    return await ask_state_or_random(update, context)           
+    # 3. Call your state function (Assuming it's in the same rental.py file)
+    return await ask_state_or_random(update, context)          
 
 
 # Function to reserve rental number and handle the wake request
