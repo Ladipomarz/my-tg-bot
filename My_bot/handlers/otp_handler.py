@@ -17,6 +17,7 @@ import datetime
 from typing import Optional
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
+import html
 from pricelist import get_otp_price_usd
 from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd,get_service_name_by_code
 import logging
@@ -418,6 +419,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             # ✅ Debit wallet (atomic)
             if not try_debit_user_balance_usd(user_id, float(price_val)):
                 bal = get_user_balance_usd(user_id)
+                remainder = price_val - bal  # Calculate exactly how much they are missing
                 kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
             
@@ -428,8 +430,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                     f"❌ Insufficient wallet balance.\n"
                     f"Price: ${float(price_val):.2f}\n"
                     f"Your balance: ${bal:.2f}\n\n"
-                    f"Please top up your wallet and try again.",
+                    f"Please top up your wallet with <b>${remainder:.2f}</b> and try again.",
                     reply_markup=kb,
+                    parse_mode="HTML"
                 )
                 return True
                 

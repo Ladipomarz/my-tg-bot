@@ -230,18 +230,20 @@ async def confirm_rental(update: Update, context: CallbackContext):
     if not try_debit_user_balance_usd(user_id, price):
         await processing_msg.delete()
         
-        # EXACT PIPELINE FROM OTP_HANDLER
+        # EXACT PIPELINE FROM OTP_HANDLER WITH REMAINDER MATH
         bal = get_user_balance_usd(user_id)
+        remainder = price - bal  # Calculate exactly how much they are missing
         kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
+            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet")],
         ])
         
         await target.reply_text(
             f"❌ Insufficient wallet balance.\n"
             f"Price: ${price:.2f}\n"
             f"Your balance: ${bal:.2f}\n\n"
-            f"Please top up your wallet and try again.",
+            f"Please top up your wallet with <b>${remainder:.2f}</b> and try again.",
             reply_markup=kb,
+            parse_mode="HTML"
         )
         context.user_data.pop("otp_step", None)
         return
