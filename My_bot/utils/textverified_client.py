@@ -32,9 +32,15 @@ async def get_dynamic_rental_price(service_name: str, state: str, duration_api: 
     """
     client, reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
     
-    # 🛑 THE SDK X-RAY 🛑
-    print(f"🕵️ CLIENT MODULES: {[m for m in dir(client) if not m.startswith('_')]}")
-    print(f"🕵️ SERVICES METHODS: {[m for m in dir(client.services) if not m.startswith('_')]}")
+   # 🛑 THE DEEP-SCAN X-RAY 🛑
+    print(f"🕵️ RESERVATIONS METHODS: {[m for m in dir(reservations) if not m.startswith('_')]}")
+    
+    # Let's peek at the actual data inside the service list
+    sample_services = client.services.list()
+    if sample_services:
+        print(f"🕵️ FIRST SERVICE DATA: {sample_services[0].__dict__ if hasattr(sample_services[0], '__dict__') else sample_services[0]}")
+        
+        
     # 1. Handle the "Universal" alias safely
     if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"]):
         api_service_name = "allservices"
