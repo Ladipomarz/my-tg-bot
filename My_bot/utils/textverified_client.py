@@ -28,62 +28,69 @@ def get_textverified_client():
 
 async def get_dynamic_rental_price(service_name: str, state: str, duration_api: str, always_on: bool, is_renewable: bool) -> float:
     """
-    Fetches the live rental price from TextVerified and adds an 85% profit markup.
+    Bypasses the buggy Python wrapper and queries the V2 TextVerified Pricing API directly.
     """
     client, reservations, wake_requests, sms, NumberType, ReservationCapability, RentalDuration = get_textverified_client()
     
-    # 🛑 THE FIXED DEEP-SCAN X-RAY 🛑
-    print(f"🕵️ RESERVATIONS METHODS: {[m for m in dir(reservations) if not m.startswith('_')]}")
-    
-    try:
-        # Give it the exact arguments it's begging for
-        sample_services = client.services.list(NumberType.MOBILE, ReservationCapability.SMS)
-        if sample_services:
-            print(f"🕵️ FIRST SERVICE DATA: {sample_services[0].__dict__ if hasattr(sample_services[0], '__dict__') else sample_services[0]}")
-    except Exception as e:
-        print(f"🕵️ LIST CRASHED AGAIN: {e}")
-        
-    # 1. Handle the "Universal" alias safely
+    # 1. Handle Universal Override
     if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"]):
         api_service_name = "allservices"
     else:
         api_service_name = service_name
 
-    # 2. Does the user want a specific state?
-    # The pricing API expects a boolean (True/False) for area_code requests, not the string!
-    requests_specific_state = bool(state and state.lower() != "random")
+    # 2. Map your internal duration keys to the exact V2 Strings they require
+    v2_duration_map = {
+        "ONE_DAY": "1 Day",
+        "THREE_DAY": "3 Days",
+        "SEVEN_DAY": "1 Week",
+        "FOURTEEN_DAY": "2 Weeks",
+        "THIRTY_DAY": "1 Month"
+    }
+    exact_duration = v2_duration_map.get(duration_api, "1 Day")
 
-    # 3. Build the exact query the SDK wants
-    kwargs = {
+    # 3. Build the exact JSON body for POST /api/pub/v2/pricing/rentals
+    payload = {
         "service_name": api_service_name,
-        "number_type": NumberType.MOBILE,
-        "capability": ReservationCapability.SMS,
-        "duration": getattr(RentalDuration, duration_api),
+        "number_type": "Mobile",
+        "reservation_type": "SMS",
+        "duration": exact_duration,
         "always_on": always_on,
-        "is_renewable": is_renewable,
-        "area_code": requests_specific_state
+        "is_renewable": is_renewable
     }
 
+    # 4. Attach Area Code requests if they picked a specific state
+    if state and state.lower() != "random":
+        from handlers.otp_handler import _area_codes_for_state
+        acs = _area_codes_for_state(state)
+        if acs:
+            payload["area_code_select_option"] = acs[:15]
+
     try:
-        # 4. Ask the API for the live price!
-        price_response = await asyncio.to_thread(client.services.rental_pricing, **kwargs)
+        # 5. The Magic Trick: Use the client's pre-authenticated session to hit the raw URL!
+        url = f"{client.base_url}/api/pub/v2/pricing/rentals"
         
-        # 5. Extract the raw cost
-        base_cost = getattr(price_response, "cost", None) or getattr(price_response, "price", None)
+        # We push the POST request directly to the server
+        response = await asyncio.to_thread(client.session.post, url, json=payload)
         
-        if base_cost is None and isinstance(price_response, dict):
-            base_cost = price_response.get("cost") or price_response.get("price")
-            
+        # If the API rejects our payload, we print exactly why
+        if response.status_code != 200:
+            logger.error(f"💥 API REJECTED PRICING: {response.text}")
+            raise ValueError(f"TextVerified Pricing API Error: {response.text}")
+
+        # 6. Extract the real-time cost directly from the raw JSON response
+        data = response.json()
+        print(f"🕵️ LIVE TEXTVERIFIED QUOTE: {data}")
+        
+        base_cost = data.get("cost") or data.get("price")
+        
         if not base_cost:
-            raise ValueError(f"Could not extract cost from API. Raw Response: {price_response}")
-            
-        # 6. 💰 THE 85% PROFIT ENGINE
+            raise ValueError("No 'cost' found in API response")
+
+        # 7. 💰 APPLY YOUR 85% PROFIT MARKUP
         final_price = float(base_cost) * 1.85
-        logger.info(f"💵 PRICING ENGINE: Base Cost ${base_cost} -> User Price ${final_price:.2f}")
         
         return round(final_price, 2)
-        
+
     except Exception as e:
-        logger.error(f"💥 Failed to fetch live rental price: {e}")
-        
-        
+        logger.error(f"💥 Live Pricing Engine Failed: {e}")
+        raise e

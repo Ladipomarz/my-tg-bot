@@ -142,26 +142,24 @@ async def handle_rental_state(update: Update, context: CallbackContext):
         await update.message.reply_text(suggestion_text)
 
 
-    
+
 async def final_confirmation(update: Update, context: CallbackContext):
     """
-    Display the final confirmation with the selected service, state, and dynamically calculated price.
+    Display the final confirmation with the dynamically calculated 85% markup price.
     """
-    # 1. Grab all the exact variables the API needs
     service = context.user_data.get("otp_service_name", "Unknown Service")
     state = context.user_data.get("otp_state", "Random")
     duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
     always_on = context.user_data.get("otp_always_on", True)
     is_renewable = context.user_data.get("otp_is_renewable", False)
 
-    # 2. Identify the target message (handles both button clicks and typed responses)
     target = update.message if update.message else update.callback_query.message
     
-    # 3. Show a loading message while we ask TextVerified for the quote
-    processing_msg = await target.reply_text("⏳ Calculating live market price for this number...")
+    # The Loading UI
+    processing_msg = await target.reply_text("⏳ Requesting live market quote from provider...")
 
     try:
-        # 4. Fetch the live price with the 85% markup
+        # Pings the TextVerified V2 Endpoint directly!
         price = await get_dynamic_rental_price(
             service_name=service, 
             state=state, 
@@ -170,10 +168,9 @@ async def final_confirmation(update: Update, context: CallbackContext):
             is_renewable=is_renewable
         )
         
-        # 5. SAVE THE FINAL PRICE TO MEMORY! (Crucial for the wallet debit)
+        # Saves the price for checkout
         context.user_data["rental_price"] = price
 
-        # 6. Build and send the final confirmation menu
         confirmation_message = f"""
 FINAL CONFIRMATION:
 
@@ -183,19 +180,14 @@ Price: ${price:.2f}
 
 ⚠️ Please reply with either 'yes' or 'no' to confirm.
 """
-
-        # Delete the "Calculating..." message and show the final menu
         await processing_msg.delete()
         await target.reply_text(confirmation_message)
-        
-        # Move to the final step
-        context.user_data["otp_step"] = "rental_final_confirm"  
+        context.user_data["otp_step"] = "rental_final_confirm" 
         
     except Exception as e:
-        # If the API fails (since we removed the fallback), safely abort
         await processing_msg.delete()
-        await target.reply_text(f"❌ Failed to calculate price from the provider. Please try again later.\nError: {e}")
-    
+        await target.reply_text(f"❌ Could not calculate rental cost. The provider API may be offline.\n\nError: {e}")
+
 async def confirm_rental(update: Update, context: CallbackContext):
     """
     Final confirmation for rental flow.
