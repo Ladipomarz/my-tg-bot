@@ -173,6 +173,9 @@ async def confirm_rental(update: Update, context: CallbackContext):
     text = update.message.text.strip().lower()
 
     if text == "yes":
+        # 🛑 THE MEMORY X-RAY 🛑
+        print(f"🕵️ BOT MEMORY AT CONFIRMATION: {context.user_data}")
+        
         # 1. 🛑 STRICT VALIDATION: If the bot forgot the critical data, ABORT!
         if "otp_service_name" not in context.user_data or "otp_duration_api" not in context.user_data:
             await update.message.reply_text("❌ Your session expired or the data was lost. Please restart your purchase.")
