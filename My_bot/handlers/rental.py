@@ -23,6 +23,7 @@ from utils.db import (
     get_rental_details,
     try_debit_user_balance_usd, 
     add_user_balance_usd,
+    get_user_balance_usd
 )
 from telegram.constants import ParseMode
 import logging
