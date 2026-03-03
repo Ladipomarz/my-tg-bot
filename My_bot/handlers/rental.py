@@ -16,7 +16,14 @@ import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
 from pricelist import get_rental_price_usd
-from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals,get_rental_details
+from utils.db import (
+    get_rental_service_name_by_code,
+    save_active_rental,
+    get_user_active_rentals,
+    get_rental_details,
+    try_debit_user_balance_usd, 
+    add_user_balance_usd,
+)
 from telegram.constants import ParseMode
 import logging
 
@@ -69,7 +76,7 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
 
 async def ask_state_or_random(update: Update, context: CallbackContext):
     """
-    Ask the user if they want the number generated from a specific US state.
+    Ask the user if they want the number generated from a specific US state, and show prices.
     """
     context.user_data["otp_step"] = "awaiting_state_or_random"
     
@@ -81,17 +88,26 @@ async def ask_state_or_random(update: Update, context: CallbackContext):
         # User clicked the Universal button
         target = update.callback_query.message
 
-    # Send the prompt using the correct target
+    # --- 💰 DYNAMIC PRICING CHECK ---
+    # Grab the service and duration they ALREADY chose earlier
+    service = context.user_data.get("otp_service_name", "Unknown")
+    duration_api = context.user_data.get("otp_duration_api", "ONE_DAY") # ONE_DAY is just a fallback to prevent crashes
+
+    # Calculate the normal price
+    price_random = get_rental_price_usd(service, duration_api, "Random")
+    
+    # Calculate the premium price (We pass "NY" just to trigger your state fee in the calculator)
+    price_specific = get_rental_price_usd(service, duration_api, "NY")
+    # ---------------------------------
+
+    # Send the prompt using the correct target with dynamic prices
     await target.reply_text(
-        "Do you want the number to be generated from a specific US state?\n\n"
-        "✅ Reply with: <b>yes</b> or <b>no</b>",
+        f"Do you want the number to be generated from a specific US state?\n\n"
+        f"<b>Specific State Price : ${price_specific:.2f}</b>\n\n"
+        f"<b>Random state price: ${price_random:.2f}</b>\n\n"
+        f"✅ Reply with: <b>yes</b> or <b>no</b>",
         parse_mode="HTML"
     )
-    
-    # Ensure you return the state if you're using a ConversationHandler
-    # return ASK_STATE
-    
-    
     
 async def handle_state_or_random(update: Update, context: CallbackContext):
     """
@@ -182,72 +198,111 @@ Price: ${price:.2f}
         
 async def confirm_rental(update: Update, context: CallbackContext):
     """
-    Final confirmation for rental flow.
+    Handles the final 'yes' or 'no', debits the wallet safely, and buys the API number.
     """
-    text = update.message.text.strip().lower()
+    target = update.message if update.message else update.callback_query.message
+    text = target.text.strip().lower()
 
-    if text == "yes":
-        # 🛑 THE MEMORY X-RAY 🛑
-        print(f"🕵️ BOT MEMORY AT CONFIRMATION: {context.user_data}")
-        
-        # 1. 🛑 STRICT VALIDATION: If the bot forgot the critical data, ABORT!
-        if "otp_service_name" not in context.user_data or "otp_duration_api" not in context.user_data:
-            await update.message.reply_text("❌ Your session expired or the data was lost. Please restart your purchase.")
-            context.user_data.pop("otp_step", None)
-            return
+    if text not in ['yes', 'no']:
+        await target.reply_text("⚠️ Please reply with exactly 'yes' or 'no'.")
+        return
 
-        # 2. Grab the exact choices (No guessing allowed)
-        service = context.user_data["otp_service_name"]
-        duration_api = context.user_data["otp_duration_api"]
+    # If they say no, safely cancel and wipe the memory
+    if text == 'no':
+        await target.reply_text("✅ Rental cancelled.")
+        context.user_data.pop("otp_step", None)
+        return
+
+    # Grab variables
+    user_id = update.effective_user.id
+    price = context.user_data.get("rental_price", 0.0)
+    service = context.user_data.get("otp_service_name")
+    state = context.user_data.get("otp_state")
+    duration_api = context.user_data.get("otp_duration_api")
+    always_on = context.user_data.get("otp_always_on", True)
+    is_renewable = context.user_data.get("otp_is_renewable", False)
+
+    # UI Loading message
+    processing_msg = await target.reply_text("⏳ Securing funds and fetching your premium number...")
+
+    # 3. 🛡️ THE ESCROW HOLD (Wallet Deduction)
+    if not try_debit_user_balance_usd(user_id, price):
+        await processing_msg.delete()
         
-        # We can safely default these because they don't change the price
-        state = context.user_data.get("otp_state", "Random")
-        always_on = context.user_data.get("otp_always_on", True)
-        is_renewable = context.user_data.get("otp_is_renewable", False)
+        # EXACT PIPELINE FROM OTP_HANDLER
+        bal = get_user_balance_usd(user_id)
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
+        ])
         
-        await update.message.reply_text("⏳ Requesting your rental line from the provider... please wait.")
-                
-        # The REAL API call (Training wheels are off!)
-        rental_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
-            service, state, duration_api, always_on, is_renewable
+        await target.reply_text(
+            f"❌ Insufficient wallet balance.\n"
+            f"Price: ${price:.2f}\n"
+            f"Your balance: ${bal:.2f}\n\n"
+            f"Please top up your wallet and try again.",
+            reply_markup=kb,
         )
-        
-        # 🛑 THIS IS THE MAGIC CATCHER 🛑
-        if error_msg:
-            await update.message.reply_text(f"❌ Purchase Failed: {error_msg}")
-            return ConversationHandler.END
-        
-            
-        if rental_number and rental_id:
-            # 2. ✅ Convert the API duration string into an actual number of days
-            days_to_expire = 1
-            if duration_api == "THREE_DAY": days_to_expire = 3
-            elif duration_api == "SEVEN_DAY": days_to_expire = 7
-            elif duration_api == "FOURTEEN_DAY": days_to_expire = 14
-            elif duration_api == "THIRTY_DAY": days_to_expire = 30
-            
-            # Grab the user's Telegram ID
-            user_id = update.effective_user.id
-            
-            # 3. ✅ Lock it into the PostgreSQL Database (Synchronous call!)
-            save_active_rental(
-                user_id=user_id,
-                rental_id=rental_id,
-                phone_number=rental_number,
-                service_name=service,
-                always_on=always_on,
-                is_renewable=is_renewable,
-                days_to_expire=days_to_expire
-            )
-            
-            await update.message.reply_text(f"✅ Reserved number!\n\nRental Number: {rental_number}\nService: {service}\nState: {state}")
-            context.user_data.pop("otp_step", None)
-            
-        else:
-            await update.message.reply_text(f"❌ Failed to fetch rental number:\n\n{error_msg}")
-            context.user_data.pop("otp_step", None)
+        context.user_data.pop("otp_step", None)
+        return
 
-    
+    # 4. 🚀 THE API PURCHASE
+    try:
+        # NOTE: Make sure fetch_rental_number_from_textverified is imported!
+        rental_data = await fetch_rental_number_from_textverified(
+            service_name=service,
+            state=state,
+            duration_api=duration_api,
+            always_on=always_on,
+            is_renewable=is_renewable
+        )
+
+        if not rental_data or "phone_number" not in rental_data:
+            raise ValueError("The provider is temporarily out of stock for this specific service or state.")
+
+        rental_id = rental_data['rental_id']
+        phone_number = rental_data['phone_number']
+
+        # 5. 💾 SAVE TO DATABASE
+        days_map = {"ONE_DAY": 1, "THREE_DAY": 3, "SEVEN_DAY": 7, "FOURTEEN_DAY": 14, "THIRTY_DAY": 30}
+        days_to_expire = days_map.get(duration_api, 1)
+
+        save_active_rental(
+            user_id=user_id,
+            rental_id=rental_id,
+            phone_number=phone_number,
+            service_name=service,
+            always_on=always_on,
+            is_renewable=is_renewable,
+            days_to_expire=days_to_expire
+        )
+
+        # 6. 🎉 DELIVER TO THE USER
+        await processing_msg.delete()
+        success_message = f"""
+✅ <b>Rental Successful!</b>
+
+📱 <b>Number:</b> <code>{phone_number}</code>
+💬 <b>Service:</b> {service}
+⏱️ <b>Duration:</b> {days_to_expire} Days
+
+💵 Your wallet was successfully charged <b>${price:.2f}</b>.
+<i>You can manage your rental in the 'My Numbers' menu.</i>
+"""
+        await target.reply_text(success_message, parse_mode="HTML")
+        context.user_data.pop("otp_step", None)
+
+    except Exception as e:
+        # 7. 🛟 THE AUTO-REFUND (Safety Net)
+        add_user_balance_usd(user_id, price)
+        
+        await processing_msg.delete()
+        await target.reply_text(
+            f"❌ Purchase failed. The provider is out of stock or offline.\n\n"
+            f"💰 <b>Your ${price:.2f} has been instantly refunded to your wallet.</b>\n\n"
+            f"Error details: {e}", 
+            parse_mode="HTML"
+        )
+        context.user_data.pop("otp_step", None)
 
 
 # Function to send the service list with the buttons
