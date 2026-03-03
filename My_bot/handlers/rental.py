@@ -14,7 +14,7 @@ import html
 import httpx
 import time
 from utils.auto_delete import safe_send
-from utils.textverified_client import get_textverified_client
+from utils.textverified_client import get_textverified_client, get_dynamic_rental_price
 from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals,get_rental_details
 from telegram.constants import ParseMode
 import logging
@@ -145,26 +145,56 @@ async def handle_rental_state(update: Update, context: CallbackContext):
     
 async def final_confirmation(update: Update, context: CallbackContext):
     """
-    Display the final confirmation with the selected service, state, and price.
+    Display the final confirmation with the selected service, state, and dynamically calculated price.
     """
+    # 1. Grab all the exact variables the API needs
     service = context.user_data.get("otp_service_name", "Unknown Service")
     state = context.user_data.get("otp_state", "Random")
-    price = 3.00  # You can adjust this as per your service's pricing.
+    duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
+    always_on = context.user_data.get("otp_always_on", True)
+    is_renewable = context.user_data.get("otp_is_renewable", False)
 
-    confirmation_message = f"""
-    FINAL CONFIRMATION:
-
-    Service: {service}
-    State: {state}
-    Price: ${price}
-
-    ⚠️ Please reply with either 'yes' or 'no' to confirm.
-    """
-
-    await update.message.reply_text(confirmation_message)
-    # Handle user response for confirmation
-    context.user_data["otp_step"] = "rental_final_confirm"  
+    # 2. Identify the target message (handles both button clicks and typed responses)
+    target = update.message if update.message else update.callback_query.message
     
+    # 3. Show a loading message while we ask TextVerified for the quote
+    processing_msg = await target.reply_text("⏳ Calculating live market price for this number...")
+
+    try:
+        # 4. Fetch the live price with the 85% markup
+        price = await get_dynamic_rental_price(
+            service_name=service, 
+            state=state, 
+            duration_api=duration_api, 
+            always_on=always_on, 
+            is_renewable=is_renewable
+        )
+        
+        # 5. SAVE THE FINAL PRICE TO MEMORY! (Crucial for the wallet debit)
+        context.user_data["rental_price"] = price
+
+        # 6. Build and send the final confirmation menu
+        confirmation_message = f"""
+FINAL CONFIRMATION:
+
+Service: {service}
+State: {state}
+Price: ${price:.2f}
+
+⚠️ Please reply with either 'yes' or 'no' to confirm.
+"""
+
+        # Delete the "Calculating..." message and show the final menu
+        await processing_msg.delete()
+        await target.reply_text(confirmation_message)
+        
+        # Move to the final step
+        context.user_data["otp_step"] = "rental_final_confirm"  
+        
+    except Exception as e:
+        # If the API fails (since we removed the fallback), safely abort
+        await processing_msg.delete()
+        await target.reply_text(f"❌ Failed to calculate price from the provider. Please try again later.\nError: {e}")
     
 async def confirm_rental(update: Update, context: CallbackContext):
     """
