@@ -14,7 +14,8 @@ import html
 import httpx
 import time
 from utils.auto_delete import safe_send
-from utils.textverified_client import get_textverified_client, get_dynamic_rental_price
+from utils.textverified_client import get_textverified_client
+from pricelist import get_rental_price_usd
 from utils.db import get_rental_service_name_by_code,save_active_rental,get_user_active_rentals,get_rental_details
 from telegram.constants import ParseMode
 import logging
@@ -145,30 +146,19 @@ async def handle_rental_state(update: Update, context: CallbackContext):
 
 async def final_confirmation(update: Update, context: CallbackContext):
     """
-    Display the final confirmation with the dynamically calculated 85% markup price.
+    Display the final confirmation with strict price validation.
     """
     service = context.user_data.get("otp_service_name", "Unknown Service")
     state = context.user_data.get("otp_state", "Random")
-    duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
-    always_on = context.user_data.get("otp_always_on", True)
-    is_renewable = context.user_data.get("otp_is_renewable", False)
+    duration_api = context.user_data.get("otp_duration_api") # No default here either!
 
     target = update.message if update.message else update.callback_query.message
     
-    # The Loading UI
-    processing_msg = await target.reply_text("⏳ Requesting live market quote from provider...")
-
     try:
-        # Pings the TextVerified V2 Endpoint directly!
-        price = await get_dynamic_rental_price(
-            service_name=service, 
-            state=state, 
-            duration_api=duration_api, 
-            always_on=always_on, 
-            is_renewable=is_renewable
-        )
+        # 1. Ask for the strict price. If they glitch the duration, this will crash gracefully.
+        price = get_rental_price_usd(service, duration_api, state)
         
-        # Saves the price for checkout
+        # 2. SAVE THE FINAL PRICE TO MEMORY! (Crucial for the wallet debit)
         context.user_data["rental_price"] = price
 
         confirmation_message = f"""
@@ -180,14 +170,16 @@ Price: ${price:.2f}
 
 ⚠️ Please reply with either 'yes' or 'no' to confirm.
 """
-        await processing_msg.delete()
         await target.reply_text(confirmation_message)
         context.user_data["otp_step"] = "rental_final_confirm" 
         
-    except Exception as e:
-        await processing_msg.delete()
-        await target.reply_text(f"❌ Could not calculate rental cost. The provider API may be offline.\n\nError: {e}")
-
+    except ValueError as e:
+        # 3. IF PRICING FAILS, REJECT THE USER
+        await target.reply_text("❌ Pricing Error: Invalid duration or service selected. Please restart your purchase.")
+        context.user_data.pop("otp_step", None)
+        
+        
+        
 async def confirm_rental(update: Update, context: CallbackContext):
     """
     Final confirmation for rental flow.

@@ -65,3 +65,53 @@ COIN_MAP = {
     "usdttrc20": "USDT_TRX",
     "usdterc20": "USDT_ETH",
 }
+
+
+# 1. Standard Base Costs (What TextVerified charges for most services)
+RENTAL_BASE_PRICES = {
+    "ONE_DAY": 1.50,
+    "THREE_DAY": 3.00,
+    "SEVEN_DAY": 6.00,
+    "FOURTEEN_DAY": 10.00,
+    "THIRTY_DAY": 18.00,
+}
+
+
+# 1. EXACT PRICES FOR STANDARD SERVICES (WhatsApp, Gmail, etc.)
+RENTAL_BASE_PRICES = {
+    "ONE_DAY": 3.50,       
+    "THREE_DAY": 4.50,     
+    "SEVEN_DAY": 5.60,    
+    "FOURTEEN_DAY": 7.50, 
+    "THIRTY_DAY": 9.00,   
+}
+
+# 2. EXACT PRICES FOR UNIVERSAL / ALL SERVICES
+UNIVERSAL_RENTAL_PRICES = {     
+    "THREE_DAY": 10.33,     
+    "SEVEN_DAY": 12.13,    
+    "FOURTEEN_DAY": 14.50, 
+    "THIRTY_DAY": 17.50,   
+}
+
+def get_rental_price_usd(service_name: str, duration_api: str, state: str) -> float:
+    """Calculates the final rental price. STRICT MODE: No defaults."""
+    
+    # 1. Check if the user selected a Universal/AllServices line
+    is_universal = service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"])
+    
+    # 2. STRICT LOOKUP (If the duration is missing, ABORT!)
+    if is_universal:
+        if duration_api not in UNIVERSAL_RENTAL_PRICES:
+            raise ValueError(f"Pricing not found for Universal duration: {duration_api}")
+        final_price = UNIVERSAL_RENTAL_PRICES[duration_api]
+    else:
+        if duration_api not in RENTAL_BASE_PRICES:
+            raise ValueError(f"Pricing not found for Standard duration: {duration_api}")
+        final_price = RENTAL_BASE_PRICES[duration_api]
+            
+    # 3. Add your flat premium if they requested a Specific State (e.g., + $2.00)
+    if state and state.lower() != "random":
+        final_price += 3.50  
+        
+    return round(final_price, 2)
