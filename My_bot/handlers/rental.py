@@ -356,7 +356,12 @@ async def confirm_rental(update: Update, context: CallbackContext):
         # 7. 🛟 THE AUTO-REFUND (Safety Net)
         add_user_balance_usd(user_id, price)
         
-        await processing_msg.delete()
+        # 🛡️ SAFE DELETE: Ignores the error if Telegram already lost the message
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+            
         await target.reply_text(
             f"❌ Purchase failed. The provider is out of stock or offline.\n\n"
             f"💰 <b>Your ${price:.2f} has been instantly refunded to your wallet.</b>\n\n"
