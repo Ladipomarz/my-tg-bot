@@ -229,22 +229,34 @@ async def confirm_rental(update: Update, context: CallbackContext):
 
     # UI Loading message
     processing_msg = await target.reply_text("⏳ Securing funds and fetching your premium number...")
-
+        
     # 3. 🛡️ THE ESCROW HOLD (Wallet Deduction)
     if not try_debit_user_balance_usd(user_id, price):
-        await processing_msg.delete()
-        
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
             
-        # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
-        # 3 Months, 6 Months, 9 Months, 1 Year, and Forever are sent to Admin
-        concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
-        
-        if duration_api in concierge_durations:
-            # 🛡️ SAFE DELETE: Ignores the error if Telegram already lost the message
-            try:
-                await processing_msg.delete()
-            except Exception:
-                pass
+        # The Premium Top-Up UI
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")]])
+        await target.reply_text(
+            f"❌ <b>Insufficient balance.</b>\n\n"
+            f"Cost: <b>${price:.2f}</b>\n"
+            f"Please top up your wallet to secure this line.",
+            parse_mode="HTML",
+            reply_markup=kb
+        )
+        return  # 🛑 THIS KICKS THEM OUT AND STOPS THE CODE!
+
+    # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
+    # (Notice how this is pushed ALL the way back to the left margin!)
+    concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
+    
+    if duration_api in concierge_durations:
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
             
             
             # 1. Alert the User
