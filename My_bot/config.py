@@ -3,9 +3,15 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")  # from Railway
 
-ADMIN_IDS = [123456789]  # keep your real admin IDs
+# 👑 DYNAMIC ADMIN IDS FROM RAILWAY
+# This grabs the variable from Railway. If it's missing, it defaults to empty.
+raw_admin_ids = os.getenv("ADMIN_IDS", "")
+
+# This safely converts a string like "1234567,9876543" into a proper Python list of numbers
+ADMIN_IDS = [int(admin_id.strip()) for admin_id in raw_admin_ids.split(",") if admin_id.strip().isdigit()]
+
 if not BOT_TOKEN:
-    raise RuntimeError("BOT_TOKEN is missing set")
+    raise RuntimeError("BOT_TOKEN is missing or not set!")
 
 # config.py
 
