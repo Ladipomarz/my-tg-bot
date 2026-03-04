@@ -240,7 +240,12 @@ async def confirm_rental(update: Update, context: CallbackContext):
         concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
         
         if duration_api in concierge_durations:
-            await processing_msg.delete()
+            # 🛡️ SAFE DELETE: Ignores the error if Telegram already lost the message
+            try:
+                await processing_msg.delete()
+            except Exception:
+                pass
+            
             
             # 1. Alert the User
             await target.reply_text(
