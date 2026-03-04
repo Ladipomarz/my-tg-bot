@@ -180,6 +180,18 @@ def create_tables():
         conn.commit()
         print("✅ Database tables verified and created successfully.")
         
+        
+def extend_rental_timer(rental_id: str, days_to_add: int):
+    """Adds days to an active rental's expiration and resets the 6h reminder."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE active_rentals 
+                SET expiration_time = expiration_time + INTERVAL '%s days',
+                    reminder_6h_sent = FALSE 
+                WHERE rental_id = %s
+            """, (days_to_add, rental_id))
+        conn.commit()        
 
 def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
     """Locks the purchased rental number to the Telegram user in the database."""

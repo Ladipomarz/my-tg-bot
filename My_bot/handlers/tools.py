@@ -31,7 +31,8 @@ from handlers.rental import  (
     handle_rental_state,
     final_confirmation,
     confirm_rental,
-    manage_rental_menu,     
+    manage_rental_menu,  
+    ask_state_or_random   
 )
 
 
@@ -245,7 +246,8 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     
     
- # 1. Handle ONLY the new Short-Term Rentals (1 to 14 days)
+    # 1. Handle ONLY the new Short-Term Rentals (1 to 14 days)
+ 
     short_term_durations = {
         "otp_usa_text_rental_1_day": ("ONE_DAY", "1 Day"),
         "otp_usa_text_rental_3_days": ("THREE_DAY", "3 Days"),
@@ -259,15 +261,36 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data["otp_duration_api"] = api_duration
         context.user_data["otp_duration_text"] = text_duration
         
-        # ✅ THE MAGIC FLAG: Short-term rentals MUST be Always On!
+        # Short-term rentals MUST be Always On and DO NOT auto-renew
         context.user_data["otp_always_on"] = True
         context.user_data["otp_is_renewable"] = False
         
-        # 🛑 LOOK HERE: Change this line to be EXACTLY the same line of code 
-        # that your "Monthly" button uses to send the user to the next step!
         await send_service_list_with_buttons(update, context)
         return
 
+    # 2. Handle Long-Term Rentals (1 Month up to 1 Year)
+    long_term_durations = {
+        "otp_usa_text_rental_monthly_1m": ("ONE_MONTH", "1 Month"),
+        "otp_usa_text_rental_monthly_2m": ("TWO_MONTHS", "2 Months"),
+        "otp_usa_text_rental_monthly_3m": ("THREE_MONTHS", "3 Months"),
+        "otp_usa_text_rental_monthly_6m": ("SIX_MONTHS", "6 Months"),
+        "otp_usa_text_rental_monthly_9m": ("NINE_MONTHS", "9 Months"),
+        "otp_usa_text_rental_1_year": ("ONE_YEAR", "1 Year"),
+        "otp_usa_text_rental_forever": ("FOREVER", "Forever"),
+    }
+
+    if data in long_term_durations:
+        api_duration, text_duration = long_term_durations[data]
+        
+        context.user_data["otp_duration_api"] = api_duration
+        context.user_data["otp_duration_text"] = text_duration
+        
+        # Long-term rentals must NOT be Always On, and we set auto-renew to FALSE for safety!
+        context.user_data["otp_always_on"] = False 
+        context.user_data["otp_is_renewable"] = False 
+        
+        await send_service_list_with_buttons(update, context)
+        return
 
     if data == "otp_refund_now":
         await otp_refund_now_cb(update, context)
@@ -294,17 +317,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         await final_confirmation(update, context)
         return
      
-        # Fix: Correctly extract rental duration from the callback data
-    if data.startswith("otp_usa_text_rental_monthly_"):
-        # Extract the number part before 'm' (1m, 2m, or 3m)
-        rental_months = int(data.split('_')[-1][0])  # Split the data and get the first digit (before 'm')
-        logger.debug(f"Rental duration selected: {rental_months} months")
-
-        context.user_data['rental_months'] = rental_months
-
-        # Send the services list and proceed to the next flow
-        await send_service_list_with_buttons(update, context)
-        return
+    
     
     if data == "rental_final_confirm":
         await confirm_rental(update, context) # Call the RENTAL confirmation, not OTP

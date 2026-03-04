@@ -68,7 +68,9 @@ my_rentals_menu,
 manage_rental_menu,
 my_rentals_menu,
 check_sms_action,
-handle_rental_universal
+handle_rental_universal,
+trigger_extension_menu,
+handle_extension_text
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -825,6 +827,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await my_rentals_menu(update, context)
         return
     
+    if data.startswith("extend_rental:"):
+        await trigger_extension_menu(update, context)
+        return
+    
 
     
     await delete_tracked_message(context, q.message.chat_id, "pending_prompt_msg_id")
@@ -1436,6 +1442,7 @@ tg_app.add_handler(CommandHandler("rescue", rescue_my_number))
 tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
 tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_rental:"))
 tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
+tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_extension_text))
 
 
 

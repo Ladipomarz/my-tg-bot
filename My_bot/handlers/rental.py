@@ -23,9 +23,13 @@ from utils.db import (
     get_rental_details,
     try_debit_user_balance_usd, 
     add_user_balance_usd,
-    get_user_balance_usd
+    get_user_balance_usd,
+    extend_rental_timer
 )
+
 from telegram.constants import ParseMode
+from config import ADMIN_IDS 
+
 import logging
 
 
@@ -230,6 +234,47 @@ async def confirm_rental(update: Update, context: CallbackContext):
     if not try_debit_user_balance_usd(user_id, price):
         await processing_msg.delete()
         
+            
+        # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
+        # 3 Months, 6 Months, 9 Months, 1 Year, and Forever are sent to Admin
+        concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
+        
+        if duration_api in concierge_durations:
+            await processing_msg.delete()
+            
+            # 1. Alert the User
+            await target.reply_text(
+                f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
+                f"Because you selected a massive <b>{context.user_data.get('otp_duration_text', 'Long-Term')}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
+                f"<i>Please allow up to 24 hours. Your number will be delivered directly to your inbox.</i>",
+                parse_mode="HTML"
+            )
+            
+            # 2. Alert the Admin
+            admin_id = list(ADMIN_IDS)[0] if ADMIN_IDS else None
+            
+            if admin_id:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=f"🚨 <b>MANUAL RENTAL ORDER!</b>\n\n"
+                            f"User: <code>{user_id}</code>\n"
+                            f"Service: {service}\n"
+                            f"Duration: {duration_api}\n"
+                            f"Paid: ${price:.2f}\n\n"
+                            f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
+                        parse_mode="HTML"
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to alert admin of manual order: {e}")
+                
+            context.user_data.pop("otp_step", None)
+            
+            return    
+        
+        
+        
+        
         # EXACT PIPELINE FROM OTP_HANDLER WITH REMAINDER MATH
         bal = get_user_balance_usd(user_id)
         remainder = price - bal  # Calculate exactly how much they are missing
@@ -266,8 +311,15 @@ async def confirm_rental(update: Update, context: CallbackContext):
         phone_number = rental_data['phone_number']
 
         # 5. 💾 SAVE TO DATABASE
-        days_map = {"ONE_DAY": 1, "THREE_DAY": 3, "SEVEN_DAY": 7, "FOURTEEN_DAY": 14, "THIRTY_DAY": 30}
+        # 5. 💾 SAVE TO DATABASE
+        days_map = {
+            "ONE_DAY": 1, "THREE_DAY": 3, "SEVEN_DAY": 7, "FOURTEEN_DAY": 14, 
+            "THIRTY_DAY": 30, "ONE_MONTH": 30, "TWO_MONTHS": 60, "THREE_MONTHS": 90, 
+            "SIX_MONTHS": 180, "NINE_MONTHS": 270, "ONE_YEAR": 365,
+            "FOREVER": 36500
+        }
         days_to_expire = days_map.get(duration_api, 1)
+        
 
         save_active_rental(
             user_id=user_id,
@@ -386,11 +438,30 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
 
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
         
+        
+        logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
+        
+        # --- THE API TRANSLATOR ---
+        api_mapped_duration = duration_api
+        
+        # The API only understands up to THIRTY_DAY. 
+        if duration_api in ["ONE_MONTH", "TWO_MONTHS"]:
+            api_mapped_duration = "THIRTY_DAY"
+            
+        # ⚠️ CRITICAL SAFETY OVERRIDE: 
+        # Only 2-Month orders get auto-renew ON so it buys the 2nd month.
+        # 1-Month orders stay OFF so they die safely on day 30.
+        if duration_api == "TWO_MONTHS":
+            is_renewable = True
+        else:
+            is_renewable = False
+
+        
         kwargs = {
             "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
-            "duration": getattr(RentalDuration, duration_api), 
+            "duration": getattr(RentalDuration, api_mapped_duration), 
             "always_on": always_on,  
             "is_renewable": is_renewable,
             "allow_back_order_reservations": False
@@ -740,3 +811,186 @@ async def check_sms_action(update, context):
 
     except Exception as e:
         await query.edit_message_text(f"💥 Provider Error: {e}")
+        
+        
+          
+        
+        
+#        
+        
+async def trigger_extension_menu(update, context):
+    """Triggered when the user clicks '➕ Extend Rental' on a specific number."""
+    query = update.callback_query
+    await query.answer()
+    
+    # Extract the rental_id they clicked
+    rental_id = query.data.split(":")[1]
+    details = get_rental_details(rental_id)
+    if not details:
+        await query.edit_message_text("❌ This rental is no longer active or could not be found.")
+        return
+        
+    phone, service, always_on, expiration_time = details
+    
+    # 2. 🛑 The 1-Day Blocker
+    # If your DB tracks the original duration, check it here. 
+    # (Assuming you added a way to check if it was a ONE_DAY line)
+    # If you don't track original duration in DB yet, we can skip this or add it to DB later.
+    
+    # 3. Save the critical data to memory for the next step
+    context.user_data["extending_rental_id"] = rental_id
+    context.user_data["extending_service"] = service
+    context.user_data["extending_phone"] = phone
+    
+    # 4. Generate the proper prices based on service type
+    from pricelist import RENEWAL_BASE_PRICES, RENEWAL_UNIVERSAL_PRICES
+    prices = RENEWAL_UNIVERSAL_PRICES if service.lower() == "allservices" else RENEWAL_BASE_PRICES
+
+    # 5. Build the beautiful Text Menu
+    menu_text = (
+        f"📈 <b>Extend Your Rental</b>\n"
+        f"How long would you like to extend <code>{phone}</code>?\n\n"
+        f"<b>Standard Extensions:</b>\n"
+        f"<b>A.</b> 3 Days - <b>${prices['THREE_DAY']:.2f}</b>\n"
+        f"<b>B.</b> 7 Days - <b>${prices['SEVEN_DAY']:.2f}</b>\n"
+        f"<b>C.</b> 14 Days - <b>${prices['FOURTEEN_DAY']:.2f}</b>\n"
+        f"<b>D.</b> 1 Month - <b>${prices['THIRTY_DAY']:.2f}</b>\n"
+        f"<b>E.</b> 2 Months - <b>${prices['TWO_MONTHS']:.2f}</b>\n\n"
+        f"<b>Premium Long-Term:</b>\n"
+        f"<b>F.</b> 3 Months - <b>${prices['THREE_MONTHS']:.2f}</b>\n"
+        f"<b>G.</b> 6 Months - <b>${prices['SIX_MONTHS']:.2f}</b>\n"
+        f"<b>H.</b> 9 Months - <b>${prices['NINE_MONTHS']:.2f}</b>\n"
+        f"<b>I.</b> 1 Year - <b>${prices['ONE_YEAR']:.2f}</b>\n"
+        f"<b>J.</b> Forever - <b>${prices['FOREVER']:.2f}</b>\n\n"
+        f"<i>Type a single letter (A - J) below to secure your line, or type 'cancel' to exit.</i>"
+    )
+    
+    # We set a flag so the bot knows it is actively listening for an A-J response
+    context.user_data["awaiting_extension_choice"] = True
+    
+    await query.edit_message_text(menu_text, parse_mode="HTML")
+    
+    
+    
+    
+async def handle_extension_text(update, context):
+    """Listens for the A-J response when extending a rental."""
+    # 1. If we aren't waiting for an extension choice, ignore their message!
+    if not context.user_data.get("awaiting_extension_choice"):
+        return 
+        
+    text = update.message.text.lower().strip()
+    user_id = update.effective_user.id
+    
+    # 2. The Cancel Switch
+    if text == 'cancel':
+        context.user_data.pop("awaiting_extension_choice", None)
+        await update.message.reply_text("🛑 <b>Extension cancelled.</b>", parse_mode="HTML")
+        return
+
+    # 3. The Letter Mapper (Translates A-J into API Strings and Days)
+    extension_map = {
+        'a': ('THREE_DAY', 3),
+        'b': ('SEVEN_DAY', 7),
+        'c': ('FOURTEEN_DAY', 14),
+        'd': ('THIRTY_DAY', 30),
+        'e': ('TWO_MONTHS', 60), 
+        'f': ('THREE_MONTHS', 90),
+        'g': ('SIX_MONTHS', 180),
+        'h': ('NINE_MONTHS', 270),
+        'i': ('ONE_YEAR', 365),
+        'j': ('FOREVER', 36500)
+    }
+
+    if text not in extension_map:
+        await update.message.reply_text("⚠️ <b>Invalid choice.</b> Please reply with a single letter (A - J) or type 'cancel'.", parse_mode="HTML")
+        return
+
+    api_duration, days_to_add = extension_map[text]
+    rental_id = context.user_data.get("extending_rental_id")
+    service = context.user_data.get("extending_service")
+    phone = context.user_data.get("extending_phone")
+    
+    # 4. Calculate the Exact Price
+    from pricelist import RENEWAL_BASE_PRICES, RENEWAL_UNIVERSAL_PRICES
+    prices = RENEWAL_UNIVERSAL_PRICES if service.lower() == "allservices" else RENEWAL_BASE_PRICES
+    
+    # We mapped 'E' to 'TWO_MONTHS', so prices['TWO_MONTHS'] perfectly grabs the $55.00
+    price_to_charge = prices.get(api_duration) 
+
+    # 5. 🛡️ THE ESCROW HOLD (Wallet Deduction)
+    
+    if not try_debit_user_balance_usd(user_id, price_to_charge):
+        # They are broke! Show the top-up message.
+        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Top up wallet", callback_data="add_funds")]])
+        await update.message.reply_text(
+            f"❌ <b>Insufficient balance.</b>\n\n"
+            f"Extension cost: <b>${price_to_charge:.2f}</b>\n"
+            f"Please top up your wallet to extend this line.",
+            parse_mode="HTML",
+            reply_markup=kb
+        )
+        # We clear the flag so they aren't stuck in a loop
+        context.user_data.pop("awaiting_extension_choice", None)
+        return
+
+    # 6. Show the "Wizard of Oz" Loading Message
+    processing_msg = await update.message.reply_text("🔄 <i>Syncing your extended line with the network...</i>", parse_mode="HTML")
+
+    # 7. ROUTE A: Standard Automated Extension (A - E)
+    if text in ['a', 'b', 'c', 'd', 'e']:
+        client, reservations, _, _, _, _, RentalDuration = get_textverified_client()
+        
+        # We cap the API request to 30 days so the SDK doesn't crash
+        api_mapped = "THIRTY_DAY" if api_duration == "TWO_MONTHS" else api_duration
+        
+        try:
+            # Ping the SDK to extend it!
+            import asyncio
+            await asyncio.to_thread(reservations.extend, rental_id, getattr(RentalDuration, api_mapped))
+        except Exception as e:
+            # 🚨 THE AUTO-REFUND IF NETWORK FAILS
+            add_user_balance_usd(user_id, price_to_charge)
+            await processing_msg.edit_text(f"❌ <b>Network Error:</b> The provider locked this line and it cannot be extended. Your <b>${price_to_charge:.2f}</b> has been refunded.", parse_mode="HTML")
+            context.user_data.pop("awaiting_extension_choice", None)
+            return
+
+    # 8. ROUTE B: The Premium Concierge (F - J)
+    else:
+        # We successfully faked it! Alert the admin in the background.
+        admin_id = list(ADMIN_IDS)[0] if ADMIN_IDS else None
+        if admin_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=f"🚨 <b>MANUAL RENEWAL ORDER!</b>\n\n"
+                         f"User: <code>{user_id}</code>\n"
+                         f"Line: <code>{phone}</code> ({service})\n"
+                         f"Duration: {api_duration} ({days_to_add} Days)\n"
+                         f"Paid: ${price_to_charge:.2f}\n\n"
+                         f"<i>Log into TextVerified and manually extend this specific line to prevent expiration!</i>",
+                    parse_mode="HTML"
+                )
+            except Exception:
+                pass
+    # 9. 💾 UPDATE THE DATABASE & RESET REMINDERS
+    try:
+        extend_rental_timer(rental_id, days_to_add)
+    except Exception as e:
+        await processing_msg.edit_text("⚠️ Extension successful, but failed to update database timer. Please contact support.")
+        return            
+
+    # 10. The Grand Finale
+    await processing_msg.edit_text(
+        f"✅ <b>Extension Successful!</b>\n\n"
+        f"Line <code>{phone}</code> has been successfully secured for an additional <b>{days_to_add} Days</b>.\n"
+        f"<b>${price_to_charge:.2f}</b> was deducted from your wallet.",
+        parse_mode="HTML"
+    )
+    
+    # Wipe the memory completely clean
+    context.user_data.pop("awaiting_extension_choice", None)
+    context.user_data.pop("extending_rental_id", None)
+    context.user_data.pop("extending_service", None)
+    context.user_data.pop("extending_phone", None)    

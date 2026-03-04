@@ -188,9 +188,19 @@ async def otp_usa_rental_type_menu(update, context, method: str):
                 callback_data=f"otp_usa_{method}_rental_monthly",
             ),
             InlineKeyboardButton(
-                "Forever Rental",
-                callback_data=f"otp_usa_{method}_rental_forever",
+                "1 Year",
+                callback_data=f"otp_usa_{method}_rental_1_year",   
             ),
+        ],
+        
+        # Fourth row: Forever
+        [
+            InlineKeyboardButton(
+                
+                "Forever",
+                callback_data=f"otp_usa_{method}_rental_forever",
+            )
+
         ],
         # Bottom row: Navigation
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_one_time_rental")],
@@ -214,6 +224,20 @@ async def otp_usa_monthly_duration_menu(update, context, method: str):
                 "3 Months", callback_data=f"otp_usa_{method}_rental_monthly_3m"
             )
         ],
+        
+         [
+            InlineKeyboardButton(
+                "6 Months", callback_data=f"otp_usa_{method}_rental_monthly_6m"
+            )
+        ],
+         
+          [
+            InlineKeyboardButton(
+                "9 Months", callback_data=f"otp_usa_{method}_rental_monthly_9m"
+            )
+        ],
+          
+
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_rental_type")],
     ]
     await _edit(update, "Select duration:", keyboard)

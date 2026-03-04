@@ -67,15 +67,6 @@ COIN_MAP = {
 }
 
 
-# 1. Standard Base Costs (What TextVerified charges for most services)
-RENTAL_BASE_PRICES = {
-    "ONE_DAY": 1.50,
-    "THREE_DAY": 3.00,
-    "SEVEN_DAY": 6.00,
-    "FOURTEEN_DAY": 10.00,
-    "THIRTY_DAY": 18.00,
-}
-
 
 # 1. EXACT PRICES FOR STANDARD SERVICES (WhatsApp, Gmail, etc.)
 RENTAL_BASE_PRICES = {
@@ -84,6 +75,12 @@ RENTAL_BASE_PRICES = {
     "SEVEN_DAY": 5.60,    
     "FOURTEEN_DAY": 7.50, 
     "THIRTY_DAY": 9.00,   
+    "TWO_MONTHS": 65.00,
+    "THREE_MONTHS": 95.00,
+    "SIX_MONTHS": 180.00,
+    "NINE_MONTHS": 260.00,
+    "ONE_YEAR": 340.00,
+    "FOREVER": 999.00,
 }
 
 # 2. EXACT PRICES FOR UNIVERSAL / ALL SERVICES
@@ -92,7 +89,48 @@ UNIVERSAL_RENTAL_PRICES = {
     "SEVEN_DAY": 12.13,    
     "FOURTEEN_DAY": 14.50, 
     "THIRTY_DAY": 17.50,   
+    "TWO_MONTHS": 65.00,
+    "THREE_MONTHS": 95.00,
+    "SIX_MONTHS": 180.00,
+    "NINE_MONTHS": 260.00,
+    "ONE_YEAR": 340.00,
+    "FOREVER": 999.00,
+
 }
+
+
+
+
+# 1. EXACT PRICES FOR STANDARD SERVICES (WhatsApp, Gmail, etc.)
+RENEWAL_BASE_PRICES = {
+    "ONE_DAY": 3.20,       
+    "THREE_DAY": 4.50,     
+    "SEVEN_DAY": 5.60,    
+    "FOURTEEN_DAY": 7.50, 
+    "THIRTY_DAY": 9.00,   
+    "TWO_MONTHS": 65.00,
+    "THREE_MONTHS": 95.00,
+    "SIX_MONTHS": 180.00,
+    "NINE_MONTHS": 260.00,
+    "ONE_YEAR": 340.00,
+    "FOREVER": 999.00,
+}
+
+# 2. EXACT PRICES FOR UNIVERSAL / ALL SERVICES
+RENEWAL_UNIVERSAL_PRICES = {     
+    "THREE_DAY": 10.33,     
+    "SEVEN_DAY": 12.13,    
+    "FOURTEEN_DAY": 14.50, 
+    "THIRTY_DAY": 17.50,   
+    "TWO_MONTHS": 65.00,
+    "THREE_MONTHS": 95.00,
+    "SIX_MONTHS": 180.00,
+    "NINE_MONTHS": 260.00,
+    "ONE_YEAR": 340.00,
+    "FOREVER": 999.00,
+
+}
+
 
 def get_rental_price_usd(service_name: str, duration_api: str, state: str) -> float:
     """Calculates the final rental price. STRICT MODE: No defaults."""
