@@ -1266,12 +1266,18 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
         await safe_delete_user_message(update) # best-effort delete user message
+        
+    
+    
+    #🛑 1. THE EXTENSION INTERCEPTOR 🛑
+    if context.user_data.get("awaiting_extension_choice"):
+        await handle_extension_text(update, context)
+        await safe_delete_user_message(update)   # ✅ delete only if handled
         return
 
     # Admin wizard capture FIRST
     if await _admin_capture_text(update, context):
         await safe_delete_user_message(update)   # ✅ optional: delete admin typed text too
-
         return
     
     # Wallet flow
@@ -1442,7 +1448,7 @@ tg_app.add_handler(CommandHandler("rescue", rescue_my_number))
 tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
 tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_rental:"))
 tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
-tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_extension_text))
+
 
 
 
@@ -1451,8 +1457,6 @@ tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_extens
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router), group=0)
 # Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
-
-
 
 async def _background_telegram_bootstrap():
     webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
