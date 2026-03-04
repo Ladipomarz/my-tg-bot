@@ -268,35 +268,35 @@ async def confirm_rental(update: Update, context: CallbackContext):
             pass
             
             
-            # 1. Alert the User
-            await target.reply_text(
-                f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
-                f"Because you selected a massive <b>{context.user_data.get('otp_duration_text', 'Long-Term')}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
-                f"<i>Please allow up to 24 hours. Your number will be delivered directly to your inbox.</i>",
-                parse_mode="HTML"
-            )
+        # 1. Alert the User
+        await target.reply_text(
+            f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
+            f"Because you selected a massive <b>{context.user_data.get('otp_duration_text', 'Long-Term')}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
+            f"<i>Please allow up to 24 hours. Your number will be delivered directly to your inbox.</i>",
+            parse_mode="HTML"
+        )
+        
+        # 2. Alert the Admin
+        admin_id = list(ADMIN_IDS)[0] if ADMIN_IDS else None
+        
+        if admin_id:
+            try:
+                await context.bot.send_message(
+                    chat_id=admin_id,
+                    text=f"🚨 <b>MANUAL RENTAL ORDER!</b>\n\n"
+                        f"User: <code>{user_id}</code>\n"
+                        f"Service: {service}\n"
+                        f"Duration: {duration_api}\n"
+                        f"Paid: ${price:.2f}\n\n"
+                        f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
+                    parse_mode="HTML"
+                )
+            except Exception as e:
+                logger.error(f"Failed to alert admin of manual order: {e}")
             
-            # 2. Alert the Admin
-            admin_id = list(ADMIN_IDS)[0] if ADMIN_IDS else None
-            
-            if admin_id:
-                try:
-                    await context.bot.send_message(
-                        chat_id=admin_id,
-                        text=f"🚨 <b>MANUAL RENTAL ORDER!</b>\n\n"
-                            f"User: <code>{user_id}</code>\n"
-                            f"Service: {service}\n"
-                            f"Duration: {duration_api}\n"
-                            f"Paid: ${price:.2f}\n\n"
-                            f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
-                        parse_mode="HTML"
-                    )
-                except Exception as e:
-                    logger.error(f"Failed to alert admin of manual order: {e}")
-                
-            context.user_data.pop("otp_step", None)
-            
-            return    
+        context.user_data.pop("otp_step", None)
+        
+        return    
         
 
     # 4. 🚀 THE API PURCHASE
@@ -448,10 +448,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             logger.info("✅ No Universal keywords found. Keeping original name.")
 
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
-        
-        
-        logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
-        
+                
         # --- THE API TRANSLATOR ---
         api_mapped_duration = duration_api
         
@@ -498,11 +495,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             # We return a fake phone number, a fake rental ID, and No Errors!
             # Your bot will think it successfully bought the number and continue the flow.
             return "+15550009999", "ghost_rental_12345", None
-        # ---------------------------------------------------------
-
-
-        # 1. Buy the number and get the "mini-receipt" (YOUR REAL CODE STARTS HERE)
-        reservation = await asyncio.to_thread(reservations.create, **kwargs)        
+        # ---------------------------------------------------------   
 
         # 1. Buy the number and get the "mini-receipt"
         reservation = await asyncio.to_thread(reservations.create, **kwargs)
