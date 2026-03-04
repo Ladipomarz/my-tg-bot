@@ -499,7 +499,7 @@ async def my_rentals_menu(update, context):
         
         
 async def manage_rental_menu(update, context):
-    """Displays the management screen with a live expiration countdown."""
+    """Displays the management screen with a live expiration countdown and accurate status."""
     query = update.callback_query
     await query.answer() 
     
@@ -515,11 +515,13 @@ async def manage_rental_menu(update, context):
     phone, service, always_on, expiration_time = details
     
     # 3. Calculate the exact time remaining
-    # We use timezone.utc to perfectly match PostgreSQL's TIMESTAMP WITH TIME ZONE
     now = datetime.datetime.now(datetime.timezone.utc)
     time_left = expiration_time - now
     
-    if time_left.total_seconds() > 0:
+    # Check if it is expired
+    is_expired = time_left.total_seconds() <= 0
+    
+    if not is_expired:
         days = time_left.days
         hours, remainder = divmod(time_left.seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
@@ -529,29 +531,34 @@ async def manage_rental_menu(update, context):
             countdown_str = f"{days} days, {hours} hours, {minutes} mins"
         else:
             countdown_str = f"{hours} hours, {minutes} mins, {seconds} seconds"
+            
+        status_text = "🟢 Active"
+        footer_text = "Click the button below to connect to the network and fetch your messages."
     else:
         countdown_str = "0 hours, 0 mins (Expired)"
+        status_text = "🔴 Expired"
+        footer_text = "This number has expired and can no longer receive messages."
     
-    # 4. Build the Keyboard
-    keyboard = [
-        [InlineKeyboardButton("📥 Check SMS", callback_data=f"check_sms:{rental_id}")],
-        [InlineKeyboardButton("🔙 Back to List", callback_data="my_rentals_back")]
-    ]
+    # 4. Build the Keyboard (Hide Check SMS if expired)
+    keyboard = []
+    if not is_expired:
+        keyboard.append([InlineKeyboardButton("📥 Check SMS", callback_data=f"check_sms:{rental_id}")])
+        
+    keyboard.append([InlineKeyboardButton("🔙 Back to List", callback_data="my_rentals_back")])
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # 5. Show the beautiful UI
+    # 5. Show the beautiful UI (Using pure HTML tags to fix the asterisk glitch)
     menu_text = (
-        f"📱 **Number Details**\n\n"
-        f"**Number:** `{phone}`\n\n"
-        f"**Service:** {service.capitalize()}\n\n"
-        f"**Status:** 🟢 Active\n\n"
-        f"**ID:** `{rental_id}`\n\n"
+        f"📱 <b>Number Details</b>\n\n"
+        f"<b>Number:</b> <code>{phone}</code>\n\n"
+        f"<b>Service:</b> {service.capitalize()}\n\n"
+        f"<b>Status:</b> {status_text}\n\n"
+        f"<b>ID:</b> <code>{rental_id}</code>\n\n"
         f"<b>⚠️ Please note this number will expire in - {countdown_str}</b>\n\n"
-        f"Click the button below to connect to the network and fetch your messages."
+        f"<i>{footer_text}</i>"
     )
-  
 
-    await query.edit_message_text(menu_text, parse_mode="HTML", reply_markup=reply_markup)   
+    await query.edit_message_text(menu_text, parse_mode="HTML", reply_markup=reply_markup)
         
 
 async def check_sms_action(update, context):
