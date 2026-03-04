@@ -477,6 +477,27 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             acs = _area_codes_for_state(state)
             if acs:
                 kwargs["area_code_select_option"] = acs[:15]
+                
+                
+        
+        # ---------------------------------------------------------
+        # 🧪 THE GHOST INTERCEPTOR (TEST MODE)
+        # ⚠️ Change to False when you are ready for real users!
+        TEST_MODE = True
+        
+        if TEST_MODE:
+            import asyncio
+            await asyncio.sleep(2)  # Simulate network delay
+            logger.info("🧪 TEST MODE ACTIVE: Faking successful TextVerified response!")
+            
+            # We return a fake phone number, a fake rental ID, and No Errors!
+            # Your bot will think it successfully bought the number and continue the flow.
+            return "+15550009999", "ghost_rental_12345", None
+        # ---------------------------------------------------------
+
+
+        # 1. Buy the number and get the "mini-receipt" (YOUR REAL CODE STARTS HERE)
+        reservation = await asyncio.to_thread(reservations.create, **kwargs)        
 
         # 1. Buy the number and get the "mini-receipt"
         reservation = await asyncio.to_thread(reservations.create, **kwargs)
