@@ -6,7 +6,6 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
-from handlers.rental import scheduled_expire_rental 
 import logging
 from config import DATABASE_URL
 
@@ -1372,6 +1371,7 @@ async def rescue_my_number(update, context):
         delay_seconds = (expiration_date - now).total_seconds()
         
         if context.job_queue and delay_seconds > 0:
+            from handlers.rental import scheduled_expire_rental 
             context.job_queue.run_once(
                 scheduled_expire_rental,
                 when=delay_seconds,  # ⏰ Perfectly matches your timedelta!
