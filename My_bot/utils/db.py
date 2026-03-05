@@ -1297,6 +1297,18 @@ def get_rental_details(rental_id: str):
     except Exception as e:
         print(f"💥 Database Error (get_rental_details): {e}")
         return None
+    
+    
+def mark_rental_expired(rental_id: str):
+    """F flips the database status to expired."""
+    query = "UPDATE active_rentals SET status = 'expired' WHERE rental_id = %s"
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query, (rental_id,))
+            conn.commit()
+    except Exception as e:
+        print(f"Failed to mark rental {rental_id} expired: {e}")    
 
 
 async def rescue_my_number(update, context):

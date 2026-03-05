@@ -8,6 +8,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext,ConversationHandler
 from handlers.otp_handler import send_services_txt, _area_codes_for_state
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
+from pricelist import RENEWAL_BASE_PRICES, RENEWAL_UNIVERSAL_PRICES,UNIVERSAL_RENTAL_PRICES
 import random
 import requests
 import html
@@ -28,7 +29,8 @@ from utils.db import (
     create_order,
     update_payment_status_by_order_code, 
     set_delivery_status,
-    set_order_status
+    set_order_status,
+    mark_rental_expired
 )
 
 from telegram.constants import ParseMode
@@ -259,7 +261,8 @@ async def confirm_rental(update: Update, context: CallbackContext):
 
     # 📦 --- LOG THE RENTAL TO THE ORDERS DATABASE --- 📦
     duration_text = context.user_data.get('otp_duration_text', duration_api)
-    desc = f"Rental: {service} ({duration_text})"
+    state_display = state if state and state.lower() != "random" else "Random"
+    desc = f"Rental: {service} ({duration_text}) [State: {state_display}]"
     
     order_id, order_code = create_order(
         user_id=user_id,
@@ -728,7 +731,13 @@ async def manage_rental_menu(update, context):
     # 4. Build the Keyboard (Hide Check SMS if expired)
     keyboard = []
     if not is_expired:
-        keyboard.append([InlineKeyboardButton("📥 Check SMS", callback_data=f"check_sms:{rental_id}")])
+        keyboard.append([
+            InlineKeyboardButton("📥 Check SMS", callback_data=f"check_sms:{rental_id}"),
+            InlineKeyboardButton("⏳ Extend Rental", callback_data=f"extend_rental:{rental_id}")
+        ])
+        
+    else:
+        mark_rental_expired(rental_id)    
         
     keyboard.append([InlineKeyboardButton("🔙 Back to List", callback_data="my_rentals_back")])
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -928,10 +937,6 @@ async def check_sms_action(update, context):
         await query.edit_message_text(f"💥 Provider Error: {e}")
         
         
-          
-        
-        
-#        
         
 async def trigger_extension_menu(update, context):
     """Triggered when the user clicks '➕ Extend Rental' on a specific number."""
@@ -958,7 +963,6 @@ async def trigger_extension_menu(update, context):
     context.user_data["extending_phone"] = phone
     
     # 4. Generate the proper prices based on service type
-    from pricelist import RENEWAL_BASE_PRICES, RENEWAL_UNIVERSAL_PRICES
     prices = RENEWAL_UNIVERSAL_PRICES if service.lower() == "allservices" else RENEWAL_BASE_PRICES
 
     # 5. Build the beautiful Text Menu
@@ -1027,7 +1031,6 @@ async def handle_extension_text(update, context):
     phone = context.user_data.get("extending_phone")
     
     # 4. Calculate the Exact Price
-    from pricelist import RENEWAL_BASE_PRICES, RENEWAL_UNIVERSAL_PRICES
     prices = RENEWAL_UNIVERSAL_PRICES if service.lower() == "allservices" else RENEWAL_BASE_PRICES
     
     # We mapped 'E' to 'TWO_MONTHS', so prices['TWO_MONTHS'] perfectly grabs the $55.00
