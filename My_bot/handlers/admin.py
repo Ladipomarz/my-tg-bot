@@ -3,7 +3,14 @@ from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 
 from menus.admin_menu import get_admin_menu
-from utils.db import get_paid_orders_for_admin, get_delivered_orders_for_admin
+from utils.db import (
+    get_paid_orders_for_admin, 
+    get_delivered_orders_for_admin,
+    get_order_by_code,
+    set_delivery_status,
+    set_order_status,
+    add_user_balance_usd
+)
 
 logger = logging.getLogger(__name__)
 
@@ -157,6 +164,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         return
 
     # -------------------------
+    # -------------------------
     # OPEN ORDER (PAID LIST VIEW)
     # -------------------------
     if data.startswith("admin_open_paid:"):
@@ -169,13 +177,13 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         except Exception:
             idx = 0
 
-        from utils.db import get_order_by_code
         o = get_order_by_code(code) or {}
 
         desc = (o.get("description") or "Service").strip()
         user_id = o.get("user_id")
         pay_status = (o.get("pay_status") or "").strip()
         delivery_status = (o.get("delivery_status") or "").strip()
+        order_type = (o.get("order_type") or "").strip()
 
         text = (
             "🧾 Order Details\n\n"
@@ -192,15 +200,88 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         if idx < len(codes) - 1:
             nav_row.append(InlineKeyboardButton("Next ▶", callback_data=f"admin_open_paid:{codes[idx+1]}"))
 
-        kb_rows = [
-            [InlineKeyboardButton(f"✅ Deliver {code}", callback_data=f"admin_deliver:{code}")],
-        ]
+        kb_rows = []
+        
+        # 🔀 THE ROUTING SPLIT
+        if order_type == "premium_rental":
+            # Premium Rental Buttons
+            kb_rows.append([InlineKeyboardButton("✅ Done (Number Ready)", callback_data=f"admin_rental_done:{code}")])
+            kb_rows.append([InlineKeyboardButton("❌ Cancel & Refund", callback_data=f"admin_rental_refund:{code}")])
+        else:
+            # Standard eSIM Button
+            kb_rows.append([InlineKeyboardButton(f"✅ Deliver {code}", callback_data=f"admin_deliver:{code}")])
+
         if nav_row:
             kb_rows.append(nav_row)
+            
         kb_rows.append([InlineKeyboardButton("⬅ Back to Paid List", callback_data=f"admin_paid:{lst.get('page', 0)}")])
         kb_rows.append([InlineKeyboardButton("⬅ Admin Menu", callback_data="admin_menu")])
 
         await q.edit_message_text(text, reply_markup=InlineKeyboardMarkup(kb_rows))
+        return
+
+    # PREMIUM RENTAL: DONE LOGIC
+    # -------------------------
+    if data.startswith("admin_rental_done:"):
+        code = data.split(":", 1)[1].strip()
+        o = get_order_by_code(code)
+        if not o:
+            await q.answer("Order not found.")
+            return
+            
+        user_id = o.get("user_id")
+        desc = o.get("description", "Premium Service")
+        
+        # 1. Mark Delivered in DB
+        set_delivery_status(o["id"], "delivered")
+        
+        # 2. Alert the User
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"🎉 <b>Your Premium Rental is Ready!</b>\n\n"
+                     f"Your {desc} line is now active and ready to receive SMS.\n"
+                     f"👉 Use the <b>/rentals</b> command to view your number.",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Could not alert user {user_id}: {e}")
+            
+        # 3. Update Admin Screen
+        await q.edit_message_text(f"✅ Order <b>{code}</b> marked as Delivered. User notified.", parse_mode="HTML")
+        return
+
+    # -------------------------
+    # PREMIUM RENTAL: CANCEL LOGIC
+    # -------------------------
+    if data.startswith("admin_rental_refund:"):
+        code = data.split(":", 1)[1].strip()
+        o = get_order_by_code(code)
+        if not o:
+            await q.answer("Order not found.")
+            return
+            
+        user_id = o.get("user_id")
+        amount = float(o.get("amount_usd") or 0.0)
+        
+        # 1. Cancel in DB & Refund Wallet
+        set_order_status(o["id"], "cancelled")
+        add_user_balance_usd(user_id, amount)
+        
+        # 2. Alert the User
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"❌ <b>Rental Cancelled.</b>\n\n"
+                     f"We apologize, but our provider is currently out of stock for this specific long-term line.\n"
+                     f"💰 <b>${amount:.2f}</b> has been instantly refunded to your wallet.",
+                parse_mode="HTML"
+            )
+        except Exception as e:
+            logger.error(f"Could not alert user {user_id}: {e}")
+            
+        # 3. Update Admin Screen
+        await q.edit_message_text(f"❌ Order <b>{code}</b> Cancelled. <b>${amount:.2f}</b> refunded to user.", parse_mode="HTML")
         return
 
     # Anything else: do nothing here (bot.py handles the rest)
