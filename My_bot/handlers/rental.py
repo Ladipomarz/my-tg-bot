@@ -322,7 +322,6 @@ async def confirm_rental(update: Update, context: CallbackContext):
         return
         
     # 4. 🚀 THE API PURCHASE (For 1-30 Day standard numbers)
-    # 4. 🚀 THE API PURCHASE (For 1-30 Day standard numbers)
     try:
         phone_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
             service_name=service,
@@ -376,6 +375,9 @@ async def confirm_rental(update: Update, context: CallbackContext):
 💵 Your wallet was successfully charged <b>${price:.2f}</b>.
 <i>You can manage your rental in the 'My Numbers' menu.</i>
 """
+
+        # 🔘 ADD THE BUTTON TO JUMP STRAIGHT TO THEIR NUMBERS
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage My Numbers", callback_data="my_rentals_back")]])
         await target.reply_text(success_message, parse_mode="HTML")
         
         # ⏰ SET THE EXACT ALARM!
@@ -916,23 +918,29 @@ async def trigger_extension_menu(update, context):
     # 4. Generate the proper prices based on service type
     prices = RENEWAL_UNIVERSAL_PRICES if service.lower() == "allservices" else RENEWAL_BASE_PRICES
 
-    # 5. Build the beautiful Text Menu
+    # 5. Build the beautiful Text Menu (Safely!)
     menu_text = (
         f"📈 <b>Extend Your Rental</b>\n"
         f"How long would you like to extend <code>{phone}</code>?\n\n"
         f"<b>Standard Extensions:</b>\n"
-        f"<b>A.</b> 1 Day - <b>${prices['ONE_DAY']:.2f}</b>\n"
-        f"<b>B.</b> 3 Days - <b>${prices['THREE_DAY']:.2f}</b>\n"
-        f"<b>C.</b> 7 Days - <b>${prices['SEVEN_DAY']:.2f}</b>\n"
-        f"<b>D.</b> 14 Days - <b>${prices['FOURTEEN_DAY']:.2f}</b>\n"
-        f"<b>E.</b> 1 Month - <b>${prices['THIRTY_DAY']:.2f}</b>\n"
-        f"<b>F.</b> 2 Months - <b>${prices['TWO_MONTHS']:.2f}</b>\n\n"
+    )
+    
+    # Only show the 1-Day option if it's NOT a Universal line!
+    if "ONE_DAY" in prices:
+        menu_text += f"<b>A.</b> 1 Day - <b>${prices['ONE_DAY']:.2f}</b>\n"
+        
+    menu_text += (
+        f"<b>B.</b> 3 Days - <b>${prices.get('THREE_DAY', 0.0):.2f}</b>\n"
+        f"<b>C.</b> 7 Days - <b>${prices.get('SEVEN_DAY', 0.0):.2f}</b>\n"
+        f"<b>D.</b> 14 Days - <b>${prices.get('FOURTEEN_DAY', 0.0):.2f}</b>\n"
+        f"<b>E.</b> 1 Month - <b>${prices.get('THIRTY_DAY', 0.0):.2f}</b>\n"
+        f"<b>F.</b> 2 Months - <b>${prices.get('TWO_MONTHS', 0.0):.2f}</b>\n\n"
         f"<b>Premium Long-Term:</b>\n"
-        f"<b>G.</b> 3 Months - <b>${prices['THREE_MONTHS']:.2f}</b>\n"
-        f"<b>H.</b> 6 Months - <b>${prices['SIX_MONTHS']:.2f}</b>\n"
-        f"<b>I.</b> 9 Months - <b>${prices['NINE_MONTHS']:.2f}</b>\n"
-        f"<b>J.</b> 1 Year - <b>${prices['ONE_YEAR']:.2f}</b>\n"
-        f"<b>K.</b> Forever - <b>${prices['FOREVER']:.2f}</b>\n\n"
+        f"<b>G.</b> 3 Months - <b>${prices.get('THREE_MONTHS', 0.0):.2f}</b>\n"
+        f"<b>H.</b> 6 Months - <b>${prices.get('SIX_MONTHS', 0.0):.2f}</b>\n"
+        f"<b>I.</b> 9 Months - <b>${prices.get('NINE_MONTHS', 0.0):.2f}</b>\n"
+        f"<b>J.</b> 1 Year - <b>${prices.get('ONE_YEAR', 0.0):.2f}</b>\n"
+        f"<b>K.</b> Forever - <b>${prices.get('FOREVER', 0.0):.2f}</b>\n\n"
         f"<i>Type a single letter (A - K) below to secure your line, or type 'cancel' to exit.</i>"
     )
     
