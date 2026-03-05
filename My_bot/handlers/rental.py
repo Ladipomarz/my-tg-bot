@@ -1083,8 +1083,12 @@ async def handle_extension_text(update, context):
         api_mapped = "THIRTY_DAY" if api_duration == "TWO_MONTHS" else api_duration
         
         try:
-            # Ping the SDK to extend it!
-            await asyncio.to_thread(reservations.extend, rental_id, getattr(RentalDuration, api_mapped))
+            # Ping the SDK to extend it using the correct method and kwargs!
+            await asyncio.to_thread(
+                reservations.extend_nonrenewable, 
+                rental_id=rental_id, 
+                extension_duration=getattr(RentalDuration, api_mapped)
+            )
         except Exception as e:
             
             logging.error(f"🚨 TEXTVERIFIED EXTENSION FAILED for {rental_id}: {e}")
