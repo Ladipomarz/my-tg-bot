@@ -31,7 +31,7 @@ from utils.db import (
     set_delivery_status,
     set_order_status,
     mark_rental_expired,
-    auto_expire_rentals
+    auto_expire_rentals 
 
 )
 
@@ -1084,11 +1084,12 @@ async def handle_extension_text(update, context):
         
         try:
             # Ping the SDK to extend it!
-            import asyncio
             await asyncio.to_thread(reservations.extend, rental_id, getattr(RentalDuration, api_mapped))
         except Exception as e:
+            
             # 🚨 THE AUTO-REFUND IF NETWORK FAILS
             add_user_balance_usd(user_id, price_to_charge)
+            f"❌ <b>API ERROR:</b> {e}\n\n"
             await processing_msg.edit_text(f"❌ <b>Network Error:</b> The provider locked this line and it cannot be extended. Your <b>${price_to_charge:.2f}</b> has been refunded.", parse_mode="HTML")
             context.user_data.pop("awaiting_extension_choice", None)
             return
@@ -1140,17 +1141,22 @@ async def scheduled_expire_rental(context: CallbackContext):
     rental_id = job_data["rental_id"]
     user_id = job_data.get("user_id")
 
-    # 1. Update the database instantly
-    from utils.db import mark_rental_expired
+    # 1. Grab the phone number from the DB before we expire it
+    details = get_rental_details(rental_id)
+    
+    # If it finds the details, grab the phone number (index 0). Otherwise fallback.
+    phone_number = details[0] if details else rental_id
+
+    # 2. Update the database instantly
     mark_rental_expired(rental_id)
 
-    # 2. Tell the user it expired!
+    # 3. Tell the user it expired!
     if user_id:
         try:
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"🔴 <b>Rental Expired</b>\n\nYour premium line (ID: <code>{rental_id}</code>) has run out of time and was removed from your active list.",
+                text=f"🔴 <b>Rental Expired</b>\n\nYour premium line (<code>{phone_number}</code>) has run out of time and was removed from your active list.",
                 parse_mode="HTML"
             )
         except Exception:
-            pass # Fails silently if they blocked the bot    
+            pass # Fails silently if they blocked the bot  
