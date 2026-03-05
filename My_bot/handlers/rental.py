@@ -370,6 +370,16 @@ async def confirm_rental(update: Update, context: CallbackContext):
 <i>You can manage your rental in the 'My Numbers' menu.</i>
 """
         await target.reply_text(success_message, parse_mode="HTML")
+        
+        # ⏰ SET THE EXACT ALARM!
+        delay_seconds = days_to_expire * 24 * 3600
+        if context.job_queue:
+            context.job_queue.run_once(
+                scheduled_expire_rental,
+                when=delay_seconds,
+                data={"rental_id": rental_id, "user_id": user_id},
+                name=f"expire_{rental_id}"
+            )
         context.user_data.pop("otp_step", None)
 
     except Exception as e:
@@ -1121,3 +1131,26 @@ async def handle_extension_text(update, context):
     context.user_data.pop("extending_rental_id", None)
     context.user_data.pop("extending_service", None)
     context.user_data.pop("extending_phone", None)    
+    
+    
+    
+async def scheduled_expire_rental(context: CallbackContext):
+    """The exact alarm goes off! Mark the specific rental as expired and DM the user."""
+    job_data = context.job.data
+    rental_id = job_data["rental_id"]
+    user_id = job_data.get("user_id")
+
+    # 1. Update the database instantly
+    from utils.db import mark_rental_expired
+    mark_rental_expired(rental_id)
+
+    # 2. Tell the user it expired!
+    if user_id:
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=f"🔴 <b>Rental Expired</b>\n\nYour premium line (ID: <code>{rental_id}</code>) has run out of time and was removed from your active list.",
+                parse_mode="HTML"
+            )
+        except Exception:
+            pass # Fails silently if they blocked the bot    

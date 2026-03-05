@@ -1322,8 +1322,23 @@ def auto_expire_rentals():
                 cur.execute(query)
             conn.commit()
     except Exception as e:
-        print(f"Auto-expire sweep failed: {e}")        
-
+        print(f"Auto-expire sweep failed: {e}")  
+        
+        
+              
+def get_all_active_rentals():
+    """Fetches all active rentals to reschedule their precise alarms on boot."""
+    query = "SELECT rental_id, expiration_time, user_id FROM active_rentals WHERE status = 'active'"
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+                return cur.fetchall() # Returns list of (rental_id, exp_time, user_id) tuples
+    except Exception as e:
+        print(f"Failed to fetch active rentals: {e}")
+        return []
+    
+    
 
 async def rescue_my_number(update, context):
     """Temporary command to inject a 1-year test number directly into the DB."""

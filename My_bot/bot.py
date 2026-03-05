@@ -42,7 +42,9 @@ from utils.db import (
     get_user_balance_usd,
     mark_order_wallet_credited,
     create_wallet_transactions_table,
-    fix_db_sequence
+    fix_db_sequence,
+    get_all_active_rentals,
+    auto_expire_rentals
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -70,7 +72,8 @@ my_rentals_menu,
 check_sms_action,
 handle_rental_universal,
 trigger_extension_menu,
-handle_extension_text
+handle_extension_text,
+scheduled_expire_rental
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -216,11 +219,42 @@ async def ensure_telegram_ready():
             await tg_app.start()
             TG_READY = True
             logger.info("Telegram app is ready")
+            
+            # ---------------------------------------------------------
+            # 🚀 THE ENTERPRISE HYBRID STARTUP
+            # 1. Sweep anything that expired while the bot was offline
+            auto_expire_rentals()
+
+            # 2. Reschedule precise alarms for everything still alive
+            active_lines = get_all_active_rentals()
+            now = datetime.datetime.now(datetime.timezone.utc)
+
+            for line in active_lines:
+                rental_id = line[0]
+                exp_time = line[1]
+                user_id = line[2]
+
+                # Make sure timezone math matches
+                if exp_time.tzinfo is None:
+                    exp_time = exp_time.replace(tzinfo=datetime.timezone.utc)
+
+                time_left = (exp_time - now).total_seconds()
+                
+                # If it still has time, set the alarm!
+                if time_left > 0:
+                    tg_app.job_queue.run_once(
+                        scheduled_expire_rental,
+                        when=time_left,
+                        data={"rental_id": rental_id, "user_id": user_id},
+                        name=f"expire_{rental_id}"
+                    )
+            logger.info(f"Rescheduled {len(active_lines)} precise rental alarms.")
+            # ---------------------------------------------------------
+
             return True
         except Exception as e:
             logger.exception("Telegram not ready yet: %s", e)
             return False
-
 
 async def on_error(update, context):
     logger.exception("Unhandled Telegram error", exc_info=context.error)
