@@ -1087,9 +1087,10 @@ async def handle_extension_text(update, context):
             await asyncio.to_thread(reservations.extend, rental_id, getattr(RentalDuration, api_mapped))
         except Exception as e:
             
+            logging.error(f"🚨 TEXTVERIFIED EXTENSION FAILED for {rental_id}: {e}")
+            
             # 🚨 THE AUTO-REFUND IF NETWORK FAILS
             add_user_balance_usd(user_id, price_to_charge)
-            f"❌ <b>API ERROR:</b> {e}\n\n"
             await processing_msg.edit_text(f"❌ <b>Network Error:</b> The provider locked this line and it cannot be extended. Your <b>${price_to_charge:.2f}</b> has been refunded.", parse_mode="HTML")
             context.user_data.pop("awaiting_extension_choice", None)
             return
