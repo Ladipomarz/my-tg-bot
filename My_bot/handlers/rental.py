@@ -525,7 +525,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         # ---------------------------------------------------------
         # 🧪 THE GHOST INTERCEPTOR (TEST MODE)
         # ⚠️ Change to False when you are ready for real users!
-        TEST_MODE = True
+        TEST_MODE = False
         
         if TEST_MODE:
             await asyncio.sleep(2)  # Simulate network delay
@@ -941,8 +941,7 @@ async def trigger_extension_menu(update, context):
         f"<b>I.</b> 9 Months - <b>${prices.get('NINE_MONTHS', 0.0):.2f}</b>\n"
         f"<b>J.</b> 1 Year - <b>${prices.get('ONE_YEAR', 0.0):.2f}</b>\n"
         f"<b>K.</b> Forever - <b>${prices.get('FOREVER', 0.0):.2f}</b>\n\n"
-        f"<i>Type a single letter (A - K) below to secure your line, or type 'cancel' to exit.</i>"
-    )
+        f"<i>Type the letter of your choice below to secure your line, Example B for 3 days or type 'cancel' to exit.</i>")
     
     # We set a flag so the bot knows it is actively listening for an A-J response
     context.user_data["awaiting_extension_choice"] = True
