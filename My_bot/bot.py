@@ -55,6 +55,8 @@ from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
 
 from handlers.servicelist import fetch_and_save_services
+from handlers.service_list_flow import resend_otp_menu
+
 from handlers.start import start, handle_main_menu
 from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
@@ -73,7 +75,8 @@ check_sms_action,
 handle_rental_universal,
 trigger_extension_menu,
 handle_extension_text,
-scheduled_expire_rental
+scheduled_expire_rental,
+ resend_rental_menu 
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1325,7 +1328,18 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_delete_user_message(update) # best-effort delete user message
         return
         
-   
+    
+    # 1. THE RENTAL BUTTON INTERCEPTOR
+    if step == "awaiting_rental_button":
+        await safe_delete_user_message(update)
+        await resend_rental_menu(update, context) # <--- Calls the function!
+        return
+    
+    # 👇 2. THE ONE-TIME OTP BUTTON INTERCEPTOR 👇
+    if step == "awaiting_otp_button":
+        await safe_delete_user_message(update)
+        await resend_otp_menu(update, context)
+        return
     
       # Handle the state selection step for rental
     if context.user_data.get("otp_step") == "awaiting_state":

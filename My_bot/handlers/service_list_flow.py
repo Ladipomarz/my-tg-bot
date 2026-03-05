@@ -46,3 +46,31 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
         ),
         reply_markup=kb,
     )
+
+
+# 3) yes/skip message + buttons
+    kb = _yes_skip_keyboard(back_callback="otp_back_usa_one_time_rental")
+    await context.bot.send_message(
+        chat_id=update.effective_chat.id,
+        text=(
+            "If you've got the 4-digit Product ID, click ✅ Yes to continue.\n"
+            "If you couldn't find the service you need, click ⏭ Skip to get a universal phone number.\n\n"
+            "⚠️ Please make sure the service is not listed before using the universal phone number, "
+            "or it may not receive OTP codes."
+        ),
+        reply_markup=kb,
+    )
+    
+    # 👇 1. WE SET THE TRAP HERE 👇
+    context.user_data["otp_step"] = "awaiting_otp_button"
+
+
+# 👇 2. WE ADD THE REPROMPT HELPER HERE 👇
+async def resend_otp_menu(update, context):
+    """Silently pushes the One-Time OTP buttons back to the user if they type text."""
+    kb = _yes_skip_keyboard(back_callback="otp_back_usa_one_time_rental")
+    await update.message.reply_text(
+        "⚠️ <b>Please click an option below:</b>", 
+        reply_markup=kb, 
+        parse_mode="HTML"
+    )

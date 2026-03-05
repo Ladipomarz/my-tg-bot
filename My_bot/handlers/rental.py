@@ -31,7 +31,7 @@ from utils.db import (
     set_delivery_status,
     set_order_status,
     mark_rental_expired,
-    auto_expire_rentals 
+    auto_expire_rentals,
 
 )
 
@@ -440,7 +440,20 @@ async def send_service_list_with_buttons(update, context):
         if update.callback_query:
             await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
             
-            
+
+async def resend_rental_menu(update, context):
+    """Silently pushes the rental buttons back to the user if they type text."""
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_rental_product_id"),
+            InlineKeyboardButton("🌐 Universal", callback_data="otp_rental_universal")
+        ]
+    ]
+    await update.message.reply_text(
+        "⚠️ <b>Please click an option below:</b>", 
+        reply_markup=InlineKeyboardMarkup(keyboard), 
+        parse_mode="HTML"
+    )            
             
 async def handle_rental_universal(update: Update, context: CallbackContext):
     """
