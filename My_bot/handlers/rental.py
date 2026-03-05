@@ -24,7 +24,11 @@ from utils.db import (
     try_debit_user_balance_usd, 
     add_user_balance_usd,
     get_user_balance_usd,
-    extend_rental_timer
+    extend_rental_timer,
+    create_order,
+    update_payment_status_by_order_code, 
+    set_delivery_status,
+    set_order_status
 )
 
 from telegram.constants import ParseMode
@@ -266,7 +270,23 @@ async def confirm_rental(update: Update, context: CallbackContext):
             await processing_msg.delete()
         except Exception:
             pass
-            
+        
+        
+        duration_text = context.user_data.get('otp_duration_text', duration_api)
+        desc = f"Premium Rental: {service} ({duration_text})"    
+        
+        order_id, order_code = create_order(
+        user_id=user_id,
+        description=desc,
+        ttl_seconds=31536000,  # 1 year TTL
+        amount_usd=price,
+        order_type="premium_rental"
+    )
+        # Marks it paid so it shows in the UI immediately
+        update_payment_status_by_order_code(order_code, pay_status="paid")
+        # --------------------------------------------------------
+
+        # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
             
         # 1. Alert the User
         await target.reply_text(
@@ -339,6 +359,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
 
         # 6. 🎉 DELIVER TO THE USER
         await processing_msg.delete()
+        set_delivery_status(order_id, "delivered")
         success_message = f"""
 ✅ <b>Rental Successful!</b>
 
@@ -355,6 +376,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
     except Exception as e:
         # 7. 🛟 THE AUTO-REFUND (Safety Net)
         add_user_balance_usd(user_id, price)
+        set_order_status(order_id, "cancelled")
         
         # 🛡️ SAFE DELETE: Ignores the error if Telegram already lost the message
         try:
