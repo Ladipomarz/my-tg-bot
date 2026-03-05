@@ -1085,15 +1085,14 @@ async def handle_extension_text(update, context):
         
         try:
             # Ping the SDK to extend it using the correct method and kwargs!
+                        
+            await asyncio.to_thread(
+                reservations.extend_nonrenewable, 
+                rental_id=rental_id, 
+                extension_duration=getattr(RentalDuration, api_mapped)
+                
+            )
             
-            # 🛑 TEMPORARILY COMMENTED OUT FOR TESTING 🛑
-            # await asyncio.to_thread(
-            #     reservations.extend_nonrenewable, 
-            #     rental_id=rental_id, 
-            #     extension_duration=getattr(RentalDuration, api_mapped)
-            # )
-            
-            pass # <-- ADD THIS so Python doesn't crash from an empty try block!
             
         except Exception as e:
             logging.error(f"🚨 TEXTVERIFIED EXTENSION FAILED for {rental_id}: {e}")
