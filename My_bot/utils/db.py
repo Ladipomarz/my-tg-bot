@@ -1298,35 +1298,39 @@ def get_rental_details(rental_id: str):
         print(f"💥 Database Error (get_rental_details): {e}")
         return None
 
+
 async def rescue_my_number(update, context):
-    """Temporary command to rescue your specific WhatsApp number."""
-    id =1
+    """Temporary command to inject a 1-year test number directly into the DB."""
+    
+    # 1. Your exact hardcoded test data
     user_id = 8466713748
-    rental_id = "lr_01KJMCKBEFS5KRGW5X512CRQVT"
-    phone_number = "9209147003"
-    service_name = "whatsapp"
+    rental_id = "lr_01KGMR1GV2NTZDME6MTYV5VSDD"
+    phone_number = "9012462058"
+    service_name = "Whatsapp"
     
-    # Setting the expiration to 7 hours from now
-    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=5)
+    # 2. Time Jump: Setting expiration to exactly 365 days from now
+    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
     
+    # 3. The raw SQL injection
     query = """
         INSERT INTO active_rentals 
-        (id,user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
-        VALUES (%s,%s, %s, %s, %s, %s, %s, 'active', %s)
+        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
+        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
     """
     
     try:
-        
         with get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     query, 
-                    (id,user_id, rental_id, phone_number, service_name, False, False, expiration_date)
+                    (user_id, rental_id, phone_number, service_name, False, False, expiration_date)
                 )
             conn.commit()
             
-        await update.message.reply_text(f"✅ SUCCESS! Number {phone_number} is officially linked to your Telegram ID.")
+        await update.message.reply_text(
+            f"✅ <b>SUCCESS!</b>\n\nNumber <code>{phone_number}</code> is officially injected into your database with a 365-day expiration.",
+            parse_mode="HTML"
+        )
         
     except Exception as e:
         await update.message.reply_text(f"💥 Error saving to database: {e}")
-        
