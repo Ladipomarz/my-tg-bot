@@ -988,18 +988,19 @@ async def trigger_extension_menu(update, context):
         f"📈 <b>Extend Your Rental</b>\n"
         f"How long would you like to extend <code>{phone}</code>?\n\n"
         f"<b>Standard Extensions:</b>\n"
-        f"<b>A.</b> 3 Days - <b>${prices['THREE_DAY']:.2f}</b>\n"
-        f"<b>B.</b> 7 Days - <b>${prices['SEVEN_DAY']:.2f}</b>\n"
-        f"<b>C.</b> 14 Days - <b>${prices['FOURTEEN_DAY']:.2f}</b>\n"
-        f"<b>D.</b> 1 Month - <b>${prices['THIRTY_DAY']:.2f}</b>\n"
-        f"<b>E.</b> 2 Months - <b>${prices['TWO_MONTHS']:.2f}</b>\n\n"
+        f"<b>A.</b> 1 Day - <b>${prices['ONE_DAY']:.2f}</b>\n"
+        f"<b>B.</b> 3 Days - <b>${prices['THREE_DAY']:.2f}</b>\n"
+        f"<b>C.</b> 7 Days - <b>${prices['SEVEN_DAY']:.2f}</b>\n"
+        f"<b>D.</b> 14 Days - <b>${prices['FOURTEEN_DAY']:.2f}</b>\n"
+        f"<b>E.</b> 1 Month - <b>${prices['THIRTY_DAY']:.2f}</b>\n"
+        f"<b>F.</b> 2 Months - <b>${prices['TWO_MONTHS']:.2f}</b>\n\n"
         f"<b>Premium Long-Term:</b>\n"
-        f"<b>F.</b> 3 Months - <b>${prices['THREE_MONTHS']:.2f}</b>\n"
-        f"<b>G.</b> 6 Months - <b>${prices['SIX_MONTHS']:.2f}</b>\n"
-        f"<b>H.</b> 9 Months - <b>${prices['NINE_MONTHS']:.2f}</b>\n"
-        f"<b>I.</b> 1 Year - <b>${prices['ONE_YEAR']:.2f}</b>\n"
-        f"<b>J.</b> Forever - <b>${prices['FOREVER']:.2f}</b>\n\n"
-        f"<i>Type a single letter (A - J) below to secure your line, or type 'cancel' to exit.</i>"
+        f"<b>G.</b> 3 Months - <b>${prices['THREE_MONTHS']:.2f}</b>\n"
+        f"<b>H.</b> 6 Months - <b>${prices['SIX_MONTHS']:.2f}</b>\n"
+        f"<b>I.</b> 9 Months - <b>${prices['NINE_MONTHS']:.2f}</b>\n"
+        f"<b>J.</b> 1 Year - <b>${prices['ONE_YEAR']:.2f}</b>\n"
+        f"<b>K.</b> Forever - <b>${prices['FOREVER']:.2f}</b>\n\n"
+        f"<i>Type a single letter (A - K) below to secure your line, or type 'cancel' to exit.</i>"
     )
     
     # We set a flag so the bot knows it is actively listening for an A-J response
@@ -1011,7 +1012,7 @@ async def trigger_extension_menu(update, context):
     
     
 async def handle_extension_text(update, context):
-    """Listens for the A-J response when extending a rental."""
+    """Listens for the A-K response when extending a rental."""
     # 1. If we aren't waiting for an extension choice, ignore their message!
     if not context.user_data.get("awaiting_extension_choice"):
         return 
@@ -1027,16 +1028,17 @@ async def handle_extension_text(update, context):
 
     # 3. The Letter Mapper (Translates A-J into API Strings and Days)
     extension_map = {
-        'a': ('THREE_DAY', 3),
-        'b': ('SEVEN_DAY', 7),
-        'c': ('FOURTEEN_DAY', 14),
-        'd': ('THIRTY_DAY', 30),
-        'e': ('TWO_MONTHS', 60), 
-        'f': ('THREE_MONTHS', 90),
-        'g': ('SIX_MONTHS', 180),
-        'h': ('NINE_MONTHS', 270),
-        'i': ('ONE_YEAR', 365),
-        'j': ('FOREVER', 36500)
+        'a': ('ONE_DAY', 1),
+        'b': ('THREE_DAY', 3),
+        'c': ('SEVEN_DAY', 7),
+        'd': ('FOURTEEN_DAY', 14),
+        'e': ('THIRTY_DAY', 30),
+        'f': ('TWO_MONTHS', 60), 
+        'g': ('THREE_MONTHS', 90),
+        'h': ('SIX_MONTHS', 180),
+        'i': ('NINE_MONTHS', 270),
+        'j': ('ONE_YEAR', 365),
+        'k': ('FOREVER', 36500)
     }
 
     if text not in extension_map:
