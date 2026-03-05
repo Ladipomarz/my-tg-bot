@@ -6,6 +6,7 @@ import psycopg
 from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
+from handlers.rental import scheduled_expire_rental 
 import logging
 from config import DATABASE_URL
 
@@ -20,16 +21,6 @@ def get_connection():
     if not DATABASE_URL:
         raise RuntimeError("DATABASE_URL not set")
     return psycopg.connect(DATABASE_URL) 
-
-def test_connection():
-    try:
-        conn = get_connection()
-        print("Database connection successful!")
-        conn.close()
-    except Exception as e:
-        print(f"Error connecting to database: {e}")
-
-test_connection()
 
 
 async def fix_db_sequence(update, context):
@@ -1372,6 +1363,21 @@ async def rescue_my_number(update, context):
             f"✅ <b>SUCCESS!</b>\n\nNumber <code>{phone_number}</code> is officially injected into your database with a 365-day expiration.",
             parse_mode="HTML"
         )
+        
+        
+        # --- ADD THIS TO THE BOTTOM OF THE TRY BLOCK IN /rescue ---
+        # --- DYNAMIC ALARM CALCULATION ---
+        # Calculate exactly how many seconds until your custom expiration date
+        now = datetime.datetime.now(datetime.timezone.utc)
+        delay_seconds = (expiration_date - now).total_seconds()
+        
+        if context.job_queue and delay_seconds > 0:
+            context.job_queue.run_once(
+                scheduled_expire_rental,
+                when=delay_seconds,  # ⏰ Perfectly matches your timedelta!
+                data={"rental_id": rental_id, "user_id": user_id},
+                name=f"expire_{rental_id}"
+            )
         
     except Exception as e:
         await update.message.reply_text(f"💥 Error saving to database: {e}")
