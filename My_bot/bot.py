@@ -862,7 +862,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
     # ADMIN list menu + paging (admin.py)
-    if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:") or data.startswith("admin_open_paid:"):
+    if data == "admin_menu" or data.startswith("admin_paid:") or data.startswith("admin_delivered:") or data.startswith("admin_open_paid:") or data.startswith("admin_rental_"):
         return await admin_callback(update, context, ADMIN_IDS)
 
     # ✅ Admin view delivered payload (PREVIEW)
