@@ -593,7 +593,6 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         TEST_MODE = True
         
         if TEST_MODE:
-            import asyncio
             await asyncio.sleep(2)  # Simulate network delay
             logger.info("🧪 TEST MODE ACTIVE: Faking successful TextVerified response!")
             
@@ -1082,20 +1081,26 @@ async def handle_extension_text(update, context):
         # We cap the API request to 30 days so the SDK doesn't crash
         api_mapped = "THIRTY_DAY" if api_duration == "TWO_MONTHS" else api_duration
         
+        
+        
         try:
             # Ping the SDK to extend it using the correct method and kwargs!
-            await asyncio.to_thread(
-                reservations.extend_nonrenewable, 
-                rental_id=rental_id, 
-                extension_duration=getattr(RentalDuration, api_mapped)
-            )
-        except Exception as e:
             
+            # 🛑 TEMPORARILY COMMENTED OUT FOR TESTING 🛑
+            # await asyncio.to_thread(
+            #     reservations.extend_nonrenewable, 
+            #     rental_id=rental_id, 
+            #     extension_duration=getattr(RentalDuration, api_mapped)
+            # )
+            
+            pass # <-- ADD THIS so Python doesn't crash from an empty try block!
+            
+        except Exception as e:
             logging.error(f"🚨 TEXTVERIFIED EXTENSION FAILED for {rental_id}: {e}")
             
             # 🚨 THE AUTO-REFUND IF NETWORK FAILS
             add_user_balance_usd(user_id, price_to_charge)
-            await processing_msg.edit_text(f"❌ <b>Network Error:</b> The provider locked this line and it cannot be extended. Your <b>${price_to_charge:.2f}</b> has been refunded.", parse_mode="HTML")
+            await processing_msg.edit_text(f"❌ <b>Network Error:</b> The provider locked this line... Your <b>${price_to_charge:.2f}</b> has been refunded.", parse_mode="HTML")
             context.user_data.pop("awaiting_extension_choice", None)
             return
 
@@ -1119,10 +1124,35 @@ async def handle_extension_text(update, context):
                 pass
     # 9. 💾 UPDATE THE DATABASE & RESET REMINDERS
     try:
+        # 1. Update PostgreSQL
         extend_rental_timer(rental_id, days_to_add)
+        
+        # 2. Reset the Bot's Internal Alarm Clock!
+        if context.job_queue:
+            # Find the old alarm and delete it
+            old_jobs = context.job_queue.get_jobs_by_name(f"expire_{rental_id}")
+            for job in old_jobs:
+                job.schedule_removal()
+                
+            # Grab the brand new expiration date we just saved to the DB
+            details = get_rental_details(rental_id)
+            if details:
+                new_exp = details[3]
+                now = datetime.datetime.now(datetime.timezone.utc)
+                time_left = (new_exp - now).total_seconds()
+                
+                # Set the brand new alarm!
+                context.job_queue.run_once(
+                    scheduled_expire_rental,
+                    when=time_left,
+                    data={"rental_id": rental_id, "user_id": user_id},
+                    name=f"expire_{rental_id}"
+                )
+                
     except Exception as e:
-        await processing_msg.edit_text("⚠️ Extension successful, but failed to update database timer. Please contact support.")
-        return            
+        logging.error(f"🚨 DB Update or Alarm reset failed: {e}")
+        await processing_msg.edit_text("⚠️ Extension API successful, but failed to update local database timer. Please contact support.")
+        return       
 
     # 10. The Grand Finale
     await processing_msg.edit_text(

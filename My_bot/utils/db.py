@@ -1381,3 +1381,21 @@ async def rescue_my_number(update, context):
         
     except Exception as e:
         await update.message.reply_text(f"💥 Error saving to database: {e}")
+        
+        
+def extend_rental_timer(rental_id: str, days_to_add: int):
+    """Adds days to a rental's expiration time in the database."""
+    query = """
+        UPDATE active_rentals 
+        SET expiration_time = expiration_time + CAST(%s AS INTERVAL)
+        WHERE rental_id = %s
+    """
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                # Tell PostgreSQL exactly how many days to add (e.g., '14 days')
+                cur.execute(query, (f"{days_to_add} days", rental_id))
+            conn.commit()
+    except Exception as e:
+        print(f"Failed to extend timer for {rental_id}: {e}")
+        raise e # We raise it so the try/except block in rental.py catches it!        
