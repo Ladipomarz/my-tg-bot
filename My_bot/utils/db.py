@@ -1316,12 +1316,12 @@ async def rescue_my_number(update, context):
     
     # 1. Your exact hardcoded test data
     user_id = 8466713748
-    rental_id = "lr_01KGMR1GV2NTZDME6MTYV5VSDD"
-    phone_number = "9012462058"
-    service_name = "Whatsapp"
+    rental_id = "Faje2"
+    phone_number = "1111111111"
+    service_name = "test"
     
     # 2. Time Jump: Setting expiration to exactly 365 days from now
-    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=365)
+    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=3)
     
     # 3. The raw SQL injection
     query = """
