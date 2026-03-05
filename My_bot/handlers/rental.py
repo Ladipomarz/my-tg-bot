@@ -288,9 +288,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
 
         #
         # 📦 --- NEW: LOG THE RENTAL TO THE ORDERS DATABASE --- 📦
-    # (Notice this is OUTSIDE the Concierge 'if' statement so it applies to ALL rentals!)
-    from utils.db import create_order, update_payment_status_by_order_code, set_delivery_status, set_order_status
-    
+    # (Notice this is OUTSIDE the Concierge 'if' statement so it applies to ALL rentals!)    
     duration_text = context.user_data.get('otp_duration_text', duration_api)
     desc = f"Rental: {service} ({duration_text})"
     
