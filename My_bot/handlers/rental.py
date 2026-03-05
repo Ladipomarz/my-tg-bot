@@ -286,13 +286,44 @@ async def confirm_rental(update: Update, context: CallbackContext):
         update_payment_status_by_order_code(order_code, pay_status="paid")
         # --------------------------------------------------------
 
-        # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
+        #
+        # 📦 --- NEW: LOG THE RENTAL TO THE ORDERS DATABASE --- 📦
+    # (Notice this is OUTSIDE the Concierge 'if' statement so it applies to ALL rentals!)
+    from utils.db import create_order, update_payment_status_by_order_code, set_delivery_status, set_order_status
+    
+    duration_text = context.user_data.get('otp_duration_text', duration_api)
+    desc = f"Rental: {service} ({duration_text})"
+    
+    order_id, order_code = create_order(
+        user_id=user_id,
+        description=desc,
+        ttl_seconds=31536000,  # 1 year TTL
+        amount_usd=price,
+        order_type="premium_rental"
+    )
+    # Marks it paid so it shows in the UI immediately
+    update_payment_status_by_order_code(order_code, pay_status="paid")
+    # --------------------------------------------------------
+
+
+    # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
+    concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
+    
+    if duration_api in concierge_durations:
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+        
+        duration_text = context.user_data.get('otp_duration_text', duration_api)
+        desc = f"Premium Rental: {service} ({duration_text})"
+
             
         # 1. Alert the User
         await target.reply_text(
             f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
             f"Because you selected a massive <b>{context.user_data.get('otp_duration_text', 'Long-Term')}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
-            f"<i>Please allow up to 24 hours. Your number will be delivered directly to your inbox.</i>",
+            f"<i>Please allow up to 24 hours. You can track the status of this number directly in your <b>Orders</b> menu.</i>",
             parse_mode="HTML"
         )
         
@@ -301,22 +332,27 @@ async def confirm_rental(update: Update, context: CallbackContext):
         
         if admin_id:
             try:
+                kb = InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🛠 Manage Order", callback_data=f"admin_open_paid:{order_code}")
+                ]])
+                 
                 await context.bot.send_message(
                     chat_id=admin_id,
                     text=f"🚨 <b>MANUAL RENTAL ORDER!</b>\n\n"
-                        f"User: <code>{user_id}</code>\n"
-                        f"Service: {service}\n"
-                        f"Duration: {duration_api}\n"
-                        f"Paid: ${price:.2f}\n\n"
-                        f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
-                    parse_mode="HTML"
+                         f"Order: <code>{order_code}</code>\n"
+                         f"User: <code>{user_id}</code>\n"
+                         f"Service: {service}\n"
+                         f"Duration: {duration_api}\n"
+                         f"Paid: ${price:.2f}\n\n"
+                         f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
+                    parse_mode="HTML",    # <-- COMMA ADDED HERE!
+                    reply_markup=kb       # <-- BUTTON ATTACHED!
                 )
             except Exception as e:
                 logger.error(f"Failed to alert admin of manual order: {e}")
             
         context.user_data.pop("otp_step", None)
-        
-        return    
+        return
         
 
     # 4. 🚀 THE API PURCHASE
