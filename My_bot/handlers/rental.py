@@ -30,7 +30,9 @@ from utils.db import (
     update_payment_status_by_order_code, 
     set_delivery_status,
     set_order_status,
-    mark_rental_expired
+    mark_rental_expired,
+    auto_expire_rentals
+
 )
 
 from telegram.constants import ParseMode
@@ -688,6 +690,9 @@ async def my_rentals_menu(update, context):
         
         
 async def manage_rental_menu(update, context):
+    
+    # 🧹 THE SWEEP: Clean up the entire database before loading the list!
+    auto_expire_rentals()
     """Displays the management screen with a live expiration countdown and accurate status."""
     query = update.callback_query
     await query.answer() 
