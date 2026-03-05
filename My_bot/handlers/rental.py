@@ -322,8 +322,9 @@ async def confirm_rental(update: Update, context: CallbackContext):
         return
         
     # 4. 🚀 THE API PURCHASE (For 1-30 Day standard numbers)
+    # 4. 🚀 THE API PURCHASE (For 1-30 Day standard numbers)
     try:
-        rental_data = await fetch_rental_number_from_textverified(
+        phone_number, rental_id, error_msg = await fetch_rental_number_from_textverified(
             service_name=service,
             state=state,
             duration_api=duration_api,
@@ -331,11 +332,13 @@ async def confirm_rental(update: Update, context: CallbackContext):
             is_renewable=is_renewable
         )
 
-        if not rental_data or "phone_number" not in rental_data:
-            raise ValueError("The provider is temporarily out of stock for this specific service or state.")
+        # If the API function returned a specific error message, raise it!
+        if error_msg:
+            raise ValueError(error_msg)
 
-        rental_id = rental_data['rental_id']
-        phone_number = rental_data['phone_number']
+        # If it returned blank, trigger the default stock error
+        if not phone_number or not rental_id:
+            raise ValueError("The provider is temporarily out of stock for this specific service or state.")
 
         # 5. 💾 SAVE TO DATABASE
         days_map = {
@@ -357,13 +360,17 @@ async def confirm_rental(update: Update, context: CallbackContext):
         )
 
         # 6. 🎉 DELIVER TO THE USER
-        await processing_msg.delete()
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+            
         set_delivery_status(order_id, "delivered")
         success_message = f"""
 ✅ <b>Rental Successful!</b>
 
 📱 <b>Number:</b> <code>{phone_number}</code>
-💬 <b>Service:</b> {service}
+💬 <b>Service:</b> {service.capitalize()}
 ⏱️ <b>Duration:</b> {days_to_expire} Days
 
 💵 Your wallet was successfully charged <b>${price:.2f}</b>.
@@ -388,80 +395,6 @@ async def confirm_rental(update: Update, context: CallbackContext):
         set_order_status(order_id, "cancelled")
         
         # 🛡️ SAFE DELETE
-        try:
-            await processing_msg.delete()
-        except Exception:
-            pass
-            
-        await target.reply_text(
-            f"❌ Purchase failed. The provider is out of stock or offline.\n\n"
-            f"💰 <b>Your ${price:.2f} has been instantly refunded to your wallet.</b>\n\n"
-            f"Error details: {e}", 
-            parse_mode="HTML"
-        )
-        context.user_data.pop("otp_step", None)
-        
-
-    # 4. 🚀 THE API PURCHASE
-    try:
-        # NOTE: Make sure fetch_rental_number_from_textverified is imported!
-        rental_data = await fetch_rental_number_from_textverified(
-            service_name=service,
-            state=state,
-            duration_api=duration_api,
-            always_on=always_on,
-            is_renewable=is_renewable
-        )
-
-        if not rental_data or "phone_number" not in rental_data:
-            raise ValueError("The provider is temporarily out of stock for this specific service or state.")
-
-        rental_id = rental_data['rental_id']
-        phone_number = rental_data['phone_number']
-
-        # 5. 💾 SAVE TO DATABASE
-        # 5. 💾 SAVE TO DATABASE
-        days_map = {
-            "ONE_DAY": 1, "THREE_DAY": 3, "SEVEN_DAY": 7, "FOURTEEN_DAY": 14, 
-            "THIRTY_DAY": 30, "ONE_MONTH": 30, "TWO_MONTHS": 60, "THREE_MONTHS": 90, 
-            "SIX_MONTHS": 180, "NINE_MONTHS": 270, "ONE_YEAR": 365,
-            "FOREVER": 36500
-        }
-        days_to_expire = days_map.get(duration_api, 1)
-        
-
-        save_active_rental(
-            user_id=user_id,
-            rental_id=rental_id,
-            phone_number=phone_number,
-            service_name=service,
-            always_on=always_on,
-            is_renewable=is_renewable,
-            days_to_expire=days_to_expire
-        )
-
-        # 6. 🎉 DELIVER TO THE USER
-        await processing_msg.delete()
-        set_delivery_status(order_id, "delivered")
-        success_message = f"""
-✅ <b>Rental Successful!</b>
-
-📱 <b>Number:</b> <code>{phone_number}</code>
-💬 <b>Service:</b> {service}
-⏱️ <b>Duration:</b> {days_to_expire} Days
-
-💵 Your wallet was successfully charged <b>${price:.2f}</b>.
-<i>You can manage your rental in the 'My Numbers' menu.</i>
-"""
-        await target.reply_text(success_message, parse_mode="HTML")
-        context.user_data.pop("otp_step", None)
-
-    except Exception as e:
-        # 7. 🛟 THE AUTO-REFUND (Safety Net)
-        add_user_balance_usd(user_id, price)
-        set_order_status(order_id, "cancelled")
-        
-        # 🛡️ SAFE DELETE: Ignores the error if Telegram already lost the message
         try:
             await processing_msg.delete()
         except Exception:
