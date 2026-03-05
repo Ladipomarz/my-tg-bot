@@ -1292,10 +1292,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await confirm_rental(update, context)
         return  # Stop here if they are in the rental flow
         
-    elif step == "awaiting_rental_product_id":
-        await handle_rental_product_id(update, context)
-        return
-        
 
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
@@ -1328,7 +1324,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_rental_product_id(update, context)  # Your existing rental handler
         await safe_delete_user_message(update) # best-effort delete user message
         return
-    
+        
+   
     
       # Handle the state selection step for rental
     if context.user_data.get("otp_step") == "awaiting_state":

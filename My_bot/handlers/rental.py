@@ -429,7 +429,10 @@ async def send_service_list_with_buttons(update, context):
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         await safe_send(update, context, "Select your option:", reply_markup=reply_markup)
-
+        
+        # 👇 ADD THIS ONE LINE 👇
+        context.user_data["otp_step"] = "awaiting_rental_button" 
+        
         logger.info("Service list and buttons sent successfully.")
 
     except Exception as e:
