@@ -203,8 +203,6 @@ Price: ${price:.2f}
         await target.reply_text("❌ Pricing Error: Invalid duration or service selected. Please restart your purchase.")
         context.user_data.pop("otp_step", None)
         
-        
-        
 async def confirm_rental(update: Update, context: CallbackContext):
     """
     Handles the final 'yes' or 'no', debits the wallet safely, and buys the API number.
@@ -241,7 +239,6 @@ async def confirm_rental(update: Update, context: CallbackContext):
         except Exception:
             pass
         
-        
         # EXACT PIPELINE FROM OTP_HANDLER WITH REMAINDER MATH
         bal = get_user_balance_usd(user_id)
         remainder = price - bal  # Calculate exactly how much they are missing
@@ -259,36 +256,8 @@ async def confirm_rental(update: Update, context: CallbackContext):
         )
         context.user_data.pop("otp_step", None)
         return
-            
 
-    # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
-    # (Notice how this is pushed ALL the way back to the left margin!)
-    concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
-    
-    if duration_api in concierge_durations:
-        try:
-            await processing_msg.delete()
-        except Exception:
-            pass
-        
-        
-        duration_text = context.user_data.get('otp_duration_text', duration_api)
-        desc = f"Premium Rental: {service} ({duration_text})"    
-        
-        order_id, order_code = create_order(
-        user_id=user_id,
-        description=desc,
-        ttl_seconds=31536000,  # 1 year TTL
-        amount_usd=price,
-        order_type="premium_rental"
-    )
-        # Marks it paid so it shows in the UI immediately
-        update_payment_status_by_order_code(order_code, pay_status="paid")
-        # --------------------------------------------------------
-
-        #
-        # 📦 --- NEW: LOG THE RENTAL TO THE ORDERS DATABASE --- 📦
-    # (Notice this is OUTSIDE the Concierge 'if' statement so it applies to ALL rentals!)    
+    # 📦 --- LOG THE RENTAL TO THE ORDERS DATABASE --- 📦
     duration_text = context.user_data.get('otp_duration_text', duration_api)
     desc = f"Rental: {service} ({duration_text})"
     
@@ -299,10 +268,10 @@ async def confirm_rental(update: Update, context: CallbackContext):
         amount_usd=price,
         order_type="premium_rental"
     )
+    
     # Marks it paid so it shows in the UI immediately
     update_payment_status_by_order_code(order_code, pay_status="paid")
     # --------------------------------------------------------
-
 
     # 🛑 THE CONCIERGE BYPASS FOR MASSIVE PACKAGES 🛑
     concierge_durations = ["THREE_MONTHS", "SIX_MONTHS", "NINE_MONTHS", "ONE_YEAR", "FOREVER"]
@@ -312,45 +281,110 @@ async def confirm_rental(update: Update, context: CallbackContext):
             await processing_msg.delete()
         except Exception:
             pass
-        
-        duration_text = context.user_data.get('otp_duration_text', duration_api)
-        desc = f"Premium Rental: {service} ({duration_text})"
-
             
         # 1. Alert the User
         await target.reply_text(
             f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
-            f"Because you selected a massive <b>{context.user_data.get('otp_duration_text', 'Long-Term')}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
+            f"Because you selected a massive <b>{duration_text}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
             f"<i>Please allow up to 24 hours. You can track the status of this number directly in your <b>Orders</b> menu.</i>",
             parse_mode="HTML"
         )
         
-        # 2. Alert the Admin
-        admin_id = list(ADMIN_IDS)[0] if ADMIN_IDS else None
-        
-        if admin_id:
-            try:
-                kb = InlineKeyboardMarkup([[
-                    InlineKeyboardButton("🛠 Manage Order", callback_data=f"admin_open_paid:{order_code}")
-                ]])
-                 
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=f"🚨 <b>MANUAL RENTAL ORDER!</b>\n\n"
-                         f"Order: <code>{order_code}</code>\n"
-                         f"User: <code>{user_id}</code>\n"
-                         f"Service: {service}\n"
-                         f"Duration: {duration_api}\n"
-                         f"Paid: ${price:.2f}\n\n"
-                         f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
-                    parse_mode="HTML",    # <-- COMMA ADDED HERE!
-                    reply_markup=kb       # <-- BUTTON ATTACHED!
-                )
-            except Exception as e:
-                logger.error(f"Failed to alert admin of manual order: {e}")
+        # 2. Alert the Admin (THE FIX: Safe loop through all admins)
+        if ADMIN_IDS:
+            kb = InlineKeyboardMarkup([[
+                InlineKeyboardButton("🛠 Manage Order", callback_data=f"admin_open_paid:{order_code}")
+            ]])
+            
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=f"🚨 <b>MANUAL RENTAL ORDER!</b>\n\n"
+                             f"Order: <code>{order_code}</code>\n"
+                             f"User: <code>{user_id}</code>\n"
+                             f"Service: {service}\n"
+                             f"Duration: {duration_api}\n"
+                             f"Paid: ${price:.2f}\n\n"
+                             f"<i>Log into TextVerified, buy the line manually, and assign it to this user!</i>",
+                        parse_mode="HTML",
+                        reply_markup=kb
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to alert admin {admin_id}: {e}")
             
         context.user_data.pop("otp_step", None)
         return
+        
+    # 4. 🚀 THE API PURCHASE (For 1-30 Day standard numbers)
+    try:
+        rental_data = await fetch_rental_number_from_textverified(
+            service_name=service,
+            state=state,
+            duration_api=duration_api,
+            always_on=always_on,
+            is_renewable=is_renewable
+        )
+
+        if not rental_data or "phone_number" not in rental_data:
+            raise ValueError("The provider is temporarily out of stock for this specific service or state.")
+
+        rental_id = rental_data['rental_id']
+        phone_number = rental_data['phone_number']
+
+        # 5. 💾 SAVE TO DATABASE
+        days_map = {
+            "ONE_DAY": 1, "THREE_DAY": 3, "SEVEN_DAY": 7, "FOURTEEN_DAY": 14, 
+            "THIRTY_DAY": 30, "ONE_MONTH": 30, "TWO_MONTHS": 60, "THREE_MONTHS": 90, 
+            "SIX_MONTHS": 180, "NINE_MONTHS": 270, "ONE_YEAR": 365,
+            "FOREVER": 36500
+        }
+        days_to_expire = days_map.get(duration_api, 1)
+
+        save_active_rental(
+            user_id=user_id,
+            rental_id=rental_id,
+            phone_number=phone_number,
+            service_name=service,
+            always_on=always_on,
+            is_renewable=is_renewable,
+            days_to_expire=days_to_expire
+        )
+
+        # 6. 🎉 DELIVER TO THE USER
+        await processing_msg.delete()
+        set_delivery_status(order_id, "delivered")
+        success_message = f"""
+✅ <b>Rental Successful!</b>
+
+📱 <b>Number:</b> <code>{phone_number}</code>
+💬 <b>Service:</b> {service}
+⏱️ <b>Duration:</b> {days_to_expire} Days
+
+💵 Your wallet was successfully charged <b>${price:.2f}</b>.
+<i>You can manage your rental in the 'My Numbers' menu.</i>
+"""
+        await target.reply_text(success_message, parse_mode="HTML")
+        context.user_data.pop("otp_step", None)
+
+    except Exception as e:
+        # 7. 🛟 THE AUTO-REFUND (Safety Net)
+        add_user_balance_usd(user_id, price)
+        set_order_status(order_id, "cancelled")
+        
+        # 🛡️ SAFE DELETE
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+            
+        await target.reply_text(
+            f"❌ Purchase failed. The provider is out of stock or offline.\n\n"
+            f"💰 <b>Your ${price:.2f} has been instantly refunded to your wallet.</b>\n\n"
+            f"Error details: {e}", 
+            parse_mode="HTML"
+        )
+        context.user_data.pop("otp_step", None)
         
 
     # 4. 🚀 THE API PURCHASE
