@@ -653,6 +653,9 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
 
 async def my_rentals_menu(update, context):
     """Displays a list of the user's active rental numbers."""
+    
+    # 🧹 THE SWEEP: Clean up the entire database before loading the list!
+    auto_expire_rentals()
     user_id = update.effective_user.id
     query = update.callback_query
 
@@ -692,7 +695,7 @@ async def my_rentals_menu(update, context):
 async def manage_rental_menu(update, context):
     
     # 🧹 THE SWEEP: Clean up the entire database before loading the list!
-    auto_expire_rentals()
+    
     """Displays the management screen with a live expiration countdown and accurate status."""
     query = update.callback_query
     await query.answer() 
@@ -757,6 +760,7 @@ async def manage_rental_menu(update, context):
         f"<b>⚠️ Please note this number will expire in - {countdown_str}</b>\n\n"
         f"<i>{footer_text}</i>"
     )
+    
 
     await query.edit_message_text(menu_text, parse_mode="HTML", reply_markup=reply_markup)
         
