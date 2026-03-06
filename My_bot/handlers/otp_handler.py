@@ -2,7 +2,6 @@ from textverified import TextVerified, NumberType, ReservationType, ReservationC
 import os
 import re
 import asyncio
-from handlers.provider_factory import get_otp_provider
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
 from telegram.ext import ContextTypes
@@ -441,7 +440,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             )
             
             if not verification_id:
-                raise RuntimeError("TextVerified did not return verification_id")
+                raise RuntimeError("The network provider failed to assign. Please try again, Or Contact Support")
 
 
             # ✅ Debit wallet (atomic)
@@ -497,6 +496,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             
             
         except Exception as e:
+            # Log the real error to your Railway console so you can still investigate it
+            logger.error(f"Failed to reserve number: {e}") 
+            
             # refund wallet if we already debited
             try:
                 amt = context.user_data.get("otp_debited_amount")
@@ -506,7 +508,12 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             except Exception:
                 pass
 
-            await safe_send(update, context, f"❌ Failed to reserve number: {e}")
+            # 🚨 THE FIX: Send a safe, white-labeled message to the user
+            await safe_send(
+                update, 
+                context, 
+                "❌ Failed to reserve number. Please try again, Or Contact Support"
+            )
             return True
 
         # clear step data but keep verification info
@@ -670,12 +677,22 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 
     if since_dt.tzinfo is None:
         since_dt = since_dt.replace(tzinfo=datetime.timezone.utc)
-
+        
+    # 🚨 THE CORRECTED POLL JOB TRY/EXCEPT
     try:
+        # We ping the provider to see if an SMS arrived
         result = await asyncio.to_thread(_poll_textverified_once, verification_id, since_dt)
     except Exception as e:
-        await context.bot.send_message(chat_id=chat_id, text=f"❌ OTP polling error: {e}")
-
+        # 1. You see the raw TextVerified error in your Railway console
+        logger.error(f"OTP Polling API Error: {e}") 
+        
+        # 2. The user sees this safe, white-labeled message
+        await context.bot.send_message(
+            chat_id=chat_id, 
+            text="❌ Network connection lost with the provider. Cancelling verification..."
+        )
+        
+        # 3. Stop the bot from continuing to check
         poll_name = data.get("poll_job_name")
         refund_name = data.get("refund_job_name")
         if poll_name:
@@ -686,9 +703,11 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         await _cleanup_otp_state(context.application, user_id)
         return
 
+    # If the provider connection worked, but the SMS just hasn't arrived yet
     if not result:
         return
 
+    # If we made it here, the SMS arrived!
     code = result.get("code") or "N/A"
     local_num = format_us_local(reserved_number)
 
@@ -701,7 +720,7 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         parse_mode="HTML",
     )
 
-    # Stop both jobs and clear state
+    # Stop both jobs and clear state since the user got their code
     poll_name = data.get("poll_job_name")
     refund_name = data.get("refund_job_name")
     if poll_name:
@@ -758,7 +777,8 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
-        await context.bot.send_message(chat_id=chat_id, text=f"❌ Refund attempt failed: {e}")
+        logger.error(f"Refund API Error: {e}") # You see this
+        await context.bot.send_message(chat_id=chat_id, text=f"❌ Refund attempt failed: Contact Support")
         await _cleanup_otp_state(context, user_id)
         return
 
@@ -778,7 +798,6 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         text=(
             "⌛ No OTP received within 5 minutes.\n"
             "I cancelled the verification and reported it as 'no SMS' "
-            "(refund/credit depends on TextVerified eligibility)."
             + refunded_msg
         ),
     )
@@ -881,7 +900,8 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
-        await q.message.reply_text(f"❌ Refund attempt failed: {e}")
+        logger.error(f"Refund API Error: {e}") 
+        await q.message.reply_text(f"❌ Refund attempt failed: Contact Support")
         await _cleanup_otp_state(context.application, user_id)
         return
 
@@ -901,7 +921,6 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     await q.message.reply_text(
         "✅ Refund requested: cancelled + reported as 'no SMS'.\n"
-        "Refund/credit depends on TextVerified eligibility."
         + refunded_msg
     )
 

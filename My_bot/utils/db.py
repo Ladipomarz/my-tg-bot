@@ -22,20 +22,6 @@ def get_connection():
     return psycopg.connect(DATABASE_URL) 
 
 
-async def fix_db_sequence(update, context):
-    """Temporary command to resync the PostgreSQL ID counter."""
-    # This SQL command fast-forwards the sequence to match the highest ID in the table
-    query = "SELECT setval(pg_get_serial_sequence('active_rentals', 'id'), coalesce(max(id),0) + 1, false) FROM active_rentals;"
-    
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(query)
-            conn.commit()
-        await update.message.reply_text("✅ Database ID counter successfully resynced!")
-    except Exception as e:
-        await update.message.reply_text(f"💥 Error fixing sequence: {e}")
-
 
 # ---------------- MIGRATIONS ----------------
 
@@ -158,9 +144,14 @@ def create_tables():
                     always_on BOOLEAN DEFAULT FALSE,
                     is_renewable BOOLEAN DEFAULT FALSE,
                     status TEXT DEFAULT 'active' CHECK (status IN ('active', 'expired', 'cancelled')),
-                    expiration_time TIMESTAMP WITH TIME ZONE
+                    expiration_time TIMESTAMP WITH TIME ZONE,
+                    reminder_6h_sent BOOLEAN DEFAULT FALSE
                 );
             """)
+            
+            
+            # 👇 AND ADD THIS SAFEGUARD DIRECTLY BELOW IT 👇
+            cur.execute("ALTER TABLE active_rentals ADD COLUMN IF NOT EXISTS reminder_6h_sent BOOLEAN DEFAULT FALSE;")
 
             # Create necessary indexes for 'active_rentals'
             cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_user_id ON active_rentals(user_id);")
@@ -169,19 +160,7 @@ def create_tables():
         # Lock all the changes into PostgreSQL
         conn.commit()
         print("✅ Database tables verified and created successfully.")
-        
-        
-def extend_rental_timer(rental_id: str, days_to_add: int):
-    """Adds days to an active rental's expiration and resets the 6h reminder."""
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                UPDATE active_rentals 
-                SET expiration_time = expiration_time + INTERVAL '%s days',
-                    reminder_6h_sent = FALSE 
-                WHERE rental_id = %s
-            """, (days_to_add, rental_id))
-        conn.commit()        
+                
 
 def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
     """Locks the purchased rental number to the Telegram user in the database."""
@@ -1331,61 +1310,7 @@ def get_all_active_rentals():
     except Exception as e:
         print(f"Failed to fetch active rentals: {e}")
         return []
-    
-    
-
-async def rescue_my_number(update, context):
-    """Temporary command to inject a 1-year test number directly into the DB."""
-    
-    # 1. Your exact hardcoded test data
-    user_id = 8466713748
-    rental_id = "Faje2"
-    phone_number = "1111111111"
-    service_name = "test"
-    
-    # 2. Time Jump: Setting expiration to exactly 365 days from now
-    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=2)
-    
-    # 3. The raw SQL injection
-    query = """
-        INSERT INTO active_rentals 
-        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
-        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
-    """
-    
-    try:
-        with get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    query, 
-                    (user_id, rental_id, phone_number, service_name, False, False, expiration_date)
-                )
-            conn.commit()
-            
-        await update.message.reply_text(
-            f"✅ <b>SUCCESS!</b>\n\nNumber <code>{phone_number}</code> is officially injected into your database with a 365-day expiration.",
-            parse_mode="HTML"
-        )
-        
-        
-        # --- ADD THIS TO THE BOTTOM OF THE TRY BLOCK IN /rescue ---
-        # --- DYNAMIC ALARM CALCULATION ---
-        # Calculate exactly how many seconds until your custom expiration date
-        now = datetime.datetime.now(datetime.timezone.utc)
-        delay_seconds = (expiration_date - now).total_seconds()
-        
-        if context.job_queue and delay_seconds > 0:
-            from handlers.rental import scheduled_expire_rental 
-            context.job_queue.run_once(
-                scheduled_expire_rental,
-                when=delay_seconds,  # ⏰ Perfectly matches your timedelta!
-                data={"rental_id": rental_id, "user_id": user_id},
-                name=f"expire_{rental_id}"
-            )
-        
-    except Exception as e:
-        await update.message.reply_text(f"💥 Error saving to database: {e}")
-        
+       
         
 def extend_rental_timer(rental_id: str, days_to_add: int):
     """Adds days to a rental's expiration time in the database."""

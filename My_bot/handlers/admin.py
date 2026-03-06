@@ -1,6 +1,7 @@
 import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+import datetime
 
 from menus.admin_menu import get_admin_menu
 from utils.db import (
@@ -9,7 +10,8 @@ from utils.db import (
     get_order_by_code,
     set_delivery_status,
     set_order_status,
-    add_user_balance_usd
+    add_user_balance_usd,
+    get_connection
 )
 
 logger = logging.getLogger(__name__)
@@ -286,3 +288,73 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
 
     # Anything else: do nothing here (bot.py handles the rest)
     return
+
+
+
+async def fix_db_sequence(update, context):
+    """Temporary command to resync the PostgreSQL ID counter."""
+    # This SQL command fast-forwards the sequence to match the highest ID in the table
+    query = "SELECT setval(pg_get_serial_sequence('active_rentals', 'id'), coalesce(max(id),0) + 1, false) FROM active_rentals;"
+    
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(query)
+            conn.commit()
+        await update.message.reply_text("✅ Database ID counter successfully resynced!")
+    except Exception as e:
+        await update.message.reply_text(f"💥 Error fixing sequence: {e}")
+        
+        
+async def rescue_my_number(update, context):
+    """Temporary command to inject a 1-year test number directly into the DB."""
+    
+    # 1. Your exact hardcoded test data
+    user_id = 8466713748
+    rental_id = "Faje2"
+    phone_number = "1111111111"
+    service_name = "test"
+    
+    # 2. Time Jump: Setting expiration to exactly 365 days from now
+    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=2)
+    
+    # 3. The raw SQL injection
+    query = """
+        INSERT INTO active_rentals 
+        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
+        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
+    """
+    
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    query, 
+                    (user_id, rental_id, phone_number, service_name, False, False, expiration_date)
+                )
+            conn.commit()
+            
+        await update.message.reply_text(
+            f"✅ <b>SUCCESS!</b>\n\nNumber <code>{phone_number}</code> is officially injected into your database with a 365-day expiration.",
+            parse_mode="HTML"
+        )
+        
+        
+        # --- ADD THIS TO THE BOTTOM OF THE TRY BLOCK IN /rescue ---
+        # --- DYNAMIC ALARM CALCULATION ---
+        # Calculate exactly how many seconds until your custom expiration date
+        now = datetime.datetime.now(datetime.timezone.utc)
+        delay_seconds = (expiration_date - now).total_seconds()
+        
+        if context.job_queue and delay_seconds > 0:
+            from handlers.rental import scheduled_expire_rental 
+            context.job_queue.run_once(
+                scheduled_expire_rental,
+                when=delay_seconds,  # ⏰ Perfectly matches your timedelta!
+                data={"rental_id": rental_id, "user_id": user_id},
+                name=f"expire_{rental_id}"
+            )
+        
+    except Exception as e:
+        await update.message.reply_text(f"💥 Error saving to database: {e}")
+                

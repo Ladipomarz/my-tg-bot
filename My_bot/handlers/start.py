@@ -92,9 +92,5 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     
     if key == "wallet":
-        return await open_wallet_menu(update, context)
-
-
-    await update.message.reply_text("Unknown command, please use menu buttons.")
-    
+        return await open_wallet_menu(update, context)    
 

@@ -1,6 +1,5 @@
 import datetime
 import os
-import os
 import re
 import asyncio
 from telegram import Update
@@ -400,9 +399,21 @@ async def confirm_rental(update: Update, context: CallbackContext):
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage My Numbers", callback_data="my_rentals_back")]])
         await target.reply_text(success_message, parse_mode="HTML")
         
-        # ⏰ SET THE EXACT ALARM!
+        # ⏰ SET THE EXACT ALARMS!
         delay_seconds = days_to_expire * 24 * 3600
+        reminder_seconds = delay_seconds - (6 * 3600) # 6 hours before expiration!
+        
         if context.job_queue:
+            # Alarm 1: The 6-Hour Warning
+            if reminder_seconds > 0:
+                context.job_queue.run_once(
+                    scheduled_6h_reminder,
+                    when=reminder_seconds,
+                    data={"rental_id": rental_id, "user_id": user_id},
+                    name=f"warn_{rental_id}"
+                )
+                
+            # Alarm 2: The Kill Switch
             context.job_queue.run_once(
                 scheduled_expire_rental,
                 when=delay_seconds,
@@ -627,9 +638,9 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             # FIXED: Returning 3 items
             return None, None, "This specific service is not available for Long-Term Rentals. Please try a different service."
         elif "balance" in error_msg.lower():
-            return None, None, "Our provider is currently out of balance. Please try again later."
+            return None, None, "Purchasing Error Please Try Again Or Contact Support."
         else:
-            return None, None, "The provider could not fulfill this request at this time."
+            return None, None, "The provider could not fulfill this request at this time Please Contact Support."
         
         
 
@@ -1086,22 +1097,23 @@ async def handle_extension_text(update, context):
 
     # 8. ROUTE B: The Premium Concierge (F - J)
     else:
-        # We successfully faked it! Alert the admin in the background.
-        admin_id = list(ADMIN_IDS)[0] if ADMIN_IDS else None
-        if admin_id:
-            try:
-                await context.bot.send_message(
-                    chat_id=admin_id,
-                    text=f"🚨 <b>MANUAL RENEWAL ORDER!</b>\n\n"
-                         f"User: <code>{user_id}</code>\n"
-                         f"Line: <code>{phone}</code> ({service})\n"
-                         f"Duration: {api_duration} ({days_to_add} Days)\n"
-                         f"Paid: ${price_to_charge:.2f}\n\n"
-                         f"<i>Log into TextVerified and manually extend this specific line to prevent expiration!</i>",
-                    parse_mode="HTML"
-                )
-            except Exception:
-                pass
+        # We successfully faked it! Alert ALL admins in the background.
+        if ADMIN_IDS:
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=f"🚨 <b>MANUAL RENEWAL ORDER!</b>\n\n"
+                             f"User: <code>{user_id}</code>\n"
+                             f"Line: <code>{phone}</code> ({service})\n"
+                             f"Duration: {api_duration} ({days_to_add} Days)\n"
+                             f"Paid: ${price_to_charge:.2f}\n\n"
+                             f"<i>Log into TextVerified and manually extend this specific line to prevent expiration!</i>",
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+    # 9. 💾 UPDATE THE DATABASE & RESET REMINDERS
     # 9. 💾 UPDATE THE DATABASE & RESET REMINDERS
     try:
         # 1. Update PostgreSQL
@@ -1109,9 +1121,14 @@ async def handle_extension_text(update, context):
         
         # 2. Reset the Bot's Internal Alarm Clock!
         if context.job_queue:
-            # Find the old alarm and delete it
-            old_jobs = context.job_queue.get_jobs_by_name(f"expire_{rental_id}")
-            for job in old_jobs:
+            # Delete old Kill Switch
+            old_expire_jobs = context.job_queue.get_jobs_by_name(f"expire_{rental_id}")
+            for job in old_expire_jobs:
+                job.schedule_removal()
+                
+            # Delete old 6-Hour Warning
+            old_warn_jobs = context.job_queue.get_jobs_by_name(f"warn_{rental_id}")
+            for job in old_warn_jobs:
                 job.schedule_removal()
                 
             # Grab the brand new expiration date we just saved to the DB
@@ -1119,20 +1136,31 @@ async def handle_extension_text(update, context):
             if details:
                 new_exp = details[3]
                 now = datetime.datetime.now(datetime.timezone.utc)
-                time_left = (new_exp - now).total_seconds()
                 
-                # Set the brand new alarm!
-                context.job_queue.run_once(
-                    scheduled_expire_rental,
-                    when=time_left,
-                    data={"rental_id": rental_id, "user_id": user_id},
-                    name=f"expire_{rental_id}"
-                )
+                delay_seconds = (new_exp - now).total_seconds()
+                reminder_seconds = delay_seconds - (6 * 3600) # 6 hours before expiration
+                
+                # SET ALARM 1: The 6-Hour Warning
+                if reminder_seconds > 0:
+                    context.job_queue.run_once(
+                        scheduled_6h_reminder,
+                        when=reminder_seconds,
+                        data={"rental_id": rental_id, "user_id": user_id},
+                        name=f"warn_{rental_id}"
+                    )
+                    
+                # SET ALARM 2: The Kill Switch
+                if delay_seconds > 0:
+                    context.job_queue.run_once(
+                        scheduled_expire_rental,
+                        when=delay_seconds,
+                        data={"rental_id": rental_id, "user_id": user_id},
+                        name=f"expire_{rental_id}"
+                    )
                 
     except Exception as e:
         logging.error(f"🚨 DB Update or Alarm reset failed: {e}")
-        await processing_msg.edit_text("⚠️ Extension API successful, but failed to update local database timer. Please contact support.")
-        return       
+        return      
 
     # 10. The Grand Finale
     await processing_msg.edit_text(
@@ -1148,7 +1176,36 @@ async def handle_extension_text(update, context):
     context.user_data.pop("extending_service", None)
     context.user_data.pop("extending_phone", None)    
     
-    
+async def scheduled_6h_reminder(context: CallbackContext):
+    """The 6-Hour warning alarm goes off! DM the user to extend their number."""
+    job_data = context.job.data
+    rental_id = job_data["rental_id"]
+    user_id = job_data.get("user_id")
+
+    # 1. Double check the number is still active
+    details = get_rental_details(rental_id)
+    if not details:
+        return
+        
+    phone_number = details[0]
+    service = details[1]
+
+    # 2. Fire the warning DM!
+    if user_id:
+        try:
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏳ Extend Rental Now", callback_data=f"extend_rental:{rental_id}")]])
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=(
+                    f"⚠️ <b>Rental Expiring Soon!</b>\n\n"
+                    f"Your premium line <code>{phone_number}</code> ({service.capitalize()}) will expire in exactly <b>6 Hours</b>.\n\n"
+                    f"<i>If you do not extend it, the number will be deleted and cannot be recovered.</i>"
+                ),
+                parse_mode="HTML",
+                reply_markup=kb
+            )
+        except Exception:
+            pass # Fails silently if they blocked the bot    
     
 async def scheduled_expire_rental(context: CallbackContext):
     """The exact alarm goes off! Mark the specific rental as expired and DM the user."""

@@ -6,6 +6,9 @@ import datetime
 import io
 import re
 import json
+import traceback
+import html
+
 
 from fastapi import FastAPI, Request, Response
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -21,6 +24,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 from utils.auto_delete import safe_send
+from handlers.admin import fix_db_sequence,rescue_my_number
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
@@ -43,9 +47,11 @@ from utils.db import (
     get_user_balance_usd,
     mark_order_wallet_credited,
     create_wallet_transactions_table,
-    fix_db_sequence,
     get_all_active_rentals,
-    auto_expire_rentals
+    auto_expire_rentals,
+    scheduled_6h_reminder,
+    scheduled_expire_rental,
+    
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -119,6 +125,44 @@ TG_LOCK = asyncio.Lock()
 # ------------------------------
 # HELPERS
 # ------------------------------
+
+# 🚨 THE GLOBAL SAFETY NET 🚨
+async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Catches ALL unhandled crashes, hides the error from the user, 
+    and sends the raw traceback to the Admins.
+    """
+    logger.error("Exception while handling an update:", exc_info=context.error)
+
+    # 1. THE WHITE-LABEL USER MESSAGE
+    SUPPORT_HANDLE = "@YourSupportHandle" # <-- Change this when your support bot is ready
+    
+    user_msg = (
+        f"❌ <b>Purchasing Error</b>\n\n"
+        f"An unexpected error occurred. Please try again or contact support: {SUPPORT_HANDLE}"
+    )
+    
+    if update and update.effective_message:
+        try:
+            await update.effective_message.reply_text(user_msg, parse_mode="HTML")
+        except Exception:
+            pass # Fails silently if the user blocked the bot
+
+    # 2. THE ADMIN ALERT
+    if ADMIN_IDS:
+        user_id = update.effective_user.id if update and update.effective_user else "Unknown"
+        
+        # Create a short, single-line summary
+        error_text = html.escape(str(context.error))
+        admin_msg = f"🚨 <b>CRASH</b> | User: <code>{user_id}</code> | Error: {error_text}"
+        
+        for admin_id in ADMIN_IDS:
+            try:
+                await context.bot.send_message(chat_id=admin_id, text=admin_msg, parse_mode="HTML")
+            except Exception:
+                pass
+            
+            
 def _is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
 
@@ -843,14 +887,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith(("tool_", "otp_", "service_", "esim_" )):
         await tools_callback(update, context)
         return
-    
-    if data.startswith("otp_usa_text_rental_monthly_"):
-        await tools_callback(update, context)
-        return
-
-    if data.startswith("otp_rental_product_id"):
-        await tools_callback(update, context)
-        return
 
     if data.startswith("manage_rental:"):
         await manage_rental_menu(update, context)
@@ -1527,6 +1563,7 @@ tg_app.add_handler(CommandHandler("rescue", rescue_my_number))
 tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
 tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_rental:"))
 tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
+tg_app.add_error_handler(global_error_handler)
 
 
 
