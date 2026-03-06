@@ -1637,39 +1637,36 @@ async def plisio_webhook(req: Request):
     order.get("wallet_credited"),
 )
 
+    # ---------------------------
+    # 🚨 SECURITY LOCK: Verify directly with Plisio
+    # ---------------------------
+    if not txn_id:
+        return {"ok": True}
 
-    # ---------------------------
-    # Detect payment activity
-    # ---------------------------
-    detected_now = False
-    invoice_total = None
-    invoice_received = None
-    invoice_remaining = None
-    pending_amt = None
+    # We completely ignore the webhook's fake payload and ask Plisio for the truth
+    inv = await _fetch_plisio_invoice_details(txn_id.strip())
+    if not inv:
+        logger.error(f"🚨 SECURITY ALERT: Fake webhook blocked! txn_id {txn_id} not found on Plisio.")
+        return {"ok": True}
+
+    # Override the untrusted webhook status with the REAL status from Plisio's servers
+    status = (inv.get("status") or p.get("status") or "").lower().strip()
     
-    inv =None
+    paid_statuses = {"paid", "completed", "success", "confirmed", "finish", "finished"}
+    expired_statuses = {"expired", "cancelled", "canceled", "failed", "error"}
 
-    received_amount = _to_float(p.get("received_amount"))
-    if received_amount > 0:
+    is_paid = status in paid_statuses
+    is_expired = status in expired_statuses
+
+    # Detect real payment activity from the verified invoice
+    detected_now = False
+    invoice_total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or 0)
+    invoice_received = _to_float(inv.get("received_amount") or 0)
+    pending_amt = _to_float(inv.get("pending_amount") or 0)
+
+    # If Plisio confirms money has actually hit the blockchain
+    if invoice_received > 0 or (invoice_total > 0 and pending_amt > 0):
         detected_now = True
-    else:
-        inv = None
-        if isinstance(txn_id, str) and txn_id.strip():
-            inv = await _fetch_plisio_invoice_details(txn_id.strip())
-
-        if isinstance(inv, dict):
-            invoice_total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or inv.get("invoice_sum"))
-            invoice_received = _to_float(inv.get("received_amount"))
-            invoice_remaining = _to_float(inv.get("remaining_amount"))
-            pending_amt = _to_float(inv.get("pending_amount"))
-
-            # Keep your broader "detected" logic (partial OR full)
-            if invoice_received > 0:
-                detected_now = True
-            elif invoice_total and invoice_total > 0 and invoice_remaining is not None and 0 <= invoice_remaining < invoice_total:
-                detected_now = True
-            elif invoice_total and invoice_total > 0 and pending_amt is not None and 0 <= pending_amt < invoice_total:
-                detected_now = True
 
     # ---------------------------
     # EXPIRED / FAILED (highest priority)
