@@ -136,7 +136,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
     
     if text.lower() in ("cancel", "back"):    
         context.user_data.pop("wallet_step", None)
-        await update.message.reply_text("✅ Cancelled. Use menu buttons.")
+        await safe_send(update, context, "✅ Cancelled. Use menu buttons.")
         return True
 
 
@@ -144,11 +144,11 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         try:
             amt = Decimal(text)
         except (InvalidOperation, ValueError):
-            await update.message.reply_text("❌ Invalid amount. Example: 10")
+            await safe_send(update, context,"❌ Invalid amount. Example: 10")
             return True
 
         if amt <= 0:
-            await update.message.reply_text("❌ Amount must be greater than 0.")
+            await safe_send(update, context, "❌ Amount must be greater than 0.")
             return True
 
         user_id = update.effective_user.id

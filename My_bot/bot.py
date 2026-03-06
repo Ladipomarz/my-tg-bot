@@ -1327,17 +1327,18 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_rental_product_id(update, context)  # Your existing rental handler
         await safe_delete_user_message(update) # best-effort delete user message
         return
-        
-    
+            
     # 1. THE RENTAL BUTTON INTERCEPTOR
     if step == "awaiting_rental_button":
-        await safe_delete_user_message(update)
-        await resend_rental_menu(update, context) # <--- Calls the function!
+        # Starts the 10-sec user delete in the background (Zero lag!)
+        asyncio.create_task(safe_delete_user_message(update)) 
+        await resend_rental_menu(update, context) 
         return
-    
-    # 👇 2. THE ONE-TIME OTP BUTTON INTERCEPTOR 👇
+        
+    # 2. THE ONE-TIME OTP BUTTON INTERCEPTOR
     if step == "awaiting_otp_button":
-        await safe_delete_user_message(update)
+        # Starts the 10-sec user delete in the background (Zero lag!)
+        asyncio.create_task(safe_delete_user_message(update))
         await resend_otp_menu(update, context)
         return
     

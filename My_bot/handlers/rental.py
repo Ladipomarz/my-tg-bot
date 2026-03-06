@@ -54,7 +54,9 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
         context.user_data["otp_step"] = "awaiting_rental_product_id"  # Indicate that we are waiting for the product ID
 
         # Send the message asking for the product ID
-        await update.callback_query.message.reply_text(
+        await safe_send(
+            update,
+            context,
             "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
         )
 
@@ -70,7 +72,7 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
         service_name = get_rental_service_name_by_code(product_id)
         
         if not service_name:
-            await update.message.reply_text("❌ Invalid Product ID. Please check the Rental Services list.")
+            await safe_send(update, context, "❌ Invalid Product ID. Please check the Rental Services list.")
             return
 
         # Validate the Product ID
@@ -84,7 +86,7 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
             
         else:
             # If the Product ID is invalid
-            await update.message.reply_text("❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
+            await safe_send(update, context, "❌ Invalid Product ID. Please reply with a valid 4-digit Product ID (e.g. 0123).")
 
 
 async def ask_state_or_random(update: Update, context: CallbackContext):
@@ -131,7 +133,9 @@ async def handle_state_or_random(update: Update, context: CallbackContext):
     if response == "yes":
         # If user wants to specify the state
         context.user_data["otp_step"] = "awaiting_state"
-        await update.message.reply_text(
+        await safe_send(
+            update,
+            context,
             "Please enter the US state you want the rental number generated from (e.g., California)."
         )
     elif response == "no":
@@ -144,7 +148,7 @@ async def handle_state_or_random(update: Update, context: CallbackContext):
         await final_confirmation(update, context)
     else:
         # If the input is invalid, prompt the user again
-        await update.message.reply_text("❌ Please reply with either 'yes' or 'no' to confirm.")   
+        await safe_send(update,context, "❌ Please reply with either 'yes' or 'no' to confirm.")   
 
                         
             
@@ -164,12 +168,12 @@ async def handle_rental_state(update: Update, context: CallbackContext):
         await final_confirmation(update, context)
     else:
         
-        await update.message.reply_text("❌ Invalid state. Please provide a valid state (e.g., California).")
+        await safe_send(update, context, "❌ Invalid state. Please provide a valid state (e.g., California).")
 
         # If invalid, suggest valid states
         suggestions = suggest_us_states_full_name(state)
         suggestion_text = "Did you mean:\n" + "\n".join(suggestions) if suggestions else "❌ Invalid state. Please provide a valid state (e.g., California)."
-        await update.message.reply_text(suggestion_text)
+        await safe_send(update, context, suggestion_text)
 
 
 
@@ -438,7 +442,7 @@ async def send_service_list_with_buttons(update, context):
     except Exception as e:
         logger.error(f"Error sending service list with buttons: {e}")
         if update.callback_query:
-            await update.callback_query.message.reply_text("An error occurred while fetching the service list.")
+            await safe_send(update, context, "An error occurred while fetching the service list.")
             
 
 async def resend_rental_menu(update, context):
@@ -449,7 +453,9 @@ async def resend_rental_menu(update, context):
             InlineKeyboardButton("🌐 Universal", callback_data="otp_rental_universal")
         ]
     ]
-    await update.message.reply_text(
+    await safe_send(
+        update,
+        context,
         "⚠️ <b>Please click an option below:</b>", 
         reply_markup=InlineKeyboardMarkup(keyboard), 
         parse_mode="HTML"
@@ -628,7 +634,7 @@ async def my_rentals_menu(update, context):
         if query:
             await query.edit_message_text(empty_text)
         else:
-            await update.message.reply_text(empty_text)
+            await safe_send(update, context, empty_text)
         return
 
     # 3. Build the dynamic inline keyboard
@@ -649,7 +655,7 @@ async def my_rentals_menu(update, context):
     if query:
         await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)
     else:
-        await update.message.reply_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)      
+        await safe_send(update, context, menu_text, parse_mode="Markdown", reply_markup=reply_markup)      
         
         
 async def manage_rental_menu(update, context):
@@ -979,7 +985,7 @@ async def handle_extension_text(update, context):
     # 2. The Cancel Switch
     if text == 'cancel':
         context.user_data.pop("awaiting_extension_choice", None)
-        await update.message.reply_text("🛑 <b>Extension cancelled.</b>", parse_mode="HTML")
+        await safe_send(update, context, "🛑 <b>Extension cancelled.</b>", parse_mode="HTML")
         return
 
     # 3. The Letter Mapper (Translates A-J into API Strings and Days)
@@ -998,7 +1004,7 @@ async def handle_extension_text(update, context):
     }
 
     if text not in extension_map:
-        await update.message.reply_text("⚠️ <b>Invalid choice.</b> Please reply with a single letter (A - J) or type 'cancel'.", parse_mode="HTML")
+        await safe_send(update, context, "⚠️ <b>Invalid choice.</b> Please reply with a single letter (A - J) or type 'cancel'.", parse_mode="HTML")
         return
 
     api_duration, days_to_add = extension_map[text]
@@ -1016,9 +1022,10 @@ async def handle_extension_text(update, context):
     
     if not try_debit_user_balance_usd(user_id, price_to_charge):
         # They are broke! Show the top-up message.
-        from telegram import InlineKeyboardMarkup, InlineKeyboardButton
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("💳 Top up wallet", callback_data="add_funds")]])
-        await update.message.reply_text(
+        await safe_send(
+            update,
+            context,
             f"❌ <b>Insufficient balance.</b>\n\n"
             f"Extension cost: <b>${price_to_charge:.2f}</b>\n"
             f"Please top up your wallet to extend this line.",
@@ -1030,7 +1037,7 @@ async def handle_extension_text(update, context):
         return
 
     # 6. Show the "Wizard of Oz" Loading Message
-    processing_msg = await update.message.reply_text("🔄 <i>Syncing your extended line with the network...</i>", parse_mode="HTML")
+    processing_msg = await safe_send(update, context,"🔄 <i>Syncing your extended line with the network...</i>", parse_mode="HTML")
 
     # 7. ROUTE A: Standard Automated Extension (A - E)
     if text in ['a', 'b', 'c', 'd', 'e']:

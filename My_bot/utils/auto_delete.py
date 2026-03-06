@@ -20,6 +20,7 @@ async def safe_send(
     context: ContextTypes.DEFAULT_TYPE,
     text: str,
     reply_markup=None,
+    **kwargs 
 ):
     """
     Sends a bot message and deletes the previous bot message AFTER a delay,
@@ -51,7 +52,7 @@ async def safe_send(
         )
 
     # Send new message
-    msg = await base_msg.reply_text(text, reply_markup=reply_markup)
+    msg = await base_msg.reply_text(text, reply_markup=reply_markup, **kwargs)
 
     # Remember this as the new "last" bot message
     context.user_data["last_bot_message_id"] = msg.message_id

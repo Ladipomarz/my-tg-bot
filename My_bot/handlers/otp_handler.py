@@ -297,19 +297,21 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     if step == "awaiting_product_id":
         print(f"User input: {update.message.text}")  # Log the input received
         if not text.isdigit() or len(text) not in (3, 4):  # support old 3-digit and new 4-digit
-            await update.message.reply_text("❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
+            await safe_send(update,context,"❌ Invalid Product ID. Please reply with the Product ID (e.g. 0123).")
             return True
 
         service_name = get_service_name_by_code(text)
         if not service_name:
-            await update.message.reply_text("❌ I couldn't find that Product ID in the DB. Try again or press Skip.")
+            await safe_send(update,context,"❌ I couldn't find that Product ID in the DB. Try again or press Skip.")
             return True
 
         context.user_data["otp_service_name"] = service_name
 
         # Ask state preference
         context.user_data["otp_step"] = "ask_specific_state"
-        await update.message.reply_text(
+        await safe_send(
+            update,
+            context,
             "If you've got the 4-digit Product ID, we can proceed.\n\n"
             "⚠️Please make sure the service is not listed before using the universal phone number.\n\n"
             "Do you want the number to be generated from a specific US state?\n"
@@ -321,7 +323,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     if step == "ask_specific_state":
         print(f"User input: {update.message.text}")  # Log the input received
         if low not in ("yes", "no"):
-            await update.message.reply_text("Please reply with: yes or no")
+            await safe_send(update,context,"Please reply with: yes or no")
             return True
 
         # "General Service" (unlisted/universal) uses cheaper pricing.
@@ -345,7 +347,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context.user_data["otp_step"] = "await_state_name"
             print(f"[OTP STEP SET] -> await_state_name (text was {text!r}) user_data={dict(context.user_data)}")
 
-            await update.message.reply_text(
+            await safe_send(
+                update,
+                context,
                 f"Specific State Price: {specific_price}\n"
                 f"Random State Price: {random_price}\n\n"
                 "🇺🇸 Which US state do you want the phone number to be generated from?\n"
@@ -365,7 +369,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         state_name = update.message.text.strip()        
         
         if not state_name:
-            await update.message.reply_text("❌ Please enter a valid state name (e.g. California).")
+            await safe_send(update, context, "❌ Please enter a valid state name (e.g. California).")
             return True
 
         ok, canon = normalize_us_state_full_name(state_name)
@@ -376,7 +380,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             await _send_final_confirmation(update, context)
             return True
         else:
-            await update.message.reply_text("❌ Invalid state. Please enter the full state name (e.g. California).")
+            await safe_send(update, context,"❌ Invalid state. Please enter the full state name (e.g. California).")
             return True
 
 
@@ -384,14 +388,14 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     if step == "final_confirm":
 
         if low not in ("yes", "no"):
-            await update.message.reply_text("Please reply with: yes or no")
+            await safe_send(update, context,"Please reply with: yes or no")
             return True
 
         if low == "no":
             # cancel + clear
             for k in ("otp_step", "otp_service_name", "otp_state", "otp_custom_service", "otp_api_service_name"):
                 context.user_data.pop(k, None)
-            await update.message.reply_text("✅ Cancelled.")
+            await safe_send(update, context, "✅ Cancelled.")
             return True
 
         # low == "yes"  ✅ everything from here down is YES-only
@@ -475,16 +479,16 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             intl_num = format_us_international(number)
             local_num = format_us_local(number)
 
-            await update.message.reply_text(
-                (
-                    "<b>✅ Reserved number!</b>\n\n"
-                    f"<b>Service:</b> {display_service}\n\n"
-                    f"<b>State:</b> {state or 'Random'}\n\n"
-                    f"<b>Number (Intl):</b> {intl_num}\n\n"
-                    f"<b>Number (Local):</b> {local_num}\n\n"
-                    f"<b>Verification ID:</b> {verification_id}\n\n"
-                    "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes)."
-                ),
+            await safe_send(
+                update,
+                context,
+                "<b>✅ Reserved number!</b>\n\n"
+                f"<b>Service:</b> {display_service}\n\n"
+                f"<b>State:</b> {state or 'Random'}\n\n"
+                f"<b>Number (Intl):</b> {intl_num}\n\n"
+                f"<b>Number (Local):</b> {local_num}\n\n"
+                f"<b>Verification ID:</b> {verification_id}\n\n"
+                "⏳ Waiting for OTP… I’ll auto-check every 5 seconds (up to 5 minutes).",
                 parse_mode=ParseMode.HTML,
                 reply_markup=refund_kb(),
             )
@@ -502,7 +506,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             except Exception:
                 pass
 
-            await update.message.reply_text(f"❌ Failed to reserve number: {e}")
+            await safe_send(update, context, f"❌ Failed to reserve number: {e}")
             return True
 
         # clear step data but keep verification info
@@ -539,7 +543,7 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
         f"Price: {price}\n\n"
         "⚠️Please reply with either yes or no to confirm."
     )
-    await update.message.reply_text(msg)
+    await safe_send(update, context, msg)
 
 def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
