@@ -11,6 +11,7 @@ from utils.db import (
     expire_pending_order_if_needed,
     get_pending_order,
 )
+from utils.auto_delete import safe_send
 
 
 def _fmt_usd(x) -> str:

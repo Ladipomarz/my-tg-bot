@@ -1298,25 +1298,26 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
-        await safe_delete_user_message(update) # best-effort delete user message
+        asyncio.create_task(safe_delete_user_message(update))
+        return
         
     
     
     #🛑 1. THE EXTENSION INTERCEPTOR 🛑
     if context.user_data.get("awaiting_extension_choice"):
         await handle_extension_text(update, context)
-        await safe_delete_user_message(update)   # ✅ delete only if handled
+        asyncio.create_task(safe_delete_user_message(update))
         return
 
     # Admin wizard capture FIRST
     if await _admin_capture_text(update, context):
-        await safe_delete_user_message(update)   # ✅ optional: delete admin typed text too
+        asyncio.create_task(safe_delete_user_message(update))
         return
     
     # Wallet flow
     if context.user_data.get("wallet_step"):
         if await handle_wallet_text_input(update, context):
-            await safe_delete_user_message(update)   # ✅ delete only if handled
+            asyncio.create_task(safe_delete_user_message(update))
             return
         
       #RENTAL FLOWWWW
@@ -1325,7 +1326,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("otp_step") == "awaiting_rental_product_id":
         # Delegate to your rental handler for processing
         await handle_rental_product_id(update, context)  # Your existing rental handler
-        await safe_delete_user_message(update) # best-effort delete user message
+        asyncio.create_task(safe_delete_user_message(update))
         return
             
     # 1. THE RENTAL BUTTON INTERCEPTOR
@@ -1346,13 +1347,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("otp_step") == "awaiting_state":
         # Ask for the state after validating product ID
         await handle_rental_state(update, context)  # Your function to handle the state input
-        await safe_delete_user_message(update) # best-effort delete user message
-
+        asyncio.create_task(safe_delete_user_message(update))
         return
     
     if context.user_data.get("otp_step") == "awaiting_state_or_random":
         await handle_state_or_random(update, context)
-        await safe_delete_user_message(update) # best-effort delete user message
+        asyncio.create_task(safe_delete_user_message(update))
         return
         
     
@@ -1360,7 +1360,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("otp_step") == "rental_final_confirm":
         # Handle confirmation (yes/no)
         await confirm_rental(update, context)  # Confirm rental process
-        await safe_delete_user_message(update) # best-effort delete user message
+        asyncio.create_task(safe_delete_user_message(update))
         return
     
     
