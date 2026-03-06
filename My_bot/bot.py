@@ -1482,34 +1482,50 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (FIXED) 🚨
-    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V4 - BULLETPROOF) 🚨
+    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V5 - INSTANT CLEANUP) 🚨
     asyncio.create_task(safe_delete_user_message(update))
     
+    # 1. Instantly vaporize the old menu so they don't pile up!
+    last_id = context.user_data.get("last_bot_message_id")
+    if last_id:
+        try:
+            await context.bot.delete_message(chat_id=update.effective_chat.id, message_id=last_id)
+            context.user_data.pop("last_bot_message_id", None) # Clear memory so it doesn't double-delete
+        except Exception:
+            pass
+
     current_menu = context.user_data.get("current_menu")
 
+    # 2. Re-open the exact menu they were looking at
     if current_menu == "wallet":
-        await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
-        return await open_wallet_menu(update, context)
-        
+        await open_wallet_menu(update, context)
     elif current_menu == "tools":
-        await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
         from handlers.tools import open_tools_menu
-        return await open_tools_menu(update, context)
-        
+        await open_tools_menu(update, context)
     elif current_menu == "orders":
-        await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
         from handlers.orders import open_orders_menu
-        return await open_orders_menu(update, context)
-
+        await open_orders_menu(update, context)
     else:
-        # Default fallback if they are nowhere
         context.user_data.pop("current_menu", None)
-        await safe_send(update, context, "⚠️ <b>Unknown Command.</b>\nPlease use the menu buttons at the bottom of your screen.", parse_mode="HTML")
-        # Force the bottom buttons to show up without triggering errors
         from menus.main_menu import get_main_menu
         await safe_send(update, context, "Main menu:", reply_markup=get_main_menu())
-        return
+
+    # 3. Drop a temporary warning that deletes itself after 10 seconds
+    warning_msg = await update.message.reply_text(
+        "⚠️ <b>Please select an option from the menu above.</b>", 
+        parse_mode="HTML"
+    )
+    
+    async def vaporize_warning():
+        await asyncio.sleep(10)
+        try:
+            await warning_msg.delete()
+        except Exception:
+            pass
+            
+    asyncio.create_task(vaporize_warning())
+    
+    return
 
 
 # ------------------------------
