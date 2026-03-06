@@ -415,7 +415,7 @@ async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Opens the Tools menu from the ReplyKeyboard 'Tools' button.
     This is used by handlers/start.py.
     """
-    await update.message.reply_text("Tools:", reply_markup=get_tools_inline())
+    await safe_send(update, context, "Tools:", reply_markup=get_tools_inline())
     
 
 # ---------- MSN USER INPUT FLOW ----------

@@ -2,7 +2,7 @@ from decimal import Decimal
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
-
+from utils.auto_delete import safe_send
 from utils.db import get_user_balance_usd, get_last_wallet_transactions, expire_pending_order_if_needed
 
 
@@ -61,7 +61,7 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 
 
     if update.message:
-        await update.message.reply_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
+        await safe_send(update, context, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
     else:
         q = update.callback_query
         try:
