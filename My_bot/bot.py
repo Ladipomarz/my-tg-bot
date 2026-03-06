@@ -1483,6 +1483,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (FIXED) 🚨
+    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V4 - BULLETPROOF) 🚨
     asyncio.create_task(safe_delete_user_message(update))
     
     current_menu = context.user_data.get("current_menu")
@@ -1493,17 +1494,22 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     elif current_menu == "tools":
         await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
-        # Let the main handler natively reset them without spoofing
-        return await handle_main_menu(update, context)
+        from handlers.tools import open_tools_menu
+        return await open_tools_menu(update, context)
         
     elif current_menu == "orders":
         await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
-        return await handle_main_menu(update, context)
+        from handlers.orders import open_orders_menu
+        return await open_orders_menu(update, context)
 
     else:
         # Default fallback if they are nowhere
-        await safe_send(update, context, "⚠️ <b>Unknown Command.</b>\nPlease use the menu buttons to navigate.", parse_mode="HTML")
-        return await handle_main_menu(update, context)
+        context.user_data.pop("current_menu", None)
+        await safe_send(update, context, "⚠️ <b>Unknown Command.</b>\nPlease use the menu buttons at the bottom of your screen.", parse_mode="HTML")
+        # Force the bottom buttons to show up without triggering errors
+        from menus.main_menu import get_main_menu
+        await safe_send(update, context, "Main menu:", reply_markup=get_main_menu())
+        return
 
 
 # ------------------------------
