@@ -1482,7 +1482,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V5 - INSTANT CLEANUP) 🚨
+    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V6 - MENU BELOW WARNING) 🚨
     asyncio.create_task(safe_delete_user_message(update))
     
     # 1. Instantly vaporize the old menu so they don't pile up!
@@ -1496,7 +1496,23 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     current_menu = context.user_data.get("current_menu")
 
-    # 2. Re-open the exact menu they were looking at
+    # 2. Drop the temporary warning FIRST (so it sits on top)
+    warning_msg = await update.message.reply_text(
+        "⚠️ <b>Please select an option from the menu below:</b>", 
+        parse_mode="HTML"
+    )
+    
+    # Background task to vaporize the warning after 5 seconds
+    async def vaporize_warning():
+        await asyncio.sleep(5)
+        try:
+            await warning_msg.delete()
+        except Exception:
+            pass
+            
+    asyncio.create_task(vaporize_warning())
+
+    # 3. Re-open the exact menu they were looking at (appears BELOW the warning)
     if current_menu == "wallet":
         await open_wallet_menu(update, context)
     elif current_menu == "tools":
@@ -1510,21 +1526,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from menus.main_menu import get_main_menu
         await safe_send(update, context, "Main menu:", reply_markup=get_main_menu())
 
-    # 3. Drop a temporary warning that deletes itself after 10 seconds
-    warning_msg = await update.message.reply_text(
-        "⚠️ <b>Please select an option from the menu above.</b>", 
-        parse_mode="HTML"
-    )
-    
-    async def vaporize_warning():
-        await asyncio.sleep(10)
-        try:
-            await warning_msg.delete()
-        except Exception:
-            pass
-            
-    asyncio.create_task(vaporize_warning())
-    
     return
 
 
