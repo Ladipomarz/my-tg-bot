@@ -1482,7 +1482,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET 🚨
+    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (FIXED) 🚨
     asyncio.create_task(safe_delete_user_message(update))
     
     current_menu = context.user_data.get("current_menu")
@@ -1492,20 +1492,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_wallet_menu(update, context)
         
     elif current_menu == "tools":
-        # Trick the bot into thinking they clicked the Tools button again
-        update.message.text = "🧰 Tools"
         await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
+        # Let the main handler natively reset them without spoofing
         return await handle_main_menu(update, context)
         
     elif current_menu == "orders":
-        # Trick the bot into thinking they clicked the Orders button again
-        update.message.text = "🛒 Orders"
         await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
         return await handle_main_menu(update, context)
 
     else:
         # Default fallback if they are nowhere
-        await safe_send(update, context, "⚠️ <b></b>\nPlease use the menu buttons to navigate.", parse_mode="HTML")
+        await safe_send(update, context, "⚠️ <b>Unknown Command.</b>\nPlease use the menu buttons to navigate.", parse_mode="HTML")
         return await handle_main_menu(update, context)
 
 
