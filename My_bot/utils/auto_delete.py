@@ -41,13 +41,14 @@ async def safe_send(
     last_id = context.user_data.get("last_bot_message_id")
     last_had_reply_kb = context.user_data.get("last_bot_message_had_reply_kb", False)
 
-    if last_id and not last_had_reply_kb:
+    if last_id:
         asyncio.create_task(
             _delete_after_delay(
                 context,
                 chat_id,
                 last_id,
                 PREVIOUS_MESSAGE_DELAY_SECONDS,
+                
             )
         )
 

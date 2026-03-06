@@ -89,10 +89,15 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ Orders (ReplyKeyboard)
     if key == "orders":
         return await open_orders_menu(update, context)
-
-    await update.message.reply_text("Unknown command, please use menu buttons.")
-
-
+    
+    
     if key == "wallet":
         return await open_wallet_menu(update, context)
+
+
+    await update.message.reply_text("Unknown command, please use menu buttons.")
+    
+    # 3. Force the main menu to open so they aren't stuck
+    return await handle_main_menu(update, context)
+
 

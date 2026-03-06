@@ -1391,6 +1391,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # User main keyboard
     if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet"}:
         
+        # 👇 ADD THIS LINE RIGHT HERE! 👇
+        asyncio.create_task(safe_delete_user_message(update))
         # clear OTP step so it doesn't hijack menu navigation
         context.user_data.pop("otp_step", None)
         context.user_data.pop("wallet_step", None)
