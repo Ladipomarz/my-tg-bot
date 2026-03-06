@@ -598,6 +598,7 @@ async def reserve_sms_verification(
         kwargs = {
             "service_name": service_name,
             "capability": ReservationCapability.SMS,
+            "allow_back_order_reservations": False,
         }
 
         # For "not listed" flow

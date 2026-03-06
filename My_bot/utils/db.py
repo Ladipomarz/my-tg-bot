@@ -1140,8 +1140,12 @@ def build_rental_services_txt_bytes() -> tuple[bytes, str]:
     lines = ["Long-Term Rental Services Catalog", ""]
     
     for r in rows:
+        # 👇 Intercept "servicenotlisted" and rename it beautifully for the user
+        raw_name = r['service_name'].strip()
+        display_name = "All Services" if raw_name.lower() in {"servicenotlisted", "general"} else raw_name
+
         lines.append(f"Product ID: {str(r['local_code']).zfill(4)}")
-        lines.append(f"Service: {r['service_name']}")
+        lines.append(f"Service: {display_name}")
         lines.append("______________________\n")
 
     content = "\n".join(lines) + "\n"
