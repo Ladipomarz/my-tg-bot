@@ -97,7 +97,4 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("Unknown command, please use menu buttons.")
     
-    # 3. Force the main menu to open so they aren't stuck
-    return await handle_main_menu(update, context)
-
 

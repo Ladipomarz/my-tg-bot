@@ -20,6 +20,7 @@ from telegram.ext import (
     CallbackContext
 )
 from telegram.request import HTTPXRequest
+from utils.auto_delete import safe_send
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
@@ -1393,6 +1394,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # 👇 ADD THIS LINE RIGHT HERE! 👇
         asyncio.create_task(safe_delete_user_message(update))
+        
+        # 👇 1. ADD THIS MEMORY TRACKER 👇
+        if text == "🧰 Tools": context.user_data["current_menu"] = "tools"
+        elif text == "🛒 Orders": context.user_data["current_menu"] = "orders"
+        elif text == "💰 Wallet": context.user_data["current_menu"] = "wallet"
+        
         # clear OTP step so it doesn't hijack menu navigation
         context.user_data.pop("otp_step", None)
         context.user_data.pop("wallet_step", None)
@@ -1461,6 +1468,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # eSIM email flow (user flow)
+    # eSIM email flow (user flow)
     if context.user_data.get("esim_step") == "email":
         try:
             await handle_esim_email_input(update, context)
@@ -1474,7 +1482,31 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
-    await handle_main_menu(update, context)
+    # 🚨 THE SMART CONTEXT-AWARE SAFETY NET 🚨
+    asyncio.create_task(safe_delete_user_message(update))
+    
+    current_menu = context.user_data.get("current_menu")
+
+    if current_menu == "wallet":
+        await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
+        return await open_wallet_menu(update, context)
+        
+    elif current_menu == "tools":
+        # Trick the bot into thinking they clicked the Tools button again
+        update.message.text = "🧰 Tools"
+        await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
+        return await handle_main_menu(update, context)
+        
+    elif current_menu == "orders":
+        # Trick the bot into thinking they clicked the Orders button again
+        update.message.text = "🛒 Orders"
+        await safe_send(update, context, "⚠️ <b>Please click an option from the menu below:</b>", parse_mode="HTML")
+        return await handle_main_menu(update, context)
+
+    else:
+        # Default fallback if they are nowhere
+        await safe_send(update, context, "⚠️ <b></b>\nPlease use the menu buttons to navigate.", parse_mode="HTML")
+        return await handle_main_menu(update, context)
 
 
 # ------------------------------
