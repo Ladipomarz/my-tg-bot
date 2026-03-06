@@ -139,7 +139,7 @@ def get_rental_price_usd(service_name: str, duration_api: str, state: str) -> fl
     """Calculates the final rental price. STRICT MODE: No defaults."""
     
     # 1. Check if the user selected a Universal/AllServices line
-    is_universal = service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"])
+    is_universal = service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "servicenotlisted", "not listed", "allservices"])
     
     # 2. STRICT LOOKUP (If the duration is missing, ABORT!)
     if is_universal:

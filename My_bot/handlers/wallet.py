@@ -117,7 +117,9 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # 3) Otherwise ask for amount
         context.user_data["wallet_step"] = "await_amount"
         context.user_data.pop("otp_step", None)
-        await q.message.reply_text(
+        await safe_send(
+            update,
+            context,
             "💳 <b>Top up Wallet</b>\n\nEnter the amount in USD (example: <b>10</b>).",
             parse_mode="HTML",
         )

@@ -76,13 +76,29 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
             return
 
         # Validate the Product ID
+        # Validate the Product ID
         if len(product_id) in [3,4] and product_id.isdigit():
-            context.user_data["otp_service_name"] = service_name
-            context.user_data["otp_rental_product_id"] = product_id  # Store the rental product ID
-            context.user_data["otp_step"] = "awaiting_rental_state"  # Next step: ask for the state
             
-             # Ask the user if they want to select a state or not
-            await ask_state_or_random(update, context)  # Call this function to ask the user for state or random selection
+            # 👇 THE 1-DAY MANUAL ENTRY BLOCKER 👇
+            duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
+            is_universal = any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "servicenotlisted", "allservices"])
+            
+            if is_universal and duration_api == "ONE_DAY":
+                await safe_send(
+                    update, 
+                    context, 
+                    "⚠️ <b>Minimum Duration Required</b>\n\nPremium Universal (All-Services) numbers require a minimum rental period of <b>3 Days</b>.\n\n<i>Please restart and select a longer duration.</i>", 
+                    parse_mode="HTML"
+                )
+                context.user_data.pop("otp_step", None)
+                return
+            # 👆 END OF BLOCKER 👆
+
+            context.user_data["otp_service_name"] = service_name
+            context.user_data["otp_rental_product_id"] = product_id  
+            context.user_data["otp_step"] = "awaiting_rental_state" 
+            
+            await ask_state_or_random(update, context)
             
         else:
             # If the Product ID is invalid
@@ -502,8 +518,8 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         logger.info(f"🚀 User requested DB Name: '{service_name}' in {state}")
         
         # ✅ THE HYBRID CHECK
-        if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices"]):
-            api_service_name = "allservices"
+        if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices", "servicenotlisted"]):
+            api_service_name = "servicenotlisted"
             logger.info("⚠️ Bot spotted a Universal keyword. Overriding to 'allservices'.")
         else:
             api_service_name = service_name
