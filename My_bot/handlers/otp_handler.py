@@ -132,9 +132,9 @@ async def _cleanup_otp_state(context: ContextTypes.DEFAULT_TYPE, user_id: int | 
 
 # Correcting how the reserve_number_for_otp should handle country and service_name
 async def reserve_number_for_otp(service_name: str, country="USA"):
-    provider = get_otp_provider(api_key=API_KEY)  # Ensure you're using the correct API key
-    # Now reserve the number using both service_name and country if necessary
-    number = provider.reserve_number(service_name=service_name, country=country)
+    provider = get_otp_provider(api_key=API_KEY)  
+    # ✅ FIX: Pushed to a background thread so the bot NEVER freezes!
+    number = await asyncio.to_thread(provider.reserve_number, service_name=service_name, country=country)
     return number
 
 
