@@ -142,11 +142,23 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         f"An unexpected error occurred. Please try again or contact support: {SUPPORT_HANDLE}"
     )
     
-    if update and update.effective_message:
+    # Send the white-labeled error to the user WITH the support link
+    if update and update.effective_chat:
+        SUPPORT_HANDLE = os.getenv("SUPPORT_HANDLE", "@YourSupportUsername")
+        safe_message = (
+            "❌ <b>System Error</b>\n"
+            "An unexpected error occurred. Please try again.\n\n"
+            f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
+        )
+        
         try:
-            await update.effective_message.reply_text(user_msg, parse_mode="HTML")
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=safe_message,
+                parse_mode="HTML"
+            )
         except Exception:
-            pass # Fails silently if the user blocked the bot
+            pass
 
     # 2. THE ADMIN ALERT
     if ADMIN_IDS:
