@@ -1325,15 +1325,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 wallet", "🏠 home"] 
     
     if text.lower() in global_menu_buttons:
-        # 1. Instantly wipe whatever process they were stuck in (Rental, OTP, etc.)
-        context.user_data.pop("otp_step", None)
-        
-        # 2. Let the bot naturally continue down to your NORMAL menu handlers!
-        # By wiping the 'otp_step' above, we broke them out of the trap.
-        # Now we just let the rest of your router handle the button click exactly like it normally does.
-        
-        # We DO NOT put 'return' here anymore. We want the code to keep flowing downwards!
-
+        # 1. Instantly wipe EVERY process they were stuck in (Rental, OTP, Wallet, Admin, etc.)
+        trap_doors = [
+            "otp_step", 
+            "wallet_step", 
+            "msn_step", 
+            "esim_step", 
+            "awaiting_extension_choice"
+        ]
+        for trap in trap_doors:
+            context.user_data.pop(trap, None)
+            
     # 👇 ... The rest of your normal routing logic continues down here ... 👇
     step = context.user_data.get("otp_step")
     
@@ -1531,12 +1533,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V7 - NO-AMNESIA FIX) 🚨
-    # We DO NOT delete the old menu here! We leave it on the screen.
-
-    # 1. Warn them immediately
-    warning_msg = await safe_send(
-        update,
-        context,
+    # This creates a temporary bubble at the bottom without destroying your menus above.
+    
+    warning_msg = await update.message.reply_text(
         "⚠️ <b>Invalid input. Please use the menu buttons above.</b>", 
         parse_mode="HTML"
     )

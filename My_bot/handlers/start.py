@@ -41,7 +41,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""
 
     await update.message.reply_text(
-        f"Hello {user.id}{admin_badge}! Welcome to your underground bot.",
+        f"Hello User {user.id}{admin_badge}! Welcome to your underground bot.",
         reply_markup=get_main_menu(),
     )
 
