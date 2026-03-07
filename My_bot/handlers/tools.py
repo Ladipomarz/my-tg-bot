@@ -3,6 +3,7 @@ from telegram.ext import ContextTypes
 import asyncio
 from telegram.ext import CallbackContext
 from telegram import Update
+from utils.helper import notify_admin
 from menus.tools_menu import (
     get_tools_inline,
     get_msn_services_menu,
@@ -12,7 +13,6 @@ from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
-from handlers.otp_handler import reserve_number_for_otp
 from handlers.otp_handler import(
     otp_verification_handler,
     otp_usa_one_time_or_rental_menu,
@@ -363,18 +363,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     
-    
-    if data.startswith("service_"):
-        service_name = data.replace("service_", "")  # Extract the service name
-        number = await reserve_number_for_otp(service_name=service_name, country="USA")  # Correct invocation
-        await update.callback_query.edit_message_text(
-            f"Reserved number for {service_name}: {number}\nWaiting for OTP..."
-        )
-        return
-    
-    
     # If unhandled data, log it
     print(f"Unhandled callback data: {data}")
+    await notify_admin(f"Unhandled callback data: {data}")
+    
     
     
 
