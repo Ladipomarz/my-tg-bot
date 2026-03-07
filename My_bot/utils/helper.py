@@ -15,6 +15,7 @@ async def notify_admin(error_message: str):
     Does NOT need 'context' or 'update'.
     """
     if not ADMIN_ID or not BOT_TOKEN:
+        print("⚠️ SNIPER ABORTED: ADMIN_ID or BOT_TOKEN is missing!") # 👈 Add this
         return
         
     safe_error = str(error_message)[:3500] # Prevent Telegram length limits
@@ -28,8 +29,8 @@ async def notify_admin(error_message: str):
         # Fire the message directly to Telegram's server
         async with httpx.AsyncClient(timeout=5) as client:
             await client.post(url, json=payload)
-    except Exception:
-        pass # Silently fail if there is a network glitch
+    except Exception as e:
+        print(f"⚠️ SNIPER MISSED: {e}")
 
 
 def notify_admin_sync(error_message: str):
@@ -38,6 +39,7 @@ def notify_admin_sync(error_message: str):
     No 'await' or 'async' needed!
     """
     if not ADMIN_ID or not BOT_TOKEN:
+        print("⚠️ SNIPER ABORTED: ADMIN_ID or BOT_TOKEN is missing!") # 👈 Add this
         return
         
     safe_error = str(error_message)[:3500]
@@ -51,5 +53,5 @@ def notify_admin_sync(error_message: str):
         # Notice we use the standard sync Client here!
         with httpx.Client(timeout=5) as client:
             client.post(url, json=payload)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"⚠️ SNIPER MISSED: {e}")

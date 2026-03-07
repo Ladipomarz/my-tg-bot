@@ -63,6 +63,9 @@ async def safe_send(
                 
             )
         )
+        
+    # ✅ Force Telegram to read HTML so your <b> tags turn into real bold text!
+    kwargs["parse_mode"] = kwargs.get("parse_mode", "HTML")   
 
     # Send new message
     msg = await base_msg.reply_text(text, reply_markup=reply_markup, **kwargs)
