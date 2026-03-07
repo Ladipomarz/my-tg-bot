@@ -287,23 +287,32 @@ async def orders_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ Proceed (Create new order)
     if data == "orders_proceed":
         desc = context.user_data.get("order_pending_description")
+        price = context.user_data.get("custom_price_usd")
 
         if not desc:
             logger.warning("orders_proceed missing order_pending_description; defaulting to MSN Service")
             desc = "MSN Service"
+            
+        if not price:
+            # Fallback to prevent crash, though this should never happen if menus are used properly
+            logger.warning("orders_proceed missing custom_price_usd; defaulting to 0.0")
+            price = 0.0
 
         logger.info(
             "orders_proceed user_id=%s pending_desc=%r custom_price_usd=%r esim_email=%r",
             user_id,
             desc,
-            context.user_data.get("custom_price_usd"),
+            price,
             context.user_data.get("esim_email"),
         )
 
+        # 👇 THE FIX: WE PASS THE PRICE AND ORDER TYPE INTO THE DATABASE!
         order_id, order_code = create_order(
             user_id=user_id,
             description=desc,
             ttl_seconds=3600,
+            amount_usd=price,
+            order_type="service_purchase" # Labeling it clearly
         )
 
         context.user_data["orders_order_id"] = order_id
@@ -331,7 +340,7 @@ async def debug_last_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     orders = get_orders_for_user(user_id)
     if not orders:
-        await update.message.reply_text("No orders found for you.")
+        await safe_send(update, context, "No orders found for you.")
         return
 
     o = orders[0]
@@ -345,4 +354,4 @@ async def debug_last_order(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Invoice: {o.get('invoice_url')}\n"
         f"Delivery file: {o.get('delivery_filename')}\n"
     )
-    await update.message.reply_text(msg)
+    await safe_send(update, context, msg)

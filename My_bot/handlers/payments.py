@@ -272,9 +272,15 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update_order_status(pending["id"], "cancelled")
         update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
         
-        #await safe_edit_message(q,"✅ Top up cancelled. Now create a new top up.")
-        # Clear any wallet flow state (optional)
-        context.user_data.pop("wallet_step", None)
+        # 🧹 THE FIX: Vaporize ALL flow memory when they cancel a payment
+        keys_to_clear = [
+            "wallet_step", "otp_step", "msn_step", "esim_step", 
+            "esim_email", "esim_duration", "esim_country", "custom_price_usd",
+            "order_pending_description", "current_menu"
+        ]
+        for k in keys_to_clear:
+            context.user_data.pop(k, None)
+
         await open_wallet_menu(update, context)
         return
 
@@ -349,18 +355,21 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return  # ✅ CRITICAL: prevent falling into Unknown action
 
         except Exception as e:
-            logger.exception("Plisio invoice creation failed: %s", str(e))
-            msg = str(e)
+            # 1. Log the real error to your server console
+            logger.exception("Payment invoice creation failed: %s", str(e))
+            msg = str(e).lower()
 
-            if "Invoice with the same order_number already exists" in msg or "return_existing" in msg:
+            # 2. Check for the duplicate invoice edge-case
+            if "already exists" in msg or "return_existing" in msg:
                 await safe_edit_message(q, context,
                     "⚠️ Payment link already exists for this order.\nTap below to continue:",
                     reply_markup=make_payment_kb(order_code),
                 )
                 return
 
+            # 3. 🚨 Send a completely safe, white-labeled error to the user
             await q.edit_message_text(
-                f"❌ Failed to create payment link:\n{e}\n\nChoose another coin.",
+                "❌ The payment network is currently unresponsive. Please wait a moment and try again, or choose another coin.",
                 reply_markup=coin_picker_kb(order_code, amount_usd),
             )
             return

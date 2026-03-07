@@ -27,6 +27,15 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         amt = t.get("amount_usd")
         status = (t.get("status") or t.get("pay_status") or "unknown").lower()
         
+        # 🗓️ THE UX FIX: Extract and format the date nicely (e.g., "Mar 07")
+        date_obj = t.get("created_at")
+        date_str = ""
+        if date_obj:
+            try:
+                date_str = date_obj.strftime("%b %d") + " - "
+            except Exception:
+                pass # Fails silently if the date format is weird
+        
         if status in ("paid", "confirmed", "completed"):
             status_txt = "Completed"
         elif status in ("expired",):
@@ -37,11 +46,11 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             status_txt = "Completed"
         elif status in ("processing", "pending"):
             status_txt = "Pending"
-
         else:
             status_txt = status.capitalize()
 
-        lines.append(f"- {_fmt_usd(amt or 0)} Top-up ({status_txt})")
+        # Added date_str to the display line!
+        lines.append(f"• {date_str}{_fmt_usd(amt or 0)} Top-up ({status_txt})")
 
     tx_block = "\n".join(lines) if lines else "- No transactions yet."
 

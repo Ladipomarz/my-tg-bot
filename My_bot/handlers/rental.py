@@ -131,7 +131,9 @@ async def ask_state_or_random(update: Update, context: CallbackContext):
     # ---------------------------------
 
     # Send the prompt using the correct target with dynamic prices
-    await target.reply_text(
+    await safe_send(
+        update,
+        context,
         f"Do you want the number to be generated from a specific US state?\n\n"
         f"<b>Specific State Price : ${price_specific:.2f}</b>\n\n"
         f"<b>Random state price: ${price_random:.2f}</b>\n\n"
@@ -218,12 +220,12 @@ Price: ${price:.2f}
 
 ⚠️ Please reply with either 'yes' or 'no' to confirm.
 """
-        await target.reply_text(confirmation_message)
+        await safe_send(update, context, confirmation_message)
         context.user_data["otp_step"] = "rental_final_confirm" 
         
     except ValueError as e:
         # 3. IF PRICING FAILS, REJECT THE USER
-        await target.reply_text("❌ Pricing Error: Invalid duration or service selected. Please restart your purchase.")
+        await safe_send( update, context, "❌Invalid duration or service selected. Please restart your purchase.")
         context.user_data.pop("otp_step", None)
         
 async def confirm_rental(update: Update, context: CallbackContext):
@@ -234,12 +236,12 @@ async def confirm_rental(update: Update, context: CallbackContext):
     text = target.text.strip().lower()
 
     if text not in ['yes', 'no']:
-        await target.reply_text("⚠️ Please reply with exactly 'yes' or 'no'.")
+        await safe_send(update, context, "⚠️ Please reply with exactly 'yes' or 'no'.")
         return
 
     # If they say no, safely cancel and wipe the memory
     if text == 'no':
-        await target.reply_text("✅ Rental cancelled.")
+        await safe_send(update, context,"✅ Rental cancelled.")
         context.user_data.pop("otp_step", None)
         return
 
@@ -269,7 +271,9 @@ async def confirm_rental(update: Update, context: CallbackContext):
             [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_topup")],
         ])
         
-        await target.reply_text(
+        await safe_send(
+            update,
+            context,
             f"❌ Insufficient wallet balance.\n"
             f"Price: ${price:.2f}\n"
             f"Your balance: ${bal:.2f}\n\n"
@@ -307,7 +311,9 @@ async def confirm_rental(update: Update, context: CallbackContext):
             pass
             
         # 1. Alert the User
-        await target.reply_text(
+        await safe_send(
+            update,
+            context,
             f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
             f"Because you selected a massive <b>{duration_text}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
             f"<i>Please allow up to 24 hours. You can track the status of this number directly in your <b>Orders</b> menu.</i>",
@@ -397,7 +403,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
 
         # 🔘 ADD THE BUTTON TO JUMP STRAIGHT TO THEIR NUMBERS
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage My Numbers", callback_data="my_rentals_back")]])
-        await target.reply_text(success_message, parse_mode="HTML")
+        await safe_send(update, context, success_message, parse_mode="HTML")
         
         # ⏰ SET THE EXACT ALARMS!
         delay_seconds = days_to_expire * 24 * 3600
@@ -423,6 +429,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
         context.user_data.pop("otp_step", None)
 
     except Exception as e:
+        logger.error(f"Rental Purchase Failed: {e}")
         # 7. 🛟 THE AUTO-REFUND (Safety Net)
         add_user_balance_usd(user_id, price)
         set_order_status(order_id, "cancelled")
@@ -432,11 +439,13 @@ async def confirm_rental(update: Update, context: CallbackContext):
             await processing_msg.delete()
         except Exception:
             pass
+        
             
-        await target.reply_text(
-            f"❌ Purchase failed. The provider is out of stock or offline.\n\n"
-            f"💰 <b>Your ${price:.2f} has been instantly refunded to your wallet.</b>\n\n"
-            f"Error details: {e}", 
+        await safe_send(
+            update,
+            context,
+            f"❌ Purchase failed. Contact Support\n\n"
+            f"💰 <b>Your ${price:.2f} has been instantly refunded to your wallet.</b>\n\n",
             parse_mode="HTML"
         )
         context.user_data.pop("otp_step", None)
@@ -659,7 +668,7 @@ async def my_rentals_menu(update, context):
     if not rentals:
         empty_text = "📭 You don't have any active rental numbers right now."
         if query:
-            await query.edit_message_text(empty_text)
+            await safe_send(update, context, empty_text)
         else:
             await safe_send(update, context, empty_text)
         return
@@ -680,7 +689,8 @@ async def my_rentals_menu(update, context):
     
     # 4. Send the menu
     if query:
-        await query.edit_message_text(menu_text, parse_mode="Markdown", reply_markup=reply_markup)
+        await safe_send(update, context, menu_text, parse_mode="Markdown", reply_markup=reply_markup)      
+
     else:
         await safe_send(update, context, menu_text, parse_mode="Markdown", reply_markup=reply_markup)      
         
@@ -699,7 +709,7 @@ async def manage_rental_menu(update, context):
     # 2. Fetch details
     details = get_rental_details(rental_id)
     if not details:
-        await query.edit_message_text("❌ This rental is no longer active or could not be found.")
+        await safe_send(update, context,"❌ This rental is no longer active or could not be found.")
         return
         
     phone, service, always_on, expiration_time = details
@@ -755,7 +765,7 @@ async def manage_rental_menu(update, context):
     )
     
 
-    await query.edit_message_text(menu_text, parse_mode="HTML", reply_markup=reply_markup)
+    await safe_send(update, context, menu_text, parse_mode="HTML", reply_markup=reply_markup)
         
 
 async def check_sms_action(update, context):
@@ -764,11 +774,11 @@ async def check_sms_action(update, context):
     await query.answer()
     
     rental_id = query.data.split(":")[1]
-    await query.edit_message_text("⏳ Connecting to provider and checking inbox... please wait.")
+    await safe_send(update, context,"⏳ Connecting to Magic Bot and checking inbox... please wait.")
 
     details = get_rental_details(rental_id)
     if not details:
-        await query.edit_message_text("❌ This rental is no longer active.")
+        await safe_send(update, context, "❌ This rental is no longer active.")
         return
 
     phone, service, always_on, expiration_time = details
@@ -786,7 +796,7 @@ async def check_sms_action(update, context):
 
         # 3. Smart Wake for sleeping lines
         if not always_on and getattr(rental_obj, 'status', '').lower() == 'sleeping':
-            await query.edit_message_text("⏰ Line is sleeping. Sending Wake command... (Takes ~3 seconds)")
+            await safe_send(update, context, "⏰ Line is sleeping. Sending Wake command... (Takes ~3 seconds)")
             await asyncio.to_thread(wake_requests.create, rental_obj)
             await asyncio.sleep(3)
             rental_obj = await asyncio.to_thread(reservations.details, rental_id) 
@@ -933,10 +943,11 @@ async def check_sms_action(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
 
-        await query.edit_message_text(text, parse_mode="HTML", reply_markup=reply_markup)
+        await safe_send(update, context, text, parse_mode="HTML", reply_markup=reply_markup)
 
     except Exception as e:
-        await query.edit_message_text(f"💥 Provider Error: {e}")
+        logger.error(f"Error  {e}")
+        await safe_send(update, context, f"💥 Checking Error Please contact Support.")
         
         
         
@@ -949,7 +960,7 @@ async def trigger_extension_menu(update, context):
     rental_id = query.data.split(":")[1]
     details = get_rental_details(rental_id)
     if not details:
-        await query.edit_message_text("❌ This rental is no longer active or could not be found.")
+        await safe_send(update, context, "❌ This rental is no longer active or could not be found.")
         return
         
     phone, service, always_on, expiration_time = details
@@ -995,7 +1006,7 @@ async def trigger_extension_menu(update, context):
     # We set a flag so the bot knows it is actively listening for an A-J response
     context.user_data["awaiting_extension_choice"] = True
     
-    await query.edit_message_text(menu_text, parse_mode="HTML")
+    await safe_send(update, context,menu_text, parse_mode="HTML")
     
     
     

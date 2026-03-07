@@ -166,7 +166,6 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         return
 
     # -------------------------
-    # -------------------------
     # OPEN ORDER (PAID LIST VIEW)
     # -------------------------
     if data.startswith("admin_open_paid:"):

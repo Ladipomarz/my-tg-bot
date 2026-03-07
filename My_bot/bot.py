@@ -1461,7 +1461,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "pending_prompt_msg_id",
                 )
 
-                msg = await update.message.reply_text(
+                msg = await safe_send(
+                    update,
+                    context,
                     f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                     reply_markup=get_pending_order_menu(),
                 )
@@ -1522,7 +1524,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # We DO NOT delete the old menu here! We leave it on the screen.
 
     # 1. Warn them immediately
-    warning_msg = await update.message.reply_text(
+    warning_msg = await safe_send(
+        update,
+        context,
         "⚠️ <b>Invalid input. Please use the menu buttons above.</b>", 
         parse_mode="HTML"
     )

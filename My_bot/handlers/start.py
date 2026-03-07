@@ -8,6 +8,7 @@ from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
 from config import ADMIN_IDS
 from handlers.wallet_continue import open_wallet_menu
+from utils.auto_delete import safe_send
 
 
 
@@ -40,7 +41,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""
 
     await update.message.reply_text(
-        f"Hello {user.first_name}{admin_badge}! Welcome to your underground bot.",
+        f"Hello {user.id}{admin_badge}! Welcome to your underground bot.",
         reply_markup=get_main_menu(),
     )
 
@@ -77,7 +78,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 🚫 Block ONLY if payment NOT detected yet
             if pay_status in {"pending", "", "new"}:
-                await update.message.reply_text(
+                await safe_send(
+                    update,
+                    context,
                     f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
                     reply_markup=get_pending_order_menu(),
                 )
