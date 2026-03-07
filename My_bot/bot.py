@@ -28,7 +28,7 @@ from handlers.admin import fix_db_sequence,rescue_my_number
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
-from utils.db import create_service_fetch_status_table, rescue_my_number
+from utils.db import create_service_fetch_status_table
 from handlers.otp_handler import handle_otp_text_input
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 
@@ -49,9 +49,6 @@ from utils.db import (
     create_wallet_transactions_table,
     get_all_active_rentals,
     auto_expire_rentals,
-    scheduled_6h_reminder,
-    scheduled_expire_rental,
-    
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -83,7 +80,9 @@ handle_rental_universal,
 trigger_extension_menu,
 handle_extension_text,
 scheduled_expire_rental,
- resend_rental_menu 
+resend_rental_menu,
+scheduled_expire_rental, 
+scheduled_6h_reminder
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -269,7 +268,7 @@ async def ensure_telegram_ready():
             logger.info("Telegram app is ready")
             
             # ---------------------------------------------------------
-            # 🚀 THE ENTERPRISE HYBRID STARTUP
+            # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
             # 1. Sweep anything that expired while the bot was offline
             auto_expire_rentals()
 
@@ -286,19 +285,30 @@ async def ensure_telegram_ready():
                 if exp_time.tzinfo is None:
                     exp_time = exp_time.replace(tzinfo=datetime.timezone.utc)
 
-                time_left = (exp_time - now).total_seconds()
+                delay_seconds = (exp_time - now).total_seconds()
+                reminder_seconds = delay_seconds - (6 * 3600) # 6 hours before
                 
-                # If it still has time, set the alarm!
-                if time_left > 0:
+                # Re-arm Alarm 1: 6-Hour Warning (THIS CLEARS YOUR WARNING!)
+                if reminder_seconds > 0:
+                    tg_app.job_queue.run_once(
+                        scheduled_6h_reminder,
+                        when=reminder_seconds,
+                        data={"rental_id": rental_id, "user_id": user_id},
+                        name=f"warn_{rental_id}"
+                    )
+                    
+                # Re-arm Alarm 2: The Kill Switch
+                if delay_seconds > 0:
                     tg_app.job_queue.run_once(
                         scheduled_expire_rental,
-                        when=time_left,
+                        when=delay_seconds,
                         data={"rental_id": rental_id, "user_id": user_id},
                         name=f"expire_{rental_id}"
                     )
-            logger.info(f"Rescheduled {len(active_lines)} precise rental alarms.")
+                    
+            logger.info(f"✅ Successfully re-armed {len(active_lines)} rental alarms!")
             # ---------------------------------------------------------
-
+            
             return True
         except Exception as e:
             logger.exception("Telegram not ready yet: %s", e)
