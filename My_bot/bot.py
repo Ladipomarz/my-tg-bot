@@ -8,7 +8,7 @@ import re
 import json
 import traceback
 import html
-
+from config import SUPPORT_HANDLE
 
 from fastapi import FastAPI, Request, Response
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -134,17 +134,8 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     """
     logger.error("Exception while handling an update:", exc_info=context.error)
 
-    # 1. THE WHITE-LABEL USER MESSAGE
-    SUPPORT_HANDLE = "@YourSupportHandle" # <-- Change this when your support bot is ready
-    
-    user_msg = (
-        f"❌ <b>Purchasing Error</b>\n\n"
-        f"An unexpected error occurred. Please try again or contact support: {SUPPORT_HANDLE}"
-    )
-    
-    # Send the white-labeled error to the user WITH the support link
+    # 1. Send the white-labeled error to the user WITH the support link
     if update and update.effective_chat:
-        SUPPORT_HANDLE = os.getenv("SUPPORT_HANDLE", "@YourSupportUsername")
         safe_message = (
             "❌ <b>System Error</b>\n"
             "An unexpected error occurred. Please try again.\n\n"

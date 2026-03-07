@@ -2,6 +2,7 @@ import os
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")  # from Railway
+SUPPORT_HANDLE = os.getenv("SUPPORT_HANDLE", "@YourSupportUsername")
 
 # 👑 DYNAMIC ADMIN IDS FROM RAILWAY
 # This grabs the variable from Railway. If it's missing, it defaults to empty.
