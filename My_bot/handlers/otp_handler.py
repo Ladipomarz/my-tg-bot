@@ -488,11 +488,13 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             
             
         except Exception as e:
-            # Log the real error to your Railway console so you can still investigate it
+            # 1. Log the real error to your Railway console
             logger.error(f"Failed to reserve number: {e}") 
-            await notify_admin(f"Failed to reserve number: {e}")
             
-            # refund wallet if we already debited
+            # 🎯 2. FIRE ONE SNIPER (so you know exactly why it crashed)
+            await notify_admin(f"🚨 Failed to reserve number: {e}")
+            
+            # 3. Refund wallet if we already debited
             try:
                 amt = context.user_data.get("otp_debited_amount")
                 if amt:
@@ -501,14 +503,14 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             except Exception:
                 pass
             
-            await notify_admin("🚨 TextVerified API failed to return a number for a user.")
-            # 🚨 THE FIX: Send a safe, white-labeled message to the user
+            # 🚨 4. THE FIX: Let the auto-appender do its job!
             await safe_send(
                 update, 
                 context, 
-                "❌ Failed to Fetch number. Please try again, Or Contact Support"
+                "❌ Failed to fetch number. Please try again."
             )
-            return True
+            
+            return True # Exits the function safely
 
         # clear step data but keep verification info
         for k in ("otp_step", "otp_service_name", "otp_state", "otp_custom_service", "otp_api_service_name", "otp_price"):
@@ -599,7 +601,6 @@ async def reserve_sms_verification(
         kwargs = {
             "service_name": service_name,
             "capability": ReservationCapability.SMS,
-            "allow_back_order_reservations": False,
         }
 
         # For "not listed" flow

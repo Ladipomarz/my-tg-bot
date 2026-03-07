@@ -9,6 +9,7 @@ import json
 import traceback
 import html
 from config import SUPPORT_HANDLE
+import html
 
 from fastapi import FastAPI, Request, Response
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
@@ -147,6 +148,7 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 chat_id=update.effective_chat.id,
                 text=safe_message,
                 parse_mode="HTML"
+                
             )
         except Exception:
             pass
