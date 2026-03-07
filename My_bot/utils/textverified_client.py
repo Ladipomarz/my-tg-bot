@@ -8,6 +8,7 @@ from textverified import (
     ReservationCapability,
     RentalDuration,
 )
+from utils.helper import notify_admin_sync
 import os
 import logging
 
@@ -28,5 +29,6 @@ def get_textverified_client():
     except Exception as e:
         # 🚨 WE BLOCK THE API ERROR HERE SO THE USER NEVER SEES IT 🚨
         logger.error(f"Backend Provider Connection Failed: {str(e)}")
+        notify_admin_sync(f"Backend failed {str(e)}")
         # We raise a generic, safe error that doesn't mention the provider name
         raise Exception("System is currently experiencing high load. Please try again later.")

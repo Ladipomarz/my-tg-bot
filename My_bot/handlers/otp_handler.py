@@ -16,6 +16,7 @@ import datetime
 from typing import Optional
 from telegram.constants import ParseMode
 from telegram.ext import CommandHandler
+from utils.helper import notify_admin
 import html
 from pricelist import get_otp_price_usd
 from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd,get_service_name_by_code
@@ -126,15 +127,6 @@ async def _cleanup_otp_state(context: ContextTypes.DEFAULT_TYPE, user_id: int | 
                     bucket.pop(k, None)
     except Exception:
         pass
-
-
-
-# Correcting how the reserve_number_for_otp should handle country and service_name
-async def reserve_number_for_otp(service_name: str, country="USA"):
-    provider = get_otp_provider(api_key=API_KEY)  
-    # ✅ FIX: Pushed to a background thread so the bot NEVER freezes!
-    number = await asyncio.to_thread(provider.reserve_number, service_name=service_name, country=country)
-    return number
 
 
 # ---------- OTP MENUS ----------
@@ -498,6 +490,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         except Exception as e:
             # Log the real error to your Railway console so you can still investigate it
             logger.error(f"Failed to reserve number: {e}") 
+            await notify_admin(f"Failed to reserve number: {e}")
             
             # refund wallet if we already debited
             try:
@@ -512,7 +505,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             await safe_send(
                 update, 
                 context, 
-                "❌ Failed to reserve number. Please try again, Or Contact Support"
+                "❌ Failed to Fetch number. Please try again, Or Contact Support"
             )
             return True
 
@@ -685,6 +678,7 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     except Exception as e:
         # 1. You see the raw TextVerified error in your Railway console
         logger.error(f"OTP Polling API Error: {e}") 
+        await notify_admin(f"OTP Polling API Error: {e}")
         
         # 2. The user sees this safe, white-labeled message
         await context.bot.send_message(
@@ -778,6 +772,7 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
         logger.error(f"Refund API Error: {e}") # You see this
+        await notify_admin(f"Refund attempt failed: {e}")
         await context.bot.send_message(chat_id=chat_id, text=f"❌ Refund attempt failed: Contact Support")
         await _cleanup_otp_state(context, user_id)
         return
@@ -901,6 +896,7 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
         logger.error(f"Refund API Error: {e}") 
+        await notify_admin(f"Refund attempt failed: {e}")
         await q.message.reply_text(f"❌ Refund attempt failed: Contact Support")
         await _cleanup_otp_state(context.application, user_id)
         return

@@ -25,6 +25,7 @@ from telegram.ext import (
 from telegram.request import HTTPXRequest
 from utils.auto_delete import safe_send
 from handlers.admin import fix_db_sequence,rescue_my_number
+from utils.helper import notify_admin
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
@@ -311,6 +312,7 @@ async def ensure_telegram_ready():
             
             return True
         except Exception as e:
+            await notify_admin(f"Telegram not up: {e}")
             logger.exception("Telegram not ready yet: %s", e)
             return False
 
@@ -327,6 +329,7 @@ async def _safe_send_message(chat_id: int, text: str):
             await tg_app.bot.send_message(chat_id=chat_id, text=text)
             return
         except Exception as e:
+            await notify_admin(f"Telegram send_message failed {e}")
             logger.exception("Telegram send_message failed attempt %s/3: %s", attempt, e)
             await asyncio.sleep(1.5 * attempt)
 
@@ -358,8 +361,9 @@ async def _notify_admin_new_paid_order(order: dict):
     for admin_id in ADMIN_IDS:
         try:
             await tg_app.bot.send_message(chat_id=admin_id, text=text, reply_markup=kb)
-        except Exception:
+        except Exception as e:
             logger.exception("Failed to notify admin %s for order %s", admin_id, order_code)
+            await notify_admin(f"Couldnt notify admin: {e}")
 
 
 async def _delete_message_later(context: ContextTypes.DEFAULT_TYPE):
@@ -403,8 +407,9 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
 
         inv = (data.get("data") or {}).get("invoice") or {}
         return inv if isinstance(inv, dict) else None
-    except Exception:
+    except Exception as e:
         logger.exception("Failed to fetch Plisio invoice details")
+        await notify_admin(f"Couldnt fetch Plisio Inv: {e}")
         return None
 
 
@@ -1518,7 +1523,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # eSIM email flow (user flow)
-    # eSIM email flow (user flow)
     if context.user_data.get("esim_step") == "email":
         try:
             await handle_esim_email_input(update, context)
@@ -1598,6 +1602,7 @@ async def _background_telegram_bootstrap():
                 return
             except Exception as e:
                 logger.exception("set_webhook failed (will retry): %s", e)
+                await notify_admin(f"Webhook Setting failed {e}")
         await asyncio.sleep(10)
 
 
@@ -1724,14 +1729,16 @@ async def plisio_webhook(req: Request):
     if is_expired:
         try:
             update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
-        except Exception:
+        except Exception as e:
             logger.exception("update_payment_status_by_order_code(expired) failed (ignored)")
+            await notify_admin(f"update_payment_status Failed: {e}")
 
         try:
             if order.get("id"):
                 update_order_status(order["id"], "expired")
-        except Exception:
+        except Exception as e:
             logger.exception("update_order_status(expired) failed (ignored)")
+            await notify_admin(f"update_payment_status failed: {e}")
 
         return {"ok": True}
 
@@ -1746,15 +1753,17 @@ async def plisio_webhook(req: Request):
         try:
             if current_pay_status != new_pay_status:
                 update_payment_status_by_order_code(order_number, pay_status=new_pay_status, pay_txn_id=txn_id)
-        except Exception:
+        except Exception as e:
             logger.exception("update_payment_status_by_order_code(%s) failed (ignored)", new_pay_status)
+            await notify_admin(f"update_payment_status Failed: {e}")
 
         # Move order into processing (idempotent)
         try:
             if order.get("id"):
                 update_order_status(order["id"], "processing")
-        except Exception:
+        except Exception as e:
             logger.exception("update_order_status(processing) failed (ignored)")
+            await notify_admin(f"update_payment_status failed: {e}")
 
         # ✅ CREDIT WALLET ON DETECTED (idempotent)
         # NOTE: This credits FULL order amount as soon as any payment is detected.
@@ -1788,22 +1797,25 @@ async def plisio_webhook(req: Request):
                     add_user_balance_usd(order["user_id"], float(usd_paid))
                     logger.info("WALLET CREDIT OK user_id=%s usd_paid=%s order=%s", order["user_id"], usd_paid, order_number)
                     mark_order_wallet_credited(order_number)
-                except Exception:
-                    logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)              
+                except Exception as e:
+                    logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)  
+                    await notify_admin(f"Wallet credit failed for order_number: {e}")            
                 
                 else:   
                     
                         # ✅ ADD THIS RIGHT HERE (after credit succeeded)
                     try:
                         update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
-                    except Exception:
+                    except Exception as e:
                         logger.exception("update_payment_status_by_order_code(paid) failed (ignored)")
+                        await notify_admin(f"update_payment_statusFailed: {e}")
                         
                     try:
                         if order.get("id"):
                             update_order_status(order["id"], "completed")
-                    except Exception:
+                    except Exception as e:
                         logger.exception("update_order_status(completed) failed (ignored)")   
+                        await notify_admin(f"update_payment_status Failed: {e}")
 
                     
                     # Notify user about wallet the credit
@@ -1829,8 +1841,9 @@ async def plisio_webhook(req: Request):
             try:
                 if await ensure_telegram_ready():
                     asyncio.create_task(_notify_admin_new_paid_order(order))
-            except Exception:
+            except Exception as e:
                 logger.exception("Admin notify failed (ignored)")
+                await notify_admin(f"Couldnt Notify Admin : {e}")
 
             if chat_id and await ensure_telegram_ready():
                 asyncio.create_task(
@@ -1854,7 +1867,7 @@ async def plisio_webhook(req: Request):
                                     data={"chat_id": chat_id},
                                     name=job_name,
                                 )
-                    except Exception:
+                    except Exception :
                         logger.exception("Failed to schedule eSIM notice (ignored)")
 
         return {"ok": True}
@@ -1870,8 +1883,9 @@ async def plisio_webhook(req: Request):
     # ---------------------------
     try:
         update_payment_status_by_order_code(order_number, pay_status=status or "pending", pay_txn_id=txn_id)
-    except Exception:
+    except Exception as e:
         logger.exception("update_payment_status_by_order_code(%s) failed (ignored)", status or "pending")
+        await notify_admin(f"update_payment_status_by_order_code Failed: {e}")
 
     return {"ok": True}
 

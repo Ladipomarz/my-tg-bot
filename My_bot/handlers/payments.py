@@ -9,6 +9,7 @@ from utils.db import get_pending_order, set_order_payment,expire_pending_order_i
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 import datetime
 from handlers.wallet_continue import open_wallet_menu
+from utils.helper import notify_admin
 
 
 
@@ -357,6 +358,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception as e:
             # 1. Log the real error to your server console
             logger.exception("Payment invoice creation failed: %s", str(e))
+            await notify_admin(f"Payment invoice creation failed: {e}")
             msg = str(e).lower()
 
             # 2. Check for the duplicate invoice edge-case

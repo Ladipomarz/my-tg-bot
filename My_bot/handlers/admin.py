@@ -2,8 +2,10 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 import datetime
+import os
 
 from menus.admin_menu import get_admin_menu
+from utils.helper import notify_admin
 from utils.db import (
     get_paid_orders_for_admin, 
     get_delivered_orders_for_admin,
@@ -247,6 +249,9 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
             )
         except Exception as e:
             logger.error(f"Could not alert user {user_id}: {e}")
+            await notify_admin(f"couldnt alert user: {e}")
+            
+            
             
         # 3. Update Admin Screen
         await q.edit_message_text(f"✅ Order <b>{code}</b> marked as Delivered. User notified.", parse_mode="HTML")
@@ -280,6 +285,7 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
             )
         except Exception as e:
             logger.error(f"Could not alert user {user_id}: {e}")
+            await notify_admin(f"couldnt alert user: {e}")
             
         # 3. Update Admin Screen
         await q.edit_message_text(f"❌ Order <b>{code}</b> Cancelled. <b>${amount:.2f}</b> refunded to user.", parse_mode="HTML")
@@ -303,6 +309,7 @@ async def fix_db_sequence(update, context):
         await update.message.reply_text("✅ Database ID counter successfully resynced!")
     except Exception as e:
         await update.message.reply_text(f"💥 Error fixing sequence: {e}")
+       
         
         
 async def rescue_my_number(update, context):
@@ -356,4 +363,6 @@ async def rescue_my_number(update, context):
         
     except Exception as e:
         await update.message.reply_text(f"💥 Error saving to database: {e}")
+        await notify_admin(f"Error saving to database: {e}")
                 
+

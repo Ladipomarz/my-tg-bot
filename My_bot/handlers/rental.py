@@ -15,6 +15,7 @@ import httpx
 import time
 from utils.auto_delete import safe_send
 from utils.textverified_client import get_textverified_client
+from utils.helper import notify_admin
 from pricelist import get_rental_price_usd
 from utils.db import (
     get_rental_service_name_by_code,
@@ -342,6 +343,8 @@ async def confirm_rental(update: Update, context: CallbackContext):
                     )
                 except Exception as e:
                     logger.error(f"Failed to alert admin {admin_id}: {e}")
+                    await notify_admin(f"couldnt alert admin: {e}")
+                    
             
         context.user_data.pop("otp_step", None)
         return
@@ -430,6 +433,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
 
     except Exception as e:
         logger.error(f"Rental Purchase Failed: {e}")
+        await notify_admin(f"Rental Purchase Failed: {e}")
         # 7. 🛟 THE AUTO-REFUND (Safety Net)
         add_user_balance_usd(user_id, price)
         set_order_status(order_id, "cancelled")
@@ -477,6 +481,7 @@ async def send_service_list_with_buttons(update, context):
 
     except Exception as e:
         logger.error(f"Error sending service list with buttons: {e}")
+        await notify_admin(f"Error sending service list with buttons: {e}")
         if update.callback_query:
             await safe_send(update, context, "An error occurred while fetching the service list.")
             
@@ -642,6 +647,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
     except Exception as e:
         error_msg = str(e)
         logger.error(f"💥 TextVerified Rental Error: {error_msg}")
+        await notify_admin(f"TextVerified Rental Error{e}")
         
         if "Invalid service name" in error_msg:
             # FIXED: Returning 3 items
@@ -828,6 +834,7 @@ async def check_sms_action(update, context):
                         
         except Exception as e:
             print(f"Failed to fetch history: {e}")
+            await notify_admin(f"TextVerified Rental Error{e}")
 
         # 5. ⏱️ THE TIME SORTER
         recent_msgs = []
@@ -947,6 +954,7 @@ async def check_sms_action(update, context):
 
     except Exception as e:
         logger.error(f"Error  {e}")
+        await notify_admin(f"Checking Error Please contact Support{e}")
         await safe_send(update, context, f"💥 Checking Error Please contact Support.")
         
         
@@ -1099,6 +1107,7 @@ async def handle_extension_text(update, context):
             
         except Exception as e:
             logging.error(f"🚨 TEXTVERIFIED EXTENSION FAILED for {rental_id}: {e}")
+            await notify_admin(f"EXTENSION FAILED for {rental_id}: {e}")
             
             # 🚨 THE AUTO-REFUND IF NETWORK FAILS
             add_user_balance_usd(user_id, price_to_charge)
@@ -1171,6 +1180,9 @@ async def handle_extension_text(update, context):
                 
     except Exception as e:
         logging.error(f"🚨 DB Update or Alarm reset failed: {e}")
+        await notify_admin(f"Alarm reset failed: {e}")
+
+        
         return      
 
     # 10. The Grand Finale

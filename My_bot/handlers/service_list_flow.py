@@ -2,6 +2,7 @@
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from handlers.otp_handler import send_services_txt  # the function that builds/sends txt from DB
 from utils.auto_delete import safe_send
+from utils.helper import notify_admin
 
 
 def _yes_skip_keyboard(*, back_callback: str) -> InlineKeyboardMarkup:
@@ -29,7 +30,8 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
     # 1) short message
     try:
         await q.edit_message_text("📄 Here is the service list. Sending the file now...")
-    except Exception:
+    except Exception as e:
+        await notify_admin(f"Sending service list Failed: {e}")
         pass
 
     # 2) txt file

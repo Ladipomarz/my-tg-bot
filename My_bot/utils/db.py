@@ -8,6 +8,7 @@ from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
 import logging
 from config import DATABASE_URL
+from utils.helper import notify_admin_sync
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -185,7 +186,9 @@ def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_
             conn.commit()  # Lock it into the database
             print(f"✅ Saved Rental {phone_number} to DB for User {user_id}")
     except Exception as e:
-        print(f"💥 Database Insert Error: {e}")        
+        print(f"💥 Database Insert Error: {e}") 
+        notify_admin_sync(f"Database Insert Error: {e}")
+               
 
 
     # Now that the users and orders tables exist, create the wallet_transactions table
@@ -1103,6 +1106,7 @@ def get_service_name_by_code(code: str) -> str | None:
                     return row[0]
             except Exception as e:
                 print(f"Error querying database: {e}")
+                notify_admin_sync(f"Error querying db: {e}")
                 return None
     return None
 
@@ -1253,6 +1257,7 @@ def get_user_active_rentals(user_id: int):
                 return cur.fetchall()
     except Exception as e:
         print(f"💥 Database Error (get_user_active_rentals): {e}")
+        notify_admin_sync(f"Error getting active user: {e}")
         return []  # Return an empty list if it fails so the bot doesn't crash
     
     
@@ -1267,6 +1272,7 @@ def get_rental_details(rental_id: str):
                 return cur.fetchone()
     except Exception as e:
         print(f"💥 Database Error (get_rental_details): {e}")
+        notify_admin_sync(f"Error getting rental details: {e}")
         return None
     
     
@@ -1280,6 +1286,7 @@ def mark_rental_expired(rental_id: str):
             conn.commit()
     except Exception as e:
         print(f"Failed to mark rental {rental_id} expired: {e}")    
+        notify_admin_sync(f"Failed to mark rental {rental_id} expired: {e}")
         
         
 def auto_expire_rentals():
@@ -1296,6 +1303,7 @@ def auto_expire_rentals():
             conn.commit()
     except Exception as e:
         print(f"Auto-expire sweep failed: {e}")  
+        notify_admin_sync(f"auto expire cleaning failed {e}")
         
         
               
@@ -1309,6 +1317,7 @@ def get_all_active_rentals():
                 return cur.fetchall() # Returns list of (rental_id, exp_time, user_id) tuples
     except Exception as e:
         print(f"Failed to fetch active rentals: {e}")
+        notify_admin_sync(f"Failed to fetch active rentals:{e}")
         return []
        
         
@@ -1327,4 +1336,5 @@ def extend_rental_timer(rental_id: str, days_to_add: int):
             conn.commit()
     except Exception as e:
         print(f"Failed to extend timer for {rental_id}: {e}")
+        notify_admin_sync(f"Failed to extend timer for {rental_id}: {e}")
         raise e # We raise it so the try/except block in rental.py catches it!        
