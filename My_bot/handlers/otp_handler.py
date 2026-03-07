@@ -500,7 +500,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                     context.user_data.pop("otp_debited_amount", None)
             except Exception:
                 pass
-
+            
+            await notify_admin("🚨 TextVerified API failed to return a number for a user.")
             # 🚨 THE FIX: Send a safe, white-labeled message to the user
             await safe_send(
                 update, 

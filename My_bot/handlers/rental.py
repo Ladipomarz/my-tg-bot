@@ -87,7 +87,7 @@ async def handle_rental_product_id(update: Update, context: CallbackContext):
                 await safe_send(
                     update, 
                     context, 
-                    "⚠️ <b>Minimum Duration Required</b>\n\nPremium Universal (All-Services) numbers require a minimum rental period of <b>3 Days</b>.\n\n<i>Please restart and select a longer duration.</i>", 
+                    " <b>Minimum Duration Required</b>\n\nPremium Universal (All-Services) numbers require a minimum rental period of <b>3 Days</b>.\n\n<i>Please restart and select a longer duration.</i>", 
                     parse_mode="HTML"
                 )
                 context.user_data.pop("otp_step", None)
@@ -219,7 +219,7 @@ Service: {service}
 State: {state}
 Price: ${price:.2f}
 
-⚠️ Please reply with either 'yes' or 'no' to confirm.
+ Please reply with either 'yes' or 'no' to confirm.
 """
         await safe_send(update, context, confirmation_message)
         context.user_data["otp_step"] = "rental_final_confirm" 
@@ -237,7 +237,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
     text = target.text.strip().lower()
 
     if text not in ['yes', 'no']:
-        await safe_send(update, context, "⚠️ Please reply with exactly 'yes' or 'no'.")
+        await safe_send(update, context, " Please reply with exactly 'yes' or 'no'.")
         return
 
     # If they say no, safely cancel and wipe the memory
@@ -497,7 +497,7 @@ async def resend_rental_menu(update, context):
     await safe_send(
         update,
         context,
-        "⚠️ <b>Please click an option below:</b>", 
+        " <b>Please click an option below:</b>", 
         reply_markup=InlineKeyboardMarkup(keyboard), 
         parse_mode="HTML"
     )            
@@ -513,7 +513,7 @@ async def handle_rental_universal(update: Update, context: CallbackContext):
     duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
     if duration_api == "ONE_DAY":
         msg = (
-            "⚠️ <b>Minimum Duration Required</b>\n\n"
+            " <b>Minimum Duration Required</b>\n\n"
             "Premium Universal (All-Services) numbers require a minimum rental period of <b>3 Days</b>. "
             "The provider does not offer 1-Day leases for this specific line.\n\n"
             "<i>Please restart and select a longer duration, or choose a specific service (like WhatsApp or Telegram) for a 1-Day rental.</i>"
@@ -545,7 +545,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         # ✅ THE HYBRID CHECK
         if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices", "servicenotlisted"]):
             api_service_name = "servicenotlisted"
-            logger.info("⚠️ Bot spotted a Universal keyword. Overriding to 'allservices'.")
+            logger.info(" Bot spotted a Universal keyword. Overriding to 'allservices'.")
         else:
             api_service_name = service_name
             logger.info("✅ No Universal keywords found. Keeping original name.")

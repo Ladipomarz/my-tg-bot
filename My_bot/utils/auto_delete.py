@@ -1,5 +1,6 @@
 import asyncio
 import os
+import html
 from config import SUPPORT_HANDLE
 
 from telegram import Update, ReplyKeyboardMarkup
@@ -29,10 +30,9 @@ async def safe_send(
 ):
     
     # 🛑 THE MAGIC AUTO-APPENDER 🛑
-    # If the text looks like an error or warning, glue the support link to the bottom!
-    if "❌" in text or "⚠️" in text or "Failed"  in text or "error" in text or "Error" in text or "failed" in text:
+    # By using text.lower(), you catch "Failed", "FAILED", "failed", "Error", "ERROR", etc.!
+    if "❌" in text or "⚠️" in text or "failed" in text.lower() or "error" in text.lower() or "invalid" in text.lower():
         text = f"{text}\n\n🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
-        
         
     """
     Sends a bot message and deletes the previous bot message AFTER a delay,

@@ -183,7 +183,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Expire ONLY if expires_at says so
     chk = expire_pending_order_if_needed(q.from_user.id)
     if chk and chk.get("status") == "expired":
-        await q.edit_message_text("⚠️ Your previous order expired. Please create a new order.")
+        await q.edit_message_text("Your previous order expired. Please create a new order.")
         return
 
     order_code = pending["order_code"]
