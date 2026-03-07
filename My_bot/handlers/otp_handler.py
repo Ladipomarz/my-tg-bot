@@ -4,6 +4,7 @@ import re
 import asyncio
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import CallbackContext
+from telegram.ext import ConversationHandler
 from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 from io import BytesIO
@@ -22,6 +23,7 @@ from pricelist import get_otp_price_usd
 from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd,get_service_name_by_code
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from config import SUPPORT_HANDLE
 
 
 logging.basicConfig(level=logging.DEBUG)
@@ -314,7 +316,11 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
     if step == "ask_specific_state":
         print(f"User input: {update.message.text}")  # Log the input received
         if low not in ("yes", "no"):
-            await safe_send(update,context,"Please reply with: yes or no")
+            await safe_send(
+                update,
+                context," Do you want the number to be generated from a specific US state?. \n\n"
+                "Please reply with: yes or no"
+                )
             return True
 
         # "General Service" (unlisted/universal) uses cheaper pricing.
@@ -387,7 +393,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             for k in ("otp_step", "otp_service_name", "otp_state", "otp_custom_service", "otp_api_service_name"):
                 context.user_data.pop(k, None)
             await safe_send(update, context, "✅ Cancelled.")
-            return True
+            return ConversationHandler.END
 
         # low == "yes"  ✅ everything from here down is YES-only
         selected = context.user_data.get("otp_service_name")          # DB service
@@ -510,7 +516,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 "❌ Failed to fetch number. Please try again."
             )
             
-            return True # Exits the function safely
+            return ConversationHandler.END # Exits the function safely
 
         # clear step data but keep verification info
         for k in ("otp_step", "otp_service_name", "otp_state", "otp_custom_service", "otp_api_service_name", "otp_price"):
@@ -685,8 +691,14 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         # 2. The user sees this safe, white-labeled message
         await context.bot.send_message(
             chat_id=chat_id, 
-            text="❌ Network connection lost with the provider. Cancelling verification..."
+            text=(
+                "❌ <b>Connection Error</b>\n"
+                "Network connection lost with the provider. Cancelling verification...\n\n"
+                f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
+            ),
+            parse_mode="HTML"
         )
+        
         
         # 3. Stop the bot from continuing to check
         poll_name = data.get("poll_job_name")
@@ -773,11 +785,21 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     try:
         await asyncio.to_thread(_cancel_and_report_blocking, verification_id)
     except Exception as e:
-        logger.error(f"Refund API Error: {e}") # You see this
-        await notify_admin(f"Refund attempt failed: {e}")
-        await context.bot.send_message(chat_id=chat_id, text=f"❌ Refund attempt failed: Contact Support")
-        await _cleanup_otp_state(context, user_id)
-        return
+            logger.error(f"Refund API Error: {e}") 
+            await notify_admin(f"🚨 Refund attempt failed: {e}")
+            
+            # 👇 The completely fixed message block
+            await context.bot.send_message(
+                chat_id=chat_id, 
+                text=(
+                    "❌ Refund attempt failed.\n\n"
+                    f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
+                ),
+                parse_mode="HTML"
+            )
+            
+            await _cleanup_otp_state(context, user_id)
+            return ConversationHandler.END
 
     # ✅ refund wallet if we debited earlier
     refunded_msg = ""
@@ -901,8 +923,7 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await notify_admin(f"Refund attempt failed: {e}")
         await q.message.reply_text(f"❌ Refund attempt failed: Contact Support")
         await _cleanup_otp_state(context.application, user_id)
-        return
-
+        return ConversationHandler.END
     # Refund wallet if we debited earlier
     refunded_msg = ""
     try:

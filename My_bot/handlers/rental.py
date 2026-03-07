@@ -36,11 +36,9 @@ from utils.db import (
 )
 
 from telegram.constants import ParseMode
-from config import ADMIN_IDS 
+from config import ADMIN_IDS,SUPPORT_HANDLE
 
 import logging
-
-
 logger = logging.getLogger(__name__)
 
 # This is for validating the Product ID and transitioning to the next step
@@ -407,7 +405,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
         # 🔘 ADD THE BUTTON TO JUMP STRAIGHT TO THEIR NUMBERS
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage My Numbers", callback_data="my_rentals_back")]])
         await safe_send(update, context, success_message, parse_mode="HTML")
-        
+   
         # ⏰ SET THE EXACT ALARMS!
         delay_seconds = days_to_expire * 24 * 3600
         reminder_seconds = delay_seconds - (6 * 3600) # 6 hours before expiration!
@@ -429,11 +427,24 @@ async def confirm_rental(update: Update, context: CallbackContext):
                 data={"rental_id": rental_id, "user_id": user_id},
                 name=f"expire_{rental_id}"
             )
+            
+            # 🤖 ALARM 3: THE SECRET AUTO-EXTENDER (For 2 Months)
+            if duration_api == "TWO_MONTHS":
+                day_29_seconds = 29 * 24 * 3600 # Wakes up exactly in 29 days
+                context.job_queue.run_once(
+                    scheduled_auto_extend,
+                    when=day_29_seconds,
+                    data={"rental_id": rental_id},
+                    name=f"auto_extend_{rental_id}"
+                )
+                
+        # Wipe the memory only AFTER all alarms are successfully set
         context.user_data.pop("otp_step", None)
 
     except Exception as e:
         logger.error(f"Rental Purchase Failed: {e}")
         await notify_admin(f"Rental Purchase Failed: {e}")
+        
         # 7. 🛟 THE AUTO-REFUND (Safety Net)
         add_user_balance_usd(user_id, price)
         set_order_status(order_id, "cancelled")
@@ -443,7 +454,6 @@ async def confirm_rental(update: Update, context: CallbackContext):
             await processing_msg.delete()
         except Exception:
             pass
-        
             
         await safe_send(
             update,
@@ -1222,7 +1232,8 @@ async def scheduled_6h_reminder(context: CallbackContext):
                 text=(
                     f"⚠️ <b>Rental Expiring Soon!</b>\n\n"
                     f"Your premium line <code>{phone_number}</code> ({service.capitalize()}) will expire in exactly <b>6 Hours</b>.\n\n"
-                    f"<i>If you do not extend it, the number will be deleted and cannot be recovered.</i>"
+                    f"<i>If you do not extend it, the number will be deleted and cannot be recovered.</i> \n\n"
+                    f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
                 ),
                 parse_mode="HTML",
                 reply_markup=kb
@@ -1250,8 +1261,40 @@ async def scheduled_expire_rental(context: CallbackContext):
         try:
             await context.bot.send_message(
                 chat_id=user_id,
-                text=f"🔴 <b>Rental Expired</b>\n\nYour premium line (<code>{phone_number}</code>) has run out of time and was removed from your active list.",
+                text=(
+                    f"🔴 <b>Rental Expired</b>\n\nYour premium line (<code>{phone_number}</code>) has run out of time and was removed from your active list. \n\n"
+                    f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
+                ),
                 parse_mode="HTML"
             )
         except Exception:
             pass # Fails silently if they blocked the bot  
+        
+        
+async def scheduled_auto_extend(context: CallbackContext):
+    """Wakes up on Day 29 to silently pay TextVerified for the 2nd month of a 60-day rental."""
+    job_data = context.job.data
+    rental_id = job_data["rental_id"]
+
+    try:
+        # 1. Connect to TextVerified
+        client, reservations, _, _, _, _, RentalDuration = get_textverified_client()
+        
+        # 2. Tell TextVerified to add exactly 30 more days to the line
+        await asyncio.to_thread(
+            reservations.extend_nonrenewable, 
+            rental_id=rental_id, 
+            extension_duration=getattr(RentalDuration, "THIRTY_DAY")
+        )
+        
+        logger.info(f"✅ AUTO-EXTEND SUCCESS: Secretly bought Month 2 for Rental {rental_id}")
+
+    except Exception as e:
+        logger.error(f"🚨 AUTO-EXTEND FAILED: {e}")
+        # 3. 🛟 The Failsafe! If TextVerified crashes on Day 29, it snipes your phone so you can save the number manually!
+        await notify_admin(
+            f"🚨 <b>URGENT AUTO-EXTEND FAILURE!</b>\n\n"
+            f"Rental ID: <code>{rental_id}</code>\n"
+            f"Error: {e}\n\n"
+            f"<i>The bot tried to buy the 2nd month but failed. Please log into TextVerified and extend it manually before it expires tomorrow!</i>"
+        )        
