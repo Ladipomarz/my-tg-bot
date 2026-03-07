@@ -1,9 +1,13 @@
 import asyncio
+import os
+
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 # How long after a NEW action before the PREVIOUS bot message disappears
 PREVIOUS_MESSAGE_DELAY_SECONDS = 2
+
+SUPPORT_HANDLE = os.getenv("SUPPORT_HANDLE", "@YourSupportUsername") # Put this near the top of the file
 
 
 async def _delete_after_delay(context, chat_id: int, message_id: int, delay: int):
@@ -22,6 +26,13 @@ async def safe_send(
     reply_markup=None,
     **kwargs 
 ):
+    
+    # 🛑 THE MAGIC AUTO-APPENDER 🛑
+    # If the text looks like an error or warning, glue the support link to the bottom!
+    if "❌" in text or "⚠️" in text or "Failed"  in text or "error" in text or "Error" in text or "failed" in text:
+        text = f"{text}\n\n🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
+        
+        
     """
     Sends a bot message and deletes the previous bot message AFTER a delay,
     BUT never deletes the message that contains the ReplyKeyboardMarkup
