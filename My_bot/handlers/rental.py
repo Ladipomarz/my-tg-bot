@@ -572,6 +572,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
                 
         # --- THE API TRANSLATOR ---
+        # --- THE API TRANSLATOR ---
         api_mapped_duration = "THIRTY_DAY" if duration_api in ["ONE_MONTH", "TWO_MONTHS"] else duration_api
             
         if duration_api == "TWO_MONTHS":
@@ -579,10 +580,10 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         else:
             is_renewable = False
 
-        # 👇 THE FIX: TextVerified blocks 'Always On' for short-term Universal lines!
+        # 👇 TextVerified blocks 'Always On' for short-term Universal lines!
         if api_service_name == "servicenotlisted":
             if api_mapped_duration in ["ONE_DAY", "THREE_DAY", "SEVEN_DAY", "FOURTEEN_DAY"]:
-                always_on = False # Force it to False so the API doesn't reject the combination
+                always_on = False 
 
         # Build the perfectly clean payload!
         kwargs = {
@@ -591,7 +592,8 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             "capability": ReservationCapability.SMS,
             "duration": getattr(RentalDuration, api_mapped_duration), 
             "always_on": always_on,  
-            "is_renewable": is_renewable
+            "is_renewable": is_renewable,
+            "allow_back_order_reservations": False # 👈 WE MUST INCLUDE THIS!
         }
         
         if state and state.lower() != "random":
