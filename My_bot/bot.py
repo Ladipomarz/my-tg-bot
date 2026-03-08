@@ -86,7 +86,10 @@ resend_rental_menu,
 scheduled_expire_rental, 
 scheduled_6h_reminder,
 force_test_auto_extend,
-scheduled_auto_extend_plus_daily_check
+scheduled_auto_extend_plus_daily_check,
+test_6h_warning,
+test_expire_alarm
+
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1602,6 +1605,8 @@ tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_ren
 tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
 tg_app.add_error_handler(global_error_handler)
 tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
+tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
+tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 
 
 

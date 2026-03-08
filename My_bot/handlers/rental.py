@@ -1326,3 +1326,47 @@ async def force_test_auto_extend(update: Update, context: CallbackContext):
         name=f"test_extend_{rental_id}"
     )
     await update.message.reply_text(f"⏳ Testing auto-extend for {rental_id} in 5s...")
+    
+    
+    
+    
+    
+    
+    
+    
+    
+async def test_6h_warning(update: Update, context: CallbackContext):
+    """Temporary admin command to test the 6-hour warning message."""
+    if not context.args:
+        await update.message.reply_text("⚠️ Usage: /test_warn <rental_id>")
+        return
+        
+    rental_id = context.args[0]
+    user_id = update.effective_user.id # It will send the warning to YOU
+    
+    # 🕒 Trigger the "6-hour" alarm in exactly 10 seconds
+    context.job_queue.run_once(
+        scheduled_6h_reminder,
+        when=10, 
+        data={"rental_id": rental_id, "user_id": user_id},
+        name=f"test_warn_{rental_id}"
+    )
+    await update.message.reply_text(f"⏳ 6-hour warning scheduled for {rental_id} in 10s...")    
+    
+async def test_expire_alarm(update: Update, context: CallbackContext):
+    """Admin command to test the final expiration alarm."""
+    if not context.args:
+        await update.message.reply_text("⚠️ Usage: /test_expire <rental_id>")
+        return
+        
+    rental_id = context.args[0]
+    user_id = update.effective_user.id
+    
+    # 🕒 Trigger the final "Kill Switch" in 10 seconds
+    context.job_queue.run_once(
+        scheduled_expire_rental,
+        when=10, 
+        data={"rental_id": rental_id, "user_id": user_id},
+        name=f"test_expire_{rental_id}"
+    )
+    await update.message.reply_text(f"💀 Expiration alarm scheduled for {rental_id} in 10s...")    
