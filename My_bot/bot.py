@@ -84,7 +84,8 @@ handle_extension_text,
 scheduled_expire_rental,
 resend_rental_menu,
 scheduled_expire_rental, 
-scheduled_6h_reminder
+scheduled_6h_reminder,
+force_test_auto_extend
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -1586,7 +1587,7 @@ tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
 tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_rental:"))
 tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
 tg_app.add_error_handler(global_error_handler)
-
+tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 
 
 

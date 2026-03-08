@@ -604,7 +604,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         # ---------------------------------------------------------
         # 🧪 THE GHOST INTERCEPTOR (TEST MODE)
         # ⚠️ Change to False when you are ready for real users!
-        TEST_MODE = True
+        TEST_MODE = False
         
         if TEST_MODE:
             await asyncio.sleep(2)  # Simulate network delay
@@ -1116,7 +1116,7 @@ async def handle_extension_text(update, context):
             await asyncio.to_thread(
                 reservations.extend_nonrenewable, 
                 rental_id=rental_id, 
-                extension_duration=getattr(RentalDuration, api_mapped)
+                extension_duration=getattr(RentalDuration, "ONE_DAY" )
                 
             )
             
@@ -1304,3 +1304,23 @@ async def scheduled_auto_extend(context: CallbackContext):
             f"Error: {e}\n\n"
             f"<i>The bot tried to buy the 2nd month but failed. Please log into TextVerified and extend it manually before it expires tomorrow!</i>"
         )        
+        
+        
+        
+async def force_test_auto_extend(update: Update, context: CallbackContext):
+    """Temporary admin command to test the Auto-Extender on an existing number!"""
+    if not context.args:
+        await update.message.reply_text("⚠️ Please provide a rental ID. Usage: /test_extend <rental_id>")
+        return
+        
+    rental_id = context.args[0]
+    
+    # Fire the Day 29 Alarm... in 5 seconds!
+    context.job_queue.run_once(
+        scheduled_auto_extend,
+        when=5, 
+        data={"rental_id": rental_id},
+        name=f"test_extend_{rental_id}"
+    )
+    await update.message.reply_text(f"⏳ Triggering Auto-Extend Robot for {rental_id} in 5 seconds... Check your terminal logs!")
+        
