@@ -1287,10 +1287,10 @@ async def scheduled_auto_extend(context: CallbackContext):
         client, reservations, _, _, _, _, RentalDuration = get_textverified_client()
         
         # 2. Tell TextVerified to add exactly 30 more days to the line
+        # Because we bought it with is_renewable=True, we use the simple renew command:
         await asyncio.to_thread(
-            reservations.extend_nonrenewable, 
-            rental_id=rental_id, 
-            extension_duration=getattr(RentalDuration, "THIRTY_DAY")
+            reservations.renew,  # 👈 Use the official renew method!
+            rental_id=rental_id 
         )
         
         logger.info(f"✅ AUTO-EXTEND SUCCESS: Secretly bought Month 2 for Rental {rental_id}")
@@ -1299,11 +1299,15 @@ async def scheduled_auto_extend(context: CallbackContext):
         logger.error(f"🚨 AUTO-EXTEND FAILED: {e}")
         # 3. 🛟 The Failsafe! If TextVerified crashes on Day 29, it snipes your phone so you can save the number manually!
         await notify_admin(
+            text =(
             f"🚨 <b>URGENT AUTO-EXTEND FAILURE!</b>\n\n"
             f"Rental ID: <code>{rental_id}</code>\n"
             f"Error: {e}\n\n"
             f"<i>The bot tried to buy the 2nd month but failed. Please log into TextVerified and extend it manually before it expires tomorrow!</i>"
-        )        
+            ),
+            parse_mode="HTML"  
+        )
+              
         
         
         
