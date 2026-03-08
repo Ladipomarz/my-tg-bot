@@ -1297,8 +1297,10 @@ async def scheduled_auto_extend(context: CallbackContext):
 
     except Exception as e:
         logger.error(f"🚨 AUTO-EXTEND FAILED: {e}")
+        await notify_admin(f"AUTO-EXTEND FAILED: {e}")
         # 3. 🛟 The Failsafe! If TextVerified crashes on Day 29, it snipes your phone so you can save the number manually!
-        await notify_admin(
+        await context.bot.send_message(
+            chat_id=ADMIN_IDS,
             text =(
             f"🚨 <b>URGENT AUTO-EXTEND FAILURE!</b>\n\n"
             f"Rental ID: <code>{rental_id}</code>\n"
