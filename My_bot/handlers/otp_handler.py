@@ -1,4 +1,4 @@
-from textverified import TextVerified, NumberType, ReservationType, ReservationCapability
+from textverified import TextVerified, NumberType, ReservationType, ReservationCapability,NewVerificationRequest
 import os
 import re
 import asyncio

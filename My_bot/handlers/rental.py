@@ -4,6 +4,13 @@ import re
 import asyncio
 from telegram import Update
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from textverified import (
+    TextVerified, 
+    NumberType,
+    ReservationCapability,
+    reservations,
+    RentalDuration
+)
 from telegram.ext import CallbackContext,ConversationHandler
 from handlers.otp_handler import send_services_txt, _area_codes_for_state
 from utils.validator import US_STATE_NAMES,suggest_us_states_full_name
@@ -32,6 +39,8 @@ from utils.db import (
     set_order_status,
     mark_rental_expired,
     auto_expire_rentals,
+    get_rentals_due_for_extension,
+    mark_rental_renewal_complete
 
 )
 
@@ -436,16 +445,6 @@ async def confirm_rental(update: Update, context: CallbackContext):
                 data={"rental_id": rental_id, "user_id": user_id},
                 name=f"expire_{rental_id}"
             )
-            
-            # 🤖 ALARM 3: THE SECRET AUTO-EXTENDER (For 2 Months)
-            if duration_api == "TWO_MONTHS":
-                day_29_seconds = 29 * 24 * 3600 # Wakes up exactly in 29 days
-                context.job_queue.run_once(
-                    scheduled_auto_extend,
-                    when=day_29_seconds,
-                    data={"rental_id": rental_id},
-                    name=f"auto_extend_{rental_id}"
-                )
                 
         # Wipe the memory only AFTER all alarms are successfully set
         context.user_data.pop("otp_step", None)
@@ -575,14 +574,11 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         # --- THE API TRANSLATOR ---
         api_mapped_duration = duration_api
         
-        # The API only understands up to THIRTY_DAY. 
         if duration_api in ["ONE_MONTH", "TWO_MONTHS"]:
             api_mapped_duration = "THIRTY_DAY"
             
-        if duration_api == "TWO_MONTHS":
-            is_renewable = True
-        else:
-            is_renewable = False
+        # 👇 EVERYTHING is non-renewable now. Much easier to manage!
+        is_renewable = False
 
         kwargs = {
             "service_name": api_service_name,
@@ -590,8 +586,8 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             "capability": ReservationCapability.SMS,
             "duration": getattr(RentalDuration, api_mapped_duration), 
             "always_on": always_on,  
-            "is_renewable": is_renewable,
-            "allow_back_order_reservations": False # 👈 Keeps the formatting bouncer happy!
+            "is_renewable": is_renewable, # 👈 Always False
+            "allow_back_order_reservations": False 
         }
         
         if state and state.lower() != "random":
@@ -1277,56 +1273,56 @@ async def scheduled_expire_rental(context: CallbackContext):
             pass # Fails silently if they blocked the bot  
         
         
-async def scheduled_auto_extend(context: CallbackContext):
-    """Wakes up on Day 29 to silently pay TextVerified for the 2nd month of a 60-day rental."""
-    job_data = context.job.data
-    rental_id = job_data["rental_id"]
+async def scheduled_auto_extend_plus_daily_check(context: CallbackContext):
+    """Wakes up for the 2nd month extension. Also used by the daily cron."""
+    job = context.job
+    rental_id = job.data.get("rental_id")
 
     try:
-        # 1. Connect to TextVerified
         client, reservations, _, _, _, _, RentalDuration = get_textverified_client()
         
-        # 2. Tell TextVerified to add exactly 30 more days to the line
-        # Because we bought it with is_renewable=True, we use the simple renew command:
+        # ✅ USE THE CORRECT NON-RENEWABLE EXTENSION (By the book!)
         await asyncio.to_thread(
-            reservations.renew,  # 👈 Use the official renew method!
-            rental_id=rental_id 
+            reservations.extend_nonrenewable,
+            rental_id=rental_id,
+            extension_duration=getattr(RentalDuration, "ONE_DAY") 
         )
         
-        logger.info(f"✅ AUTO-EXTEND SUCCESS: Secretly bought Month 2 for Rental {rental_id}")
+        logger.info(f"✅ AUTO-EXTEND SUCCESS: Added 30 days to {rental_id}")
 
     except Exception as e:
         logger.error(f"🚨 AUTO-EXTEND FAILED: {e}")
-        await notify_admin(f"AUTO-EXTEND FAILED: {e}")
-        # 3. 🛟 The Failsafe! If TextVerified crashes on Day 29, it snipes your phone so you can save the number manually!
-        await context.bot.send_message(
-            chat_id=ADMIN_IDS,
-            text =(
-            f"🚨 <b>URGENT AUTO-EXTEND FAILURE!</b>\n\n"
-            f"Rental ID: <code>{rental_id}</code>\n"
-            f"Error: {e}\n\n"
-            f"<i>The bot tried to buy the 2nd month but failed. Please log into TextVerified and extend it manually before it expires tomorrow!</i>"
-            ),
-            parse_mode="HTML"  
-        )
-              
         
-        
-        
+        # ✅ FIX: Loop through Admin IDs so everyone gets the alert
+        if ADMIN_IDS:
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=(
+                            f"🚨 <b>URGENT AUTO-EXTEND FAILURE!</b>\n\n"
+                            f"Rental ID: <code>{rental_id}</code>\n"
+                            f"Error: {e}\n\n"
+                            f"<i>The bot failed to extend the line. Please check TextVerified!</i>"
+                        ),
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    pass
+
 async def force_test_auto_extend(update: Update, context: CallbackContext):
-    """Temporary admin command to test the Auto-Extender on an existing number!"""
+    """Admin command to test the extension logic immediately."""
     if not context.args:
-        await update.message.reply_text("⚠️ Please provide a rental ID. Usage: /test_extend <rental_id>")
+        await update.message.reply_text("⚠️ Usage: /test_extend <rental_id>")
         return
         
     rental_id = context.args[0]
     
-    # Fire the Day 29 Alarm... in 5 seconds!
+    # Fire the Alarm in 5 seconds
     context.job_queue.run_once(
-        scheduled_auto_extend,
+        scheduled_auto_extend_plus_daily_check,
         when=5, 
         data={"rental_id": rental_id},
         name=f"test_extend_{rental_id}"
     )
-    await update.message.reply_text(f"⏳ Triggering Auto-Extend Robot for {rental_id} in 5 seconds... Check your terminal logs!")
-        
+    await update.message.reply_text(f"⏳ Testing auto-extend for {rental_id} in 5s...")

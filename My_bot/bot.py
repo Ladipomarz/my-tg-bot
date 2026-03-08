@@ -85,7 +85,8 @@ scheduled_expire_rental,
 resend_rental_menu,
 scheduled_expire_rental, 
 scheduled_6h_reminder,
-force_test_auto_extend
+force_test_auto_extend,
+scheduled_auto_extend_plus_daily_check
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -276,6 +277,7 @@ async def ensure_telegram_ready():
             
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
+            
             # 1. Sweep anything that expired while the bot was offline
             auto_expire_rentals()
 
@@ -295,7 +297,7 @@ async def ensure_telegram_ready():
                 delay_seconds = (exp_time - now).total_seconds()
                 reminder_seconds = delay_seconds - (6 * 3600) # 6 hours before
                 
-                # Re-arm Alarm 1: 6-Hour Warning (THIS CLEARS YOUR WARNING!)
+                # Re-arm Alarm 1: 6-Hour Warning
                 if reminder_seconds > 0:
                     tg_app.job_queue.run_once(
                         scheduled_6h_reminder,
@@ -314,6 +316,18 @@ async def ensure_telegram_ready():
                     )
                     
             logger.info(f"✅ Successfully re-armed {len(active_lines)} rental alarms!")
+            
+            # 3. ⏰ SCHEDULE THE DAILY CRON JOB (OUTSIDE THE LOOP!)
+            # Define the exact time (Midnight UTC)
+            time_to_run = datetime.time(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
+            
+            # Start the background robot
+            tg_app.job_queue.run_daily(
+                scheduled_auto_extend_plus_daily_check,
+                time=time_to_run,
+                name="daily_extension_cron"
+            )
+            logger.info("✅ Daily 2-Month extension cron scheduled for midnight UTC.")
             # ---------------------------------------------------------
             
             return True
