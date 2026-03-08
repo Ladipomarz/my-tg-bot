@@ -344,15 +344,20 @@ async def tools_callback(update: Update, context: CallbackContext):
     
 # BACK NAVIGATION
     if data == "otp_back_tools":
-        await safe_send(q, context, "Tools:", reply_markup=get_tools_inline())
-        return
-    if data == "otp_back_country":
-        await show_usa_verification_menu(update, context)
+        await safe_send(q, context, "🛠 <b>Tools Menu</b>\n\nPlease select an option below:", reply_markup=get_tools_inline(), parse_mode="HTML")
         return
 
     if data == "otp_back_verification":
-        await show_usa_verification_menu(update, context)
+        await safe_send(q, context, "🛠 <b>Tools Menu</b>\n\nPlease select an option below:", reply_markup=get_tools_inline(), parse_mode="HTML")
+
         return
+    
+    if data =="close_menu":
+        await otp_usa_rental_type_menu(update, context)
+        return
+    
+    
+    
     if data == "otp_back_usa_one_time_rental":
     # default back to text for now
         await otp_usa_one_time_or_rental_menu(update, context, "text")
@@ -360,6 +365,10 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     if data == "otp_back_usa_rental_type":
         await otp_usa_rental_type_menu(update, context, "text")
+        return
+    
+    if data == "otp_back_usa_verif_type":
+        await show_usa_verification_menu(update, context)
         return
     
     

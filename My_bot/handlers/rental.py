@@ -519,25 +519,25 @@ async def handle_rental_universal(update: Update, context: CallbackContext):
     q = update.callback_query
     await q.answer()
 
-    # 🛑 THE 1-DAY UNIVERSAL BLOCKER 🛑
+   # 🛑 THE 1-DAY UNIVERSAL BLOCKER (The Correct Way!) 🛑
     duration_api = context.user_data.get("otp_duration_api", "ONE_DAY")
     if duration_api == "ONE_DAY":
         msg = (
-            " <b>Minimum Duration Required</b>\n\n"
+            "⚠️ <b>Minimum Duration Required</b>\n\n"
             "Premium Universal (All-Services) numbers require a minimum rental period of <b>3 Days</b>. "
             "The provider does not offer 1-Day leases for this specific line.\n\n"
             "<i>Please restart and select a longer duration, or choose a specific service (like WhatsApp or Telegram) for a 1-Day rental.</i>"
         )
-        kb = InlineKeyboardMarkup([[InlineKeyboardButton("⬅ Back to Main Menu", callback_data="back_main")]])
+        kb = InlineKeyboardMarkup([[InlineKeyboardButton("🗑️ Close & Restart", callback_data="close_menu")]])
         
         try:
-            await q.edit_message_text(msg, parse_mode="HTML", reply_markup=kb)
+            await safe_send(update, context, msg, parse_mode="HTML", reply_markup=kb)
         except Exception:
-            await q.message.reply_text(msg, parse_mode="HTML", reply_markup=kb)
+            await safe_send(update, context,msg, parse_mode="HTML", reply_markup=kb)
         
-        # Wipe their memory so they don't get stuck
         context.user_data.pop("otp_step", None)
         return
+    
 
     # 2. Inject the ID into memory
     context.user_data["otp_service_name"] = "allservices"
@@ -569,6 +569,9 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         if duration_api in ["ONE_MONTH", "TWO_MONTHS"]:
             api_mapped_duration = "THIRTY_DAY"
             
+        # Standard lines (1-30 days) just die when they expire. 
+        is_renewable = False
+            
         # ⚠️ CRITICAL SAFETY OVERRIDE: 
         # Only 2-Month orders get auto-renew ON so it buys the 2nd month.
         # 1-Month orders stay OFF so they die safely on day 30.
@@ -576,6 +579,12 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             is_renewable = True
         else:
             is_renewable = False
+            
+            
+            
+        # 👇 THE FIX: Force Always On to False for Universal Lines so the API doesn't reject it!
+        if api_service_name == "servicenotlisted":
+            always_on = False
 
         
         kwargs = {
