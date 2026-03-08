@@ -563,7 +563,8 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         
         # ✅ THE HYBRID CHECK
         if service_name and any(keyword in service_name.lower() for keyword in ["universal", "general", "not listed", "allservices", "servicenotlisted"]):
-            api_service_name = "servicenotlisted"
+            # 🏆 YOU WERE RIGHT. The API uses "allservices" for Rentals!
+            api_service_name = "allservices" 
             logger.info(" Bot spotted a Universal keyword. Overriding to 'allservices'.")
         else:
             api_service_name = service_name
@@ -572,20 +573,17 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
                 
         # --- THE API TRANSLATOR ---
-        # --- THE API TRANSLATOR ---
-        api_mapped_duration = "THIRTY_DAY" if duration_api in ["ONE_MONTH", "TWO_MONTHS"] else duration_api
+        api_mapped_duration = duration_api
+        
+        # The API only understands up to THIRTY_DAY. 
+        if duration_api in ["ONE_MONTH", "TWO_MONTHS"]:
+            api_mapped_duration = "THIRTY_DAY"
             
         if duration_api == "TWO_MONTHS":
             is_renewable = True
         else:
             is_renewable = False
 
-        # 👇 TextVerified blocks 'Always On' for short-term Universal lines!
-        if api_service_name == "servicenotlisted":
-            if api_mapped_duration in ["ONE_DAY", "THREE_DAY", "SEVEN_DAY", "FOURTEEN_DAY"]:
-                always_on = False 
-
-        # Build the perfectly clean payload!
         kwargs = {
             "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
@@ -593,7 +591,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             "duration": getattr(RentalDuration, api_mapped_duration), 
             "always_on": always_on,  
             "is_renewable": is_renewable,
-            "allow_back_order_reservations": False # 👈 WE MUST INCLUDE THIS!
+            "allow_back_order_reservations": False # 👈 Keeps the formatting bouncer happy!
         }
         
         if state and state.lower() != "random":
