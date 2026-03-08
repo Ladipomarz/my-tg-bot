@@ -233,6 +233,15 @@ async def confirm_rental(update: Update, context: CallbackContext):
     """
     target = update.message if update.message else update.callback_query.message
     text = target.text.strip().lower()
+    
+    # 🧹 MAGICAL VANISH: Instantly delete the user's "yes" or "no" message
+    if update.message:
+        try:
+            await update.message.delete()
+        except Exception as e:
+            logger.error(f"Failed to Pass here {admin_id}: {e}")
+            await notify_admin(f"Failed to Pass here: {e}")
+            pass
 
     if text not in ['yes', 'no']:
         await safe_send(update, context, " Please reply with exactly 'yes' or 'no'.")
@@ -581,10 +590,13 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             is_renewable = False
             
             
+        # 👇 THE ULTIMATE FIX: Force Always On to False, and Back Orders to True!
+        allow_back_order = False    
             
         # 👇 THE FIX: Force Always On to False for Universal Lines so the API doesn't reject it!
         if api_service_name == "servicenotlisted":
             always_on = False
+            
 
         
         kwargs = {
@@ -594,7 +606,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             "duration": getattr(RentalDuration, api_mapped_duration), 
             "always_on": always_on,  
             "is_renewable": is_renewable,
-            "allow_back_order_reservations": False
+            "allow_back_order_reservations": allow_back_order
         }
         
         if state and state.lower() != "random":

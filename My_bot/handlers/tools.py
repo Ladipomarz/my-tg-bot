@@ -343,13 +343,9 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     
 # BACK NAVIGATION
-    if data == "otp_back_tools":
-        await safe_send(q, context, "🛠 <b>Tools Menu</b>\n\nPlease select an option below:", reply_markup=get_tools_inline(), parse_mode="HTML")
-        return
-
     if data == "otp_back_verification":
-        await safe_send(q, context, "🛠 <b>Tools Menu</b>\n\nPlease select an option below:", reply_markup=get_tools_inline(), parse_mode="HTML")
-
+        context.user_data.pop("otp_step", None)
+        await open_tools_menu(update, context)
         return
     
     if data =="close_menu":
