@@ -572,41 +572,26 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         logger.info(f"💵 SENDING TO TEXTVERIFIED BILLING: '{api_service_name}'")
                 
         # --- THE API TRANSLATOR ---
-        api_mapped_duration = duration_api
-        
-        # The API only understands up to THIRTY_DAY. 
-        if duration_api in ["ONE_MONTH", "TWO_MONTHS"]:
-            api_mapped_duration = "THIRTY_DAY"
+        api_mapped_duration = "THIRTY_DAY" if duration_api in ["ONE_MONTH", "TWO_MONTHS"] else duration_api
             
-        # Standard lines (1-30 days) just die when they expire. 
-        is_renewable = False
-            
-        # ⚠️ CRITICAL SAFETY OVERRIDE: 
-        # Only 2-Month orders get auto-renew ON so it buys the 2nd month.
-        # 1-Month orders stay OFF so they die safely on day 30.
         if duration_api == "TWO_MONTHS":
             is_renewable = True
         else:
             is_renewable = False
-            
-            
-        # 👇 THE ULTIMATE FIX: Force Always On to False, and Back Orders to True!
-        allow_back_order = False    
-            
-        # 👇 THE FIX: Force Always On to False for Universal Lines so the API doesn't reject it!
-        if api_service_name == "servicenotlisted":
-            always_on = False
-            
 
-        
+        # 👇 THE FIX: TextVerified blocks 'Always On' for short-term Universal lines!
+        if api_service_name == "servicenotlisted":
+            if api_mapped_duration in ["ONE_DAY", "THREE_DAY", "SEVEN_DAY", "FOURTEEN_DAY"]:
+                always_on = False # Force it to False so the API doesn't reject the combination
+
+        # Build the perfectly clean payload!
         kwargs = {
             "service_name": api_service_name,
             "number_type": NumberType.MOBILE,
             "capability": ReservationCapability.SMS,
             "duration": getattr(RentalDuration, api_mapped_duration), 
             "always_on": always_on,  
-            "is_renewable": is_renewable,
-            "allow_back_order_reservations": allow_back_order
+            "is_renewable": is_renewable
         }
         
         if state and state.lower() != "random":
