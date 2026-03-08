@@ -612,7 +612,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             
             # We return a fake phone number, a fake rental ID, and No Errors!
             # Your bot will think it successfully bought the number and continue the flow.
-            return "+15550009999", "ghost_rental_12345", None
+            return "+14581992837", "two_month_rental_334", None
         # ---------------------------------------------------------   
 
         # 1. Buy the number and get the "mini-receipt"
