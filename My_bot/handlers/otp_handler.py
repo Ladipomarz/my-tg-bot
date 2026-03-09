@@ -155,7 +155,7 @@ async def otp_usa_one_time_or_rental_menu(update, context, method: str):
     f"<b>Choose Rental Type</b>\n\n"
     f"<b>One Time</b> You can use the one time if you are looking to purchase a number to verify any platform.\n"
     f"for a one time usage.\n\n"
-    f"</b>Rental</b> This is similar to the One Time usage But gives you the Choice of having the number for a longer day.\n"
+    f"<b>Rental</b> This is similar to the One Time usage But gives you the Choice of having the number for a longer day.\n"
     f" Can receive multiple codes and it Ranges From (1 day- to Forever).",
     keyboard,
     parse_mode="HTML"
