@@ -95,7 +95,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_orders_menu(update, context)
     
     
-    if key == "wallet":
+    if key == "credit":
         return await open_wallet_menu(update, context)    
     
     if key == "support":

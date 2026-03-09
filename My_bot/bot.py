@@ -1365,7 +1365,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 🛑 THE GLOBAL INTERCEPTOR 🛑
     # Put your exact button names here in all lowercase
-    global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 wallet", "🏠 home", "🛠 support"] 
+    global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 credit", "🏠 home", "🛠 support"] 
     
     if text.lower() in global_menu_buttons:
         # 1. Instantly wipe EVERY process they were stuck in (Rental, OTP, Wallet, Admin, etc.)
@@ -1481,7 +1481,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 
     # User main keyboard
-    if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet","🛠 Support"}:
+    if text in {"🧰 Tools", "🛒 Orders", "💰 Credit","🛠 Support"}:
         
         # 👇 ADD THIS LINE RIGHT HERE! 👇
         asyncio.create_task(safe_delete_user_message(update))
@@ -1489,7 +1489,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 👇 1. ADD THIS MEMORY TRACKER 👇
         if text == "🧰 Tools": context.user_data["current_menu"] = "tools"
         elif text == "🛒 Orders": context.user_data["current_menu"] = "orders"
-        elif text == "💰 Wallet": context.user_data["current_menu"] = "wallet"
+        elif text == "💰 Credit": context.user_data["current_menu"] = "wallet"
         elif text == "🛠 Support": context.user_data["current_menu"] = "support"
         
         # clear OTP step so it doesn't hijack menu navigation
