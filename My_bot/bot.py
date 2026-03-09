@@ -94,6 +94,8 @@ test_expire_alarm
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("server")
+logging.getLogger("apscheduler").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "").strip()
@@ -323,7 +325,7 @@ async def ensure_telegram_ready():
             # 3. ⏰ SCHEDULE THE DAILY CRON JOB (OUTSIDE THE LOOP!)
             # Define the exact time (Midnight UTC)
             #time_to_run = datetime.time(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
-            time_to_run = datetime.time(hour=17, minute=35, second=0, tzinfo=datetime.timezone.utc)
+            time_to_run = datetime.time(hour=17, minute=59, second=0, tzinfo=datetime.timezone.utc)
             
             # Start the background robot
             tg_app.job_queue.run_daily(
@@ -938,6 +940,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "my_rentals_back":
         await my_rentals_menu(update, context)
+        return
+    
+    elif data == "admin_check_balance":
+        await admin_check_balance(update,context)
         return
     
     if data.startswith("extend_rental:"):

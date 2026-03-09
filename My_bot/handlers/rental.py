@@ -1290,7 +1290,6 @@ async def scheduled_auto_extend_plus_daily_check(context: CallbackContext):
     else:
         # --- PATH B: Daily Cron (Production) ---
         logger.info("🌅 Running Daily 2-Month Database Sweep...")
-        from utils.db import get_rentals_due_for_extension
         
         due_rentals = get_rentals_due_for_extension()
         if not due_rentals:
@@ -1314,8 +1313,6 @@ async def perform_actual_extension(context: CallbackContext, rental_id: str):
             extension_duration=getattr(RentalDuration, "THIRTY_DAY") 
         )
         
-        # 3. Update Database
-        from utils.db import mark_rental_renewal_complete
         mark_rental_renewal_complete(rental_id, 30)
         
         logger.info(f"✅ AUTO-EXTEND SUCCESS: {rental_id}")
