@@ -325,10 +325,10 @@ async def rescue_my_number(update, context):
     """Temporary command to inject a test number directly into the DB."""
 
     # 1. Your exact hardcoded test data
-    user_id = 2222222222
-    rental_id = "exp"
-    phone_number = "3328277181"
-    service_name = "expired"
+    user_id = 3334566533
+    rental_id = "expwer"
+    phone_number = "344555334"
+    service_name = "second test"
     
     # 2. Set expiration for 2 minutes from now
     expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=1)
