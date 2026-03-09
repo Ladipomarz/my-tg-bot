@@ -182,6 +182,8 @@ def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_
     # Calculate the exact expiration timestamp
     expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=days_to_expire)
     
+    ensure_user_exists(user_id)
+    
     query = """
         INSERT INTO active_rentals 
         (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
@@ -211,7 +213,18 @@ def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_
     migrate_orders_schema()
     
     
-    
+
+def ensure_user_exists(user_id: int):
+    """Checks if a user exists; if not, creates them with a $0 balance."""
+    query = """
+        INSERT INTO users (user_id, balance_usd, joined_at)
+        VALUES (%s, 0.00, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id) DO NOTHING;
+    """
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, (user_id,))
+        conn.commit()    
         
         
 # Run this once or add to your startup script
