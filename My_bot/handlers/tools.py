@@ -49,7 +49,7 @@ from utils.validator import (
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Example log for debuggingg
@@ -204,12 +204,12 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     if data == "tool_otp_usa_voice":
-        await update.callback_query.edit_message_text("Voice verification is coming soon! Stay tuned.")
+        await update.callback_query.answer("Voice verification is coming soon! Stay tuned.")
         await show_usa_verification_menu(update, context)
         return
     
     if data == "otp_other_country":
-        await update.callback_query.edit_message_text("Other Country coming soon! Stay tuned.")
+        await update.callback_query.answer("Other Country coming soon! Stay tuned.")
         await otp_verification_handler(update, context, method="text")
         return
 

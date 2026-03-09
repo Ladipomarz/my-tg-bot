@@ -92,10 +92,16 @@ test_expire_alarm
 
 )
 
-logging.basicConfig(level=logging.INFO)
+# 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+
 logger = logging.getLogger("server")
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logging.getLogger("telegram").setLevel(logging.WARNING)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 

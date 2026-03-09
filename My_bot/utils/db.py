@@ -10,7 +10,6 @@ import logging
 from config import DATABASE_URL
 from utils.helper import notify_admin_sync
 
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 

@@ -25,8 +25,6 @@ import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from config import SUPPORT_HANDLE
 
-
-logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
