@@ -350,8 +350,6 @@ async def on_error(update, context):
     logger.exception("Unhandled Telegram error", exc_info=context.error)
 
 
-tg_app.add_error_handler(on_error)
-
 
 async def _safe_send_message(chat_id: int, text: str):
     for attempt in range(1, 4):
@@ -1650,6 +1648,7 @@ tg_app.add_handler(CommandHandler("rentals", my_rentals_menu))
 tg_app.add_handler(CallbackQueryHandler(manage_rental_menu, pattern="^manage_rental:"))
 tg_app.add_handler(CallbackQueryHandler(my_rentals_menu, pattern="^my_rentals_back$"))
 tg_app.add_error_handler(global_error_handler)
+tg_app.add_error_handler(on_error)
 tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
