@@ -515,7 +515,7 @@ This code is required for the next step.
             reply_markup=reply_markup
         )
         
-        # 👇 ADD THIS ONE LINE 👇
+        # 👇 ADD THIS ONE LINE Here 👇
         context.user_data["otp_step"] = "awaiting_rental_button" 
         
         logger.info("Service list and buttons sent successfully.")
