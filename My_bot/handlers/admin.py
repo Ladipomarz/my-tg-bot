@@ -331,7 +331,7 @@ async def rescue_my_number(update, context):
     service_name = "expired"
     
     # 2. Set expiration for 2 minutes from now
-    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=2)
+    expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=1)
     
     try:
         with get_connection() as conn:

@@ -1316,25 +1316,24 @@ def mark_rental_expired(rental_id: str):
  
 
 def archive_expired_rental(rental_id: str):
-    """Moves a rental from active_rentals to expired_rentals and deletes the original."""
     fetch_query = "SELECT user_id, phone_number, service_name, expiration_time FROM active_rentals WHERE rental_id = %s"
     insert_query = """
         INSERT INTO expired_rentals (user_id, rental_id, phone_number, service_name, final_expiration)
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (rental_id) DO NOTHING
     """
-    
-    cur.execute(insert_query, (row['user_id'], rental_id, row['phone_number'], row['service_name'], row['expiration_time']))
     delete_query = "DELETE FROM active_rentals WHERE rental_id = %s"
 
     try:
         with get_connection() as conn:
+            # Use dict_row so we can access row['user_id']
             with conn.cursor(row_factory=dict_row) as cur:
-                # 1. Get the data
+                # 1. Fetch the data
                 cur.execute(fetch_query, (rental_id,))
                 row = cur.fetchone()
                 
                 if row:
+                    # ✅ ALL EXECUTES MUST BE INSIDE THIS INDENTATION level
                     # 2. Insert into Archive
                     cur.execute(insert_query, (
                         row['user_id'], 
@@ -1345,10 +1344,12 @@ def archive_expired_rental(rental_id: str):
                     ))
                     # 3. Delete from Active
                     cur.execute(delete_query, (rental_id,))
-            conn.commit()
+                    
+            conn.commit() # Commit while the connection is still open
             print(f"📦 Archived Rental {rental_id}")
+            
     except Exception as e:
-        print(f"💥 Archiving failed: {e}") 
+        print(f"💥 Archiving failed: {e}")
         
 def auto_expire_rentals():
     """Sweeps the entire database and marks any past-due rentals as expired."""
