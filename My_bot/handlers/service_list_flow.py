@@ -38,12 +38,14 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
     """
 
     try:
-        await safe_send(
+        msg =await safe_send(
             update,
             context,
             instruction_text,
             reply_markup=get_main_menu() # 👈 The "Safety Pin"
         )
+        
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
     except Exception as e:
         await notify_admin(f"Sending service list Failed: {e}")
 
@@ -59,7 +61,7 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
         context,
         text=(
             "If you've got the 4-digit Service ID, click ✅ Yes to continue.\n"
-            "If you couldn't find the service you need, after searching the Service List, click ⏭ Skip to get a universal phone number.\n\n"
+            "If you couldn't find the service you need, after searching \n the Service List, click ⏭ Skip to get a universal phone number.\n\n"
             "⚠️ Please make sure the service is not in the List sent above before using the universal phone number, "
             "or you will not receive your code"
         ),

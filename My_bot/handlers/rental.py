@@ -21,6 +21,7 @@ import html
 import httpx
 import time
 from utils.auto_delete import safe_send
+from menus.main_menu import get_main_menu
 from utils.textverified_client import get_textverified_client
 from utils.helper import notify_admin
 from pricelist import get_rental_price_usd
@@ -479,9 +480,23 @@ async def send_service_list_with_buttons(update, context):
     try:
         logger.info("Sending service list to user.")
         
-        # Fetch the service list and send the .txt file using your existing function
-        await send_services_txt(update, context, capability="sms", is_rental=True)
+        instruction_text_rental = """
+📂 <b>Rental Service Instructions</b>
+Open the file below to find the specific service you wish to rent.
 
+Copy the <b>4 Digit Code</b> next to the service name.
+This code is required for the next step.
+"""
+        msg = await safe_send(
+            update, 
+            context, 
+            instruction_text_rental,
+            reply_markup=get_main_menu()  
+        )
+        
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
+        await send_services_txt(update, context, capability="sms", is_rental=True)
+        
         # Create the buttons for the user to choose
         keyboard = [
             [
@@ -498,7 +513,6 @@ async def send_service_list_with_buttons(update, context):
             f"If you already have the 4 digit number from the Service list Above for a specific service, Click The <b>Yes Button</b> \n\n"
             f"But If You want a number That Can Work For All Services Click The <b>Universal Button </b>",
             reply_markup=reply_markup
-            
         )
         
         # 👇 ADD THIS ONE LINE 👇

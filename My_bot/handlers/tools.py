@@ -10,7 +10,7 @@ from menus.tools_menu import (
     get_esim_duration_menu,
 )
 from menus.orders_menu import get_pending_order_menu
-from utils.auto_delete import safe_send
+from utils.auto_delete import safe_send,delete_tracked_message
 from handlers.orders import ask_order_confirmation
 from utils.db import get_pending_order
 from handlers.otp_handler import(
@@ -243,6 +243,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     if data == "otp_have_id":
     # Next step: ask user to reply with the 4-digit Product ID
+        await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
         context.user_data["otp_step"] = "awaiting_product_id"
         await update.callback_query.edit_message_text(
         "✅ Great. Please reply with the 4-digit Product ID (example: 0042)."
@@ -250,6 +251,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
 
     if data == "otp_skip_universal":
+        await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
         context.user_data.pop("otp_service_name", None)
         context.user_data["otp_custom_service"] = "General Service"
         context.user_data["otp_api_service_name"] = "servicenotlisted"
@@ -319,6 +321,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     if data == "otp_rental_product_id":
+        await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
         # Call the rental product ID handler
         await handle_rental_product_id(update, context)
         return
@@ -341,6 +344,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         
         
     if data == "otp_rental_universal":
+            await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
             await q.answer()
             # 1. Inject the ID into memory silently
             context.user_data['rental_service'] = "allservices" # Make sure this key matches your actual variable name!

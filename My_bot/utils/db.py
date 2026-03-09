@@ -1021,21 +1021,21 @@ def get_services_rows(*, capability: str = "sms"):
             return cur.fetchall()
 
 def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
+    rows = get_services_rows(capability=capability)
     """
     Builds a text file content from DB services, returns (bytes, filename)
     """
-    rows = get_services_rows(capability=capability)
-
+    rows.sort(key=lambda r: (str(r['local_code']) != '1478', r['service_name']))
     lines = []
 
-    # First, add "General service" as the first line (with bold in the Telegram caption)
-    lines.append("General service: This service is for cases where the provider is not listed in the TextVerified catalog.")
+    # First, add "Service Not Here" as the first line (with bold in the Telegram caption)
+    lines.append("Service Not Here: is for cases where you cant find the service you need in this catalog, use the code or click skip button.")
     lines.append("")  # Empty line for spacing
 
     # Now loop through all the rows and add them to the list
     for r in rows:
         # If service is 'servicenotlisted' or 'general', display it as "General service"
-        display_name = "General service" if r['service_name'].strip().lower() in {"servicenotlisted", "general"} else r['service_name']
+        display_name = "Service Not Here" if r['service_name'].strip().lower() in {"servicenotlisted", "general"} else r['service_name']
 
         # Add the product ID and service, with the separator after each
         lines.append(f"Product ID: {r['local_code']}")
@@ -1158,7 +1158,7 @@ def build_rental_services_txt_bytes() -> tuple[bytes, str]:
         lines.append("______________________\n")
 
     content = "\n".join(lines) + "\n"
-    return content.encode("utf-8"), "rental_services.txt"
+    return content.encode("utf-8"), "rentalList_services.txt"
 
 
 def get_rental_service_name_by_code(code: str) -> str | None:
