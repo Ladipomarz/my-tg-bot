@@ -67,7 +67,7 @@ from handlers.start import start, handle_main_menu
 from handlers.orders import orders_callback, debug_last_order
 from handlers.payments import payments_callback
 from handlers.tools import tools_callback, handle_user_input, handle_esim_email_input
-from handlers.admin import admin_command, admin_callback
+from handlers.admin import admin_command, admin_callback,admin_check_balance
 from handlers.wallet_continue import open_wallet_menu
 from handlers.rental import (
 handle_rental_product_id,
@@ -322,7 +322,8 @@ async def ensure_telegram_ready():
             
             # 3. ⏰ SCHEDULE THE DAILY CRON JOB (OUTSIDE THE LOOP!)
             # Define the exact time (Midnight UTC)
-            time_to_run = datetime.time(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
+            #time_to_run = datetime.time(hour=0, minute=0, second=0, tzinfo=datetime.timezone.utc)
+            time_to_run = datetime.time(hour=17, minute=35, second=0, tzinfo=datetime.timezone.utc)
             
             # Start the background robot
             tg_app.job_queue.run_daily(
@@ -1607,6 +1608,7 @@ tg_app.add_error_handler(global_error_handler)
 tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
+tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
 
 
 

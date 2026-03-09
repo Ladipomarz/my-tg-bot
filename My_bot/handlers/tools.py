@@ -205,7 +205,16 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     if data == "tool_otp_usa_voice":
         await update.callback_query.edit_message_text("Voice verification is coming soon! Stay tuned.")
+        context.user_data.pop("otp_step", None)
+        await show_usa_verification_menu(update, context)
         return
+    
+    if data == "otp_other_country":
+        await update.callback_query.edit_message_text("Other Country coming soon! Stay tuned.")
+        context.user_data.pop("otp_step", None)
+        await otp_verification_handler(update, context)
+        return
+
 
     if data == "otp_usa_text_rental":
         await otp_usa_rental_type_menu(update, context, "text")

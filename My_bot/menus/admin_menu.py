@@ -12,6 +12,7 @@ def get_admin_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📦 Delivered", callback_data="admin_delivered:0"),
         ],
         [
+            InlineKeyboardButton("💳 Check API Balance", callback_data="admin_check_balance"),
             InlineKeyboardButton("⬅ Back to Main", callback_data="back_main"),
         ],
     ])

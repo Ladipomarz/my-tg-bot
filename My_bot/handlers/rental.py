@@ -1274,41 +1274,81 @@ async def scheduled_expire_rental(context: CallbackContext):
         
         
 async def scheduled_auto_extend_plus_daily_check(context: CallbackContext):
-    """Wakes up for the 2nd month extension. Also used by the daily cron."""
+    """Handles both individual test triggers and the automated daily sweep."""
     job = context.job
-    rental_id = job.data.get("rental_id")
+    
+    # 1. Check the backpack safely
+    # If job.data is None, we default to an empty dictionary {}
+    data = job.data if job.data else {}
+    rental_id = data.get("rental_id")
 
+    # 2. DECISION: Is this a single test or the daily sweep?
+    if rental_id:
+        # --- PATH A: Single Rental (Testing) ---
+        logger.info(f"🧪 Running individual extension test for: {rental_id}")
+        await perform_actual_extension(context, rental_id)
+    else:
+        # --- PATH B: Daily Cron (Production) ---
+        logger.info("🌅 Running Daily 2-Month Database Sweep...")
+        from utils.db import get_rentals_due_for_extension
+        
+        due_rentals = get_rentals_due_for_extension()
+        if not due_rentals:
+            logger.info("✅ No extensions due today.")
+            return
+
+        for rental in due_rentals:
+            # rental is a dict because of dict_row
+            await perform_actual_extension(context, rental['rental_id'])
+
+async def perform_actual_extension(context: CallbackContext, rental_id: str):
+    """Hits TextVerified API and notifies admins of the result."""
     try:
+        # 1. Connect to Client
         client, reservations, _, _, _, _, RentalDuration = get_textverified_client()
         
-        # ✅ USE THE CORRECT NON-RENEWABLE EXTENSION (By the book!)
+        # 2. API Call (Using the 30-day production duration)
         await asyncio.to_thread(
             reservations.extend_nonrenewable,
             rental_id=rental_id,
-            extension_duration=getattr(RentalDuration, "ONE_DAY") 
+            extension_duration=getattr(RentalDuration, "THIRTY_DAY") 
         )
         
-        logger.info(f"✅ AUTO-EXTEND SUCCESS: Added 30 days to {rental_id}")
+        # 3. Update Database
+        from utils.db import mark_rental_renewal_complete
+        mark_rental_renewal_complete(rental_id, 30)
+        
+        logger.info(f"✅ AUTO-EXTEND SUCCESS: {rental_id}")
+        
+        # 4. (Optional) Success Alert for Admins
+        if ADMIN_IDS:
+            for admin_id in ADMIN_IDS:
+                try:
+                    await context.bot.send_message(
+                        chat_id=admin_id,
+                        text=f"✅ <b>Auto-Extend Success</b>\nRental ID: <code>{rental_id}</code>\nMonth 2 has been successfully paid.",
+                        parse_mode="HTML"
+                    )
+                except Exception: pass
 
     except Exception as e:
-        logger.error(f"🚨 AUTO-EXTEND FAILED: {e}")
+        logger.error(f"🚨 API FAILURE for {rental_id}: {e}")
         
-        # ✅ FIX: Loop through Admin IDs so everyone gets the alert
+        # 5. CRITICAL Failure Alert for Admins
         if ADMIN_IDS:
             for admin_id in ADMIN_IDS:
                 try:
                     await context.bot.send_message(
                         chat_id=admin_id,
                         text=(
-                            f"🚨 <b>URGENT AUTO-EXTEND FAILURE!</b>\n\n"
+                            f"🚨 <b>URGENT: AUTO-EXTEND FAILED!</b>\n\n"
                             f"Rental ID: <code>{rental_id}</code>\n"
                             f"Error: {e}\n\n"
-                            f"<i>The bot failed to extend the line. Please check TextVerified!</i>"
+                            f"<i>The bot failed to buy Month 2. Please extend manually on TextVerified!</i>"
                         ),
                         parse_mode="HTML"
                     )
-                except Exception:
-                    pass
+                except Exception: pass
 
 async def force_test_auto_extend(update: Update, context: CallbackContext):
     """Admin command to test the extension logic immediately."""
