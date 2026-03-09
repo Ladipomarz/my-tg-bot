@@ -1263,14 +1263,14 @@ async def scheduled_expire_rental(context: CallbackContext):
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
-                    f"🔴 <b>Rental Expired</b>\n\nYour line <code>{phone_number}</code> has been moved to your history.",
+                    f"🔴 <b>Rental Expired</b>\n\nYour line <code>{phone_number}</code> has been removed from your rentals."
                     f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
                 ),
                 parse_mode="HTML"
             )
-        except Exception:
-            pass # Fails silently if they blocked the bot  
-        
+        except Exception as e:
+            logger.error(f"Failed to send expiration DM to {user_id}: {e}")
+            await notify_admin(f"Failed to send expiration DM to {user_id}: {e}")
         
 async def scheduled_auto_extend_plus_daily_check(context: CallbackContext):
     """Handles both individual test triggers and the automated daily sweep."""
