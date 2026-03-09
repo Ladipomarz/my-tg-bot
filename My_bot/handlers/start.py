@@ -1,5 +1,5 @@
 from telegram import Update
-from telegram.ext import ContextTypes, ReplyKeyboardRemove
+from telegram.ext import ContextTypes
 
 from utils.db import add_user, expire_pending_order_if_needed
 from menus.main_menu import get_main_menu
