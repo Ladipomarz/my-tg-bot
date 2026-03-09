@@ -3,6 +3,8 @@ import os
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")  # from Railway
 SUPPORT_HANDLE = os.getenv("SUPPORT_HANDLE", "@YourSupportUsername")
+# How long (seconds) before the bot deletes its previous message
+PREVIOUS_MESSAGE_DELAY_SECONDS = 2
 
 # 👑 DYNAMIC ADMIN IDS FROM RAILWAY
 # This grabs the variable from Railway. If it's missing, it defaults to empty.

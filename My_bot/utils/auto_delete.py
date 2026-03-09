@@ -1,13 +1,13 @@
 import asyncio
 import os
 import html
-from config import SUPPORT_HANDLE
+from config import SUPPORT_HANDLE,PREVIOUS_MESSAGE_DELAY_SECONDS
 
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
 
 # How long after a NEW action before the PREVIOUS bot message disappears
-PREVIOUS_MESSAGE_DELAY_SECONDS = 2
+
 
 SUPPORT_HANDLE = os.getenv("SUPPORT_HANDLE", "@YourSupportUsername") # Put this near the top of the file
 

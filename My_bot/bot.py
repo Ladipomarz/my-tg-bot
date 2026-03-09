@@ -145,6 +145,8 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     and sends the raw traceback to the Admins.
     """
     logger.error("Exception while handling an update:", exc_info=context.error)
+    if context.user_data:
+        context.user_data.clear()
 
     # 1. Send the white-labeled error to the user WITH the support link
     if update and update.effective_chat:
