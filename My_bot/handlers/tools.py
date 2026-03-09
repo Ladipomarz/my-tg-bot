@@ -209,6 +209,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         await show_usa_verification_menu(
             update, 
             context, 
+            method="voice",
             message_text="🎙 Voice verification\n\nComing soon…"
         )
         return
