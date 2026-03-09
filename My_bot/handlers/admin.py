@@ -375,9 +375,6 @@ async def rescue_my_number(update, context):
         await notify_admin(f"Error saving to database: {e}")
                 
 
-
-
-
 async def admin_check_balance(update: Update, context: CallbackContext):
     """Handles the 'Check Balance' button in the Admin Menu."""
     query = update.callback_query
@@ -388,22 +385,55 @@ async def admin_check_balance(update: Update, context: CallbackContext):
         return
 
     try:
-        # Connect to TextVerified
+        # 1. Connect to TextVerified
+        # Note: client is the top-level TextVerified object
         client, _, _, _, _, _, _ = get_textverified_client()
         
-        # Fetch account details
-        account = await asyncio.to_thread(client.get_account_details)
-        balance = getattr(account, "balance", 0.0)
+        # 2. Use the correct method to fetch profile/account data
+        # Most versions of the SDK use get_profile()
+        profile = await asyncio.to_thread(client.get_profile)
         
+        # 3. Extract balance safely
+        balance = getattr(profile, "credit_balance", 0.0) 
+        # If 'credit_balance' fails, the SDK might just use 'credit'
+        if balance == 0.0:
+            balance = getattr(profile, "credit", 0.0)
+
         msg = (
             f"💳 <b>TextVerified API Wallet</b>\n\n"
             f"<b>Current Balance:</b> ${balance:.2f}\n\n"
-            f"<i>Ensure you keep this above $5.00 for auto-extensions.</i>"
         )
         
-        # We edit the existing message instead of sending a new one to keep the chat clean
         await query.edit_message_text(text=msg, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Failed to fetch API balance: {e}")
-        await query.edit_message_text(text=f"❌ <b>Error:</b> {e}", parse_mode="HTML")
+        # If it still fails, let's print the available attributes so we can see the real one
+        await query.edit_message_text(text=f"❌ <b>API Error:</b> {e}", parse_mode="HTML")
+        
+
+async def admin_get_stats(update: Update, context: CallbackContext):
+    query = update.callback_query
+    await query.answer()
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM users;")
+                u_count = cur.fetchone()[0]
+                
+                cur.execute("SELECT COUNT(*) FROM active_rentals;")
+                a_count = cur.fetchone()[0]
+                
+                cur.execute("SELECT COUNT(*) FROM expired_rentals;")
+                e_count = cur.fetchone()[0]
+
+        msg = (
+            f"📊 <b>System Health Stats</b>\n\n"
+            f"👥 <b>Total Users:</b> {u_count}\n"
+            f"🟢 <b>Live Rentals:</b> {a_count}\n"
+            f"📦 <b>Archived History:</b> {e_count}\n"
+        )
+        await query.edit_message_text(text=msg, parse_mode="HTML")
+    except Exception as e:
+        await query.edit_message_text(text=f"❌ Error: {e}")     

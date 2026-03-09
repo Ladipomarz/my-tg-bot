@@ -1287,7 +1287,57 @@ def mark_rental_expired(rental_id: str):
     except Exception as e:
         print(f"Failed to mark rental {rental_id} expired: {e}")    
         notify_admin_sync(f"Failed to mark rental {rental_id} expired: {e}")
-        
+
+def create_expired_rentals_table():
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS expired_rentals (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    rental_id TEXT UNIQUE,
+                    phone_number TEXT,
+                    service_name TEXT,
+                    final_expiration TIMESTAMP WITH TIME ZONE,
+                    archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_expired_user_id ON expired_rentals(user_id);")
+        conn.commit()        
+ 
+
+def archive_expired_rental(rental_id: str):
+    """Moves a rental from active_rentals to expired_rentals and deletes the original."""
+    fetch_query = "SELECT user_id, phone_number, service_name, expiration_time FROM active_rentals WHERE rental_id = %s"
+    insert_query = """
+        INSERT INTO expired_rentals (user_id, rental_id, phone_number, service_name, final_expiration)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (rental_id) DO NOTHING
+    """
+    delete_query = "DELETE FROM active_rentals WHERE rental_id = %s"
+
+    try:
+        with get_connection() as conn:
+            with conn.cursor(row_factory=dict_row) as cur:
+                # 1. Get the data
+                cur.execute(fetch_query, (rental_id,))
+                row = cur.fetchone()
+                
+                if row:
+                    # 2. Insert into Archive
+                    cur.execute(insert_query, (
+                        row['user_id'], 
+                        rental_id, 
+                        row['phone_number'], 
+                        row['service_name'], 
+                        row['expiration_time']
+                    ))
+                    # 3. Delete from Active
+                    cur.execute(delete_query, (rental_id,))
+            conn.commit()
+            print(f"📦 Archived Rental {rental_id}")
+    except Exception as e:
+        print(f"💥 Archiving failed: {e}") 
         
 def auto_expire_rentals():
     """Sweeps the entire database and marks any past-due rentals as expired."""

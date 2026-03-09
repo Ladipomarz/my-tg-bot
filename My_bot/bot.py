@@ -25,7 +25,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 from utils.auto_delete import safe_send
-from handlers.admin import fix_db_sequence,rescue_my_number
+from handlers.admin import fix_db_sequence,rescue_my_number,admin_get_stats
 from utils.helper import notify_admin
 
 from config import BOT_TOKEN
@@ -944,6 +944,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     elif data == "admin_check_balance":
         await admin_check_balance(update,context)
+        return
+    
+    elif data == "admin_stats":
+        await admin_get_stats(update, context)
         return
     
     if data.startswith("extend_rental:"):

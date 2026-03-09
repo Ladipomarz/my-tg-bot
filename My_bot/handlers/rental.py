@@ -40,7 +40,8 @@ from utils.db import (
     mark_rental_expired,
     auto_expire_rentals,
     get_rentals_due_for_extension,
-    mark_rental_renewal_complete
+    mark_rental_renewal_complete,
+    archive_expired_rental
 
 )
 
@@ -1251,20 +1252,18 @@ async def scheduled_expire_rental(context: CallbackContext):
 
     # 1. Grab the phone number from the DB before we expire it
     details = get_rental_details(rental_id)
+    phone_number = details[0] if details else "Unknown"
     
-    # If it finds the details, grab the phone number (index 0). Otherwise fallback.
-    phone_number = details[0] if details else rental_id
-
-    # 2. Update the database instantly
-    mark_rental_expired(rental_id)
-
+    #Update archived table
+    archive_expired_rental(rental_id)
+    
     # 3. Tell the user it expired!
     if user_id:
         try:
             await context.bot.send_message(
                 chat_id=user_id,
                 text=(
-                    f"🔴 <b>Rental Expired</b>\n\nYour premium line (<code>{phone_number}</code>) has run out of time and was removed from your active list. \n\n"
+                    f"🔴 <b>Rental Expired</b>\n\nYour line <code>{phone_number}</code> has been moved to your history.",
                     f"🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
                 ),
                 parse_mode="HTML"
