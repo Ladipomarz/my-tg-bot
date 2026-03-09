@@ -327,7 +327,7 @@ async def rescue_my_number(update, context):
     # 1. Your exact hardcoded test data
     user_id = 3334566533
     rental_id = "expwer"
-    phone_number = "344555334"
+    phone_number = "3445553340"
     service_name = "second test"
     
     # 2. Set expiration for 2 minutes from now
