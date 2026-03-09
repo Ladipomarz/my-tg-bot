@@ -284,6 +284,24 @@ async def ensure_telegram_ready():
             TG_READY = True
             logger.info("Telegram app is ready")
             
+            # 👇 --- ADD THIS ENTIRE BLOCK HERE --- 👇
+            try:
+                commands = [
+                    BotCommand("start", "🚀 Open Main Menu"),
+                    BotCommand("rentals", "📱 Manage My Numbers"),
+                    BotCommand("wallet", "💳 Check Balance & Topup"),
+                    BotCommand("rescue", "🚑 Inject Test Number"),
+                    BotCommand("help", "🛠 Support & Help")
+                ]
+                await tg_app.bot.set_my_commands(commands)
+                await tg_app.bot.set_my_name(name="Premium SMS Bot")
+                await tg_app.bot.set_my_description(description="Welcome! We provide premium numbers.\n\nClick Start below to begin.")
+                await tg_app.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
+                logger.info("✅ Bot Profile and Menu Button have been updated successfully!")
+            except Exception as e:
+                logger.error(f"⚠️ Failed to update Bot Profile: {e}")
+            # 👆 --- END OF ADDED BLOCK --- 👆
+            
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
             
@@ -1604,40 +1622,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
 
-async def post_init(application):
-    """Automatically sets the Bot Profile and Menu Button on startup, safely."""
-    
-    try:
-        # 1. Set the Menu Commands
-        commands = [
-            BotCommand("start", "🚀 Open Main Menu"),
-            BotCommand("rentals", "📱 Manage My Numbers"),
-            BotCommand("wallet", "💳 Check Balance & Topup"),
-            BotCommand("rescue", "🚑 Inject Test Number"),
-            BotCommand("help", "🛠 Support & Help")
-        ]
-        await application.bot.set_my_commands(commands)
-        
-        # 2. Set the Bot's Name (Keep this short!)
-        await application.bot.set_my_name(name="Premium SMS Bot")
-
-        # 3. Set the Description
-        await application.bot.set_my_description(description="Welcome! We provide premium numbers.\n\nClick Start below to begin.")
-
-        # 4. Set the Short Description
-        await application.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
-
-        print("✅ Bot Profile and Menu Button have been updated successfully!")
-        
-    except Exception as e:
-        # 🛡️ IF TELEGRAM REJECTS IT, PRINT THE ERROR BUT DON'T CRASH THE BOT!
-        print(f"⚠️ Failed to update Bot Profile (Bot will still start!): {e}")
-        
-
 # ------------------------------
 # REGISTER HANDLERS
 # ------------------------------
-tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).post_init(post_init).build()
+tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).build()
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
