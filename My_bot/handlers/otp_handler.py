@@ -254,18 +254,17 @@ async def otp_usa_monthly_duration_menu(update, context, method: str):
   
 # ---------- INTERNAL HELPER ----------
 
-async def _edit(update, text, keyboard):
+async def _edit(update, text, keyboard, parse_mode="HTML"): # 👈 Added parse_mode
     try:
         await update.callback_query.edit_message_text(
             text=text,
             reply_markup=InlineKeyboardMarkup(keyboard),
-            parse_mode="HTML"
+            parse_mode=parse_mode # 👈 Use it here
         )
     except BadRequest as e:
         if "Message is not modified" in str(e):
             return
         raise
-
 
 
 

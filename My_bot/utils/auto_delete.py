@@ -26,20 +26,18 @@ async def safe_send(
     context: ContextTypes.DEFAULT_TYPE,
     text: str,
     reply_markup=None,
-    
+    parse_mode=None, # 👈 Added to function signature
     **kwargs 
 ):
-    
-    # 🛑 THE MAGIC AUTO-APPENDER 🛑
-    # By using text.lower(), you catch "Failed", "FAILED", "failed", "Error", "ERROR", etc.!
-    if "❌" in text or "⚠️" in text or "failed" in text.lower() or "error" in text.lower() or "invalid" in text.lower():
-        text = f"{text}\n\n🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
-        
     """
     Sends a bot message and deletes the previous bot message AFTER a delay,
-    BUT never deletes the message that contains the ReplyKeyboardMarkup
-    (Tools/Orders), otherwise Telegram hides the keyboard.
+    BUT never deletes the message that contains the ReplyKeyboardMarkup.
     """
+
+    # 🛑 THE MAGIC AUTO-APPENDER 🛑
+    if any(word in text.lower() for word in ["❌", "⚠️", "failed", "error", "invalid"]):
+        from config import SUPPORT_HANDLE
+        text = f"{text}\n\n🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
 
     # Detect source (Update or CallbackQuery)
     if isinstance(update_or_query, Update):
@@ -50,26 +48,33 @@ async def safe_send(
         chat_id = query.message.chat_id
         base_msg = query.message
 
-    # ✅ Delete previous bot message ONLY if it did NOT contain a reply keyboard
+    # ✅ Delete previous bot message
     last_id = context.user_data.get("last_bot_message_id")
     last_had_reply_kb = context.user_data.get("last_bot_message_had_reply_kb", False)
 
     if last_id and not last_had_reply_kb:
+        from config import PREVIOUS_MESSAGE_DELAY_SECONDS
         asyncio.create_task(
             _delete_after_delay(
                 context,
                 chat_id,
                 last_id,
-                PREVIOUS_MESSAGE_DELAY_SECONDS,
-                
+                PREVIOUS_MESSAGE_DELAY_SECONDS
             )
         )
         
-    # ✅ Force Telegram to read HTML so your <b> tags turn into real bold text!
-    kwargs["parse_mode"] = kwargs.get("parse_mode", "HTML")   
+    # ✅ FIX: Define the parse mode properly
+    # If a specific mode was passed, use it. Otherwise, default to HTML.
+    actual_mode = parse_mode or kwargs.get("parse_mode", "HTML")
 
-    # Send new message
-    msg = await base_msg.reply_text(text, reply_markup=reply_markup, **kwargs)
+    # ✅ FIX: Pass the arguments cleanly. 
+    # Don't pass parse_mode twice!
+    msg = await base_msg.reply_text(
+        text=text, 
+        reply_markup=reply_markup, 
+        parse_mode=actual_mode,
+        **{k: v for k, v in kwargs.items() if k != "parse_mode"} # Avoid duplicates
+    )
 
     # Remember this as the new "last" bot message
     context.user_data["last_bot_message_id"] = msg.message_id
