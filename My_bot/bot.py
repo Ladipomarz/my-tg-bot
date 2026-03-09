@@ -33,7 +33,7 @@ from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
 from handlers.otp_handler import handle_otp_text_input
 from handlers.wallet import handle_wallet_text_input, wallet_callback
-
+from handlers.menu_commands import register_side_menu, setup_bot_profile
 
 from utils.db import (
     create_tables,
@@ -283,25 +283,8 @@ async def ensure_telegram_ready():
             await tg_app.start()
             TG_READY = True
             logger.info("Telegram app is ready")
-            
-            # 👇 --- ADD THIS ENTIRE BLOCK HERE --- 👇
-            try:
-                commands = [
-                    BotCommand("start", "🚀 Open Main Menu"),
-                    BotCommand("rentals", "📱 Manage My Numbers"),
-                    BotCommand("wallet", "💳 Check Balance & Topup"),
-                    BotCommand("rescue", "🚑 Inject Test Number"),
-                    BotCommand("help", "🛠 Support & Help")
-                ]
-                await tg_app.bot.set_my_commands(commands)
-                await tg_app.bot.set_my_name(name="Premium SMS Bot")
-                await tg_app.bot.set_my_description(description="Welcome! We provide premium numbers.\n\nClick Start below to begin.")
-                await tg_app.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
-                logger.info("✅ Bot Profile and Menu Button have been updated successfully!")
-            except Exception as e:
-                logger.error(f"⚠️ Failed to update Bot Profile: {e}")
-            # 👆 --- END OF ADDED BLOCK --- 👆
-            
+            await setup_bot_profile(tg_app)
+             
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
             
@@ -1615,7 +1598,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return
 
-
+    
 # ------------------------------
 # /admin wrapper
 # ------------------------------
@@ -1641,6 +1624,7 @@ tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
+register_side_menu(tg_app)
 
 
 
