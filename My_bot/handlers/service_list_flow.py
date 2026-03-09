@@ -3,6 +3,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 from handlers.otp_handler import send_services_txt  # the function that builds/sends txt from DB
 from utils.auto_delete import safe_send
 from utils.helper import notify_admin
+from menus.main_menu import get_main_menu  # 👈 This connects the menu to your handler
 
 
 def _yes_skip_keyboard(*, back_callback: str) -> InlineKeyboardMarkup:
@@ -27,19 +28,24 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
     q = update.callback_query
     context.user_data["otp_plan"] = plan
 
-    # 1) short message
+    # 1) Use triple quotes for the instructions
+    instruction_text = """
+    📄 <b>Kindly Open The File Below</b> 
+    Search or find the service you want to get an OTP for.
+
+    When you find it, copy out the <b>4 Digit Code</b>. 
+    That is your Service ID.
+    """
+
     try:
         await safe_send(
             update,
             context,
-            f"📄 Kindly Open The File Below And Search Or Find The Service \n "
-            "You Want To Get An OTP For \n\n"
-            "When You Find it Copy Out The <b> 4 Digits Code </b>, That Is Your Service ID."
+            instruction_text,
+            reply_markup=get_main_menu() # 👈 The "Safety Pin"
         )
-        
     except Exception as e:
         await notify_admin(f"Sending service list Failed: {e}")
-        pass
 
     # 2) txt file
     await send_services_txt(update, context, capability=capability)
@@ -53,7 +59,7 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
         context,
         text=(
             "If you've got the 4-digit Service ID, click ✅ Yes to continue.\n"
-            "If you couldn't find the service you need, after searching the Product List, click ⏭ Skip to get a universal phone number.\n\n"
+            "If you couldn't find the service you need, after searching the Service List, click ⏭ Skip to get a universal phone number.\n\n"
             "⚠️ Please make sure the service is not in the List sent above before using the universal phone number, "
             "or you will not receive your code"
         ),

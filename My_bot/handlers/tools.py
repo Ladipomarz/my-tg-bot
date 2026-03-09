@@ -381,7 +381,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     if data == "otp_back_usa_verif_type":
-        await show_usa_verification_menu(update, context)
+        await show_usa_verification_menu(update, context, "text" )
         return
     
     
