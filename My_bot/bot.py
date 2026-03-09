@@ -133,10 +133,6 @@ tg_request = HTTPXRequest(
     pool_timeout=90.0,
 )
 
-tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).build()
-TG_READY = False
-TG_LOCK = asyncio.Lock()
-
 
 # ------------------------------
 # HELPERS
@@ -1360,35 +1356,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Unhandled callback data: %s", data)
 
 
-
-async def post_init(application):
-    """Automatically sets the Bot Profile and Menu Button on startup, safely."""
-    
-    try:
-        # 1. Set the Menu Commands
-        commands = [
-            BotCommand("start", "🚀 Open Main Menu"),
-            BotCommand("rentals", "📱 Manage My Numbers"),
-            BotCommand("wallet", "💳 Check Balance & Topup"),
-            BotCommand("rescue", "🚑 Inject Test Number"),
-            BotCommand("help", "🛠 Support & Help")
-        ]
-        await application.bot.set_my_commands(commands)
-        
-        # 2. Set the Bot's Name (Keep this short!)
-        await application.bot.set_my_name(name="Premium SMS Bot")
-
-        # 3. Set the Description
-        await application.bot.set_my_description(description="Welcome! We provide premium numbers.\n\nClick Start below to begin.")
-
-        # 4. Set the Short Description
-        await application.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
-
-        print("✅ Bot Profile and Menu Button have been updated successfully!")
-        
-    except Exception as e:
-        # 🛡️ IF TELEGRAM REJECTS IT, PRINT THE ERROR BUT DON'T CRASH THE BOT!
-        print(f"⚠️ Failed to update Bot Profile (Bot will still start!): {e}")
         
 # ------------------------------
 # TEXT ROUTER
@@ -1639,10 +1606,40 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
 
+async def post_init(application):
+    """Automatically sets the Bot Profile and Menu Button on startup, safely."""
+    
+    try:
+        # 1. Set the Menu Commands
+        commands = [
+            BotCommand("start", "🚀 Open Main Menu"),
+            BotCommand("rentals", "📱 Manage My Numbers"),
+            BotCommand("wallet", "💳 Check Balance & Topup"),
+            BotCommand("rescue", "🚑 Inject Test Number"),
+            BotCommand("help", "🛠 Support & Help")
+        ]
+        await application.bot.set_my_commands(commands)
+        
+        # 2. Set the Bot's Name (Keep this short!)
+        await application.bot.set_my_name(name="Premium SMS Bot")
+
+        # 3. Set the Description
+        await application.bot.set_my_description(description="Welcome! We provide premium numbers.\n\nClick Start below to begin.")
+
+        # 4. Set the Short Description
+        await application.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
+
+        print("✅ Bot Profile and Menu Button have been updated successfully!")
+        
+    except Exception as e:
+        # 🛡️ IF TELEGRAM REJECTS IT, PRINT THE ERROR BUT DON'T CRASH THE BOT!
+        print(f"⚠️ Failed to update Bot Profile (Bot will still start!): {e}")
+        
 
 # ------------------------------
 # REGISTER HANDLERS
 # ------------------------------
+tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).post_init(post_init).build()
 tg_app.add_handler(CommandHandler("start", start))
 tg_app.add_handler(CommandHandler("admin", admin_entry))
 tg_app.add_handler(CommandHandler("debug_last_order", debug_last_order))
@@ -1657,7 +1654,6 @@ tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
-tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).post_init(post_init).build()
 
 
 
@@ -1666,6 +1662,10 @@ tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).post_init(pos
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router), group=0)
 # Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
+
+TG_READY = False
+TG_LOCK = asyncio.Lock()
+
 
 async def _background_telegram_bootstrap():
     webhook_url = f"{PUBLIC_BASE_URL}{TELEGRAM_PATH}"
