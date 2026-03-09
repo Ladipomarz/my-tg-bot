@@ -156,6 +156,20 @@ def create_tables():
             # Create necessary indexes for 'active_rentals'
             cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_user_id ON active_rentals(user_id);")
             cur.execute("CREATE INDEX IF NOT EXISTS idx_active_rentals_status ON active_rentals(status);")
+            
+            # 4. THE NEW ARCHIVE TABLE
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS expired_rentals (
+                    id SERIAL PRIMARY KEY,
+                    user_id BIGINT,
+                    rental_id TEXT UNIQUE,
+                    phone_number TEXT,
+                    service_name TEXT,
+                    final_expiration TIMESTAMP WITH TIME ZONE,
+                    archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_expired_user_id ON expired_rentals(user_id);")
 
         # Lock all the changes into PostgreSQL
         conn.commit()
@@ -1286,23 +1300,6 @@ def mark_rental_expired(rental_id: str):
     except Exception as e:
         print(f"Failed to mark rental {rental_id} expired: {e}")    
         notify_admin_sync(f"Failed to mark rental {rental_id} expired: {e}")
-
-def create_expired_rentals_table():
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS expired_rentals (
-                    id SERIAL PRIMARY KEY,
-                    user_id BIGINT,
-                    rental_id TEXT UNIQUE,
-                    phone_number TEXT,
-                    service_name TEXT,
-                    final_expiration TIMESTAMP WITH TIME ZONE,
-                    archived_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-            """)
-            cur.execute("CREATE INDEX IF NOT EXISTS idx_expired_user_id ON expired_rentals(user_id);")
-        conn.commit()        
  
 
 def archive_expired_rental(rental_id: str):
@@ -1313,6 +1310,8 @@ def archive_expired_rental(rental_id: str):
         VALUES (%s, %s, %s, %s, %s)
         ON CONFLICT (rental_id) DO NOTHING
     """
+    
+    cur.execute(insert_query, (row['user_id'], rental_id, row['phone_number'], row['service_name'], row['expiration_time']))
     delete_query = "DELETE FROM active_rentals WHERE rental_id = %s"
 
     try:

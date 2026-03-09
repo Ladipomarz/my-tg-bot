@@ -51,6 +51,7 @@ from utils.db import (
     create_wallet_transactions_table,
     get_all_active_rentals,
     auto_expire_rentals,
+    create_expired_rentals_table
 )
 
 from utils.auto_delete import safe_delete_user_message

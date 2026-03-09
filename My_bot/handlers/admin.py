@@ -379,36 +379,26 @@ async def admin_check_balance(update: Update, context: CallbackContext):
     """Handles the 'Check Balance' button in the Admin Menu."""
     query = update.callback_query
     await query.answer()
-    
-    # 🛡️ Security Check
-    if update.effective_user.id not in ADMIN_IDS:
-        return
 
     try:
-        # 1. Connect to TextVerified
-        # Note: client is the top-level TextVerified object
+        # 1. Connect to TextVerified Client
         client, _, _, _, _, _, _ = get_textverified_client()
         
-        # 2. Use the correct method to fetch profile/account data
-        # Most versions of the SDK use get_profile()
-        profile = await asyncio.to_thread(client.get_profile)
+        # 2. Correct Method: client.account.me()
+        account_info = await asyncio.to_thread(client.account.me)
         
-        # 3. Extract balance safely
-        balance = getattr(profile, "credit_balance", 0.0) 
-        # If 'credit_balance' fails, the SDK might just use 'credit'
-        if balance == 0.0:
-            balance = getattr(profile, "credit", 0.0)
+        # 3. Extract the 'current_balance' attribute
+        balance = getattr(account_info, "current_balance", 0.0)
 
         msg = (
             f"💳 <b>TextVerified API Wallet</b>\n\n"
             f"<b>Current Balance:</b> ${balance:.2f}\n\n"
+            f"<i>Ensure you keep this above $5.00 for auto-extensions.</i>"
         )
-        
         await query.edit_message_text(text=msg, parse_mode="HTML")
         
     except Exception as e:
         logger.error(f"Failed to fetch API balance: {e}")
-        # If it still fails, let's print the available attributes so we can see the real one
         await query.edit_message_text(text=f"❌ <b>API Error:</b> {e}", parse_mode="HTML")
         
 
