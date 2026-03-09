@@ -1362,17 +1362,34 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def post_init(application):
-    """This runs immediately after the bot starts up."""
-    commands = [
-        BotCommand("start", "🚀 Open Main Menu"),
-        BotCommand("my_rentals", "📱 Manage My Numbers"),
-        BotCommand("wallet", "💳 Check Balance & Topup"),
-        BotCommand("orders", "📦 View Order History"),
-        BotCommand("help", "🛠 Support & Help")
-    ]
-    await application.bot.set_my_commands(commands)
-    await application.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
-    print("✅ Blue Menu Button has been updated on Telegram's servers!")
+    """Automatically sets the Bot Profile and Menu Button on startup, safely."""
+    
+    try:
+        # 1. Set the Menu Commands
+        commands = [
+            BotCommand("start", "🚀 Open Main Menu"),
+            BotCommand("rentals", "📱 Manage My Numbers"),
+            BotCommand("wallet", "💳 Check Balance & Topup"),
+            BotCommand("rescue", "🚑 Inject Test Number"),
+            BotCommand("help", "🛠 Support & Help")
+        ]
+        await application.bot.set_my_commands(commands)
+        
+        # 2. Set the Bot's Name (Keep this short!)
+        await application.bot.set_my_name(name="Premium SMS Bot")
+
+        # 3. Set the Description
+        await application.bot.set_my_description(description="Welcome! We provide premium numbers.\n\nClick Start below to begin.")
+
+        # 4. Set the Short Description
+        await application.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
+
+        print("✅ Bot Profile and Menu Button have been updated successfully!")
+        
+    except Exception as e:
+        # 🛡️ IF TELEGRAM REJECTS IT, PRINT THE ERROR BUT DON'T CRASH THE BOT!
+        print(f"⚠️ Failed to update Bot Profile (Bot will still start!): {e}")
+        
 # ------------------------------
 # TEXT ROUTER
 # ------------------------------
