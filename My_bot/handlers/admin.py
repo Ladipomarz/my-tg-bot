@@ -322,42 +322,42 @@ async def fix_db_sequence(update, context):
         
         
 async def rescue_my_number(update, context):
-    """Temporary command to inject a 1-year test number directly into the DB."""
-    
+    """Temporary command to inject a test number directly into the DB."""
+
     # 1. Your exact hardcoded test data
     user_id = 2222222222
-    rental_id = "Expire_move"
-    phone_number = "9320039320"
-    service_name = "expire"
+    rental_id = "exp"
+    phone_number = "3328277181"
+    service_name = "expired"
     
-    # 2. Time Jump: Setting expiration 
+    # 2. Set expiration for 2 minutes from now
     expiration_date = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=2)
-    
-    # 3. The raw SQL injection
-    query = """
-        INSERT INTO active_rentals 
-        (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
-        VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
-    """
     
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
+                # 🚀 STEP 1: RESCUE THE USER (The "Parent")
+                # This ensures user 2222222222 exists so the Foreign Key doesn't crash
+                cur.execute("""
+                    INSERT INTO users (user_id, balance_usd) 
+                    VALUES (%s, 0.00) 
+                    ON CONFLICT (user_id) DO NOTHING
+                """, (user_id,))
+
+                # 🚀 STEP 2: INJECT THE RENTAL (The "Child")
+                query = """
+                    INSERT INTO active_rentals 
+                    (user_id, rental_id, phone_number, service_name, always_on, is_renewable, status, expiration_time)
+                    VALUES (%s, %s, %s, %s, %s, %s, 'active', %s)
+                    ON CONFLICT (rental_id) DO NOTHING
+                """
                 cur.execute(
                     query, 
                     (user_id, rental_id, phone_number, service_name, False, False, expiration_date)
                 )
             conn.commit()
             
-        await update.message.reply_text(
-            f"✅ <b>SUCCESS!</b>\n\nNumber <code>{phone_number}</code> is officially injected into your database with a 365-day expiration.",
-            parse_mode="HTML"
-        )
-        
-        
-        # --- ADD THIS TO THE BOTTOM OF THE TRY BLOCK IN /rescue ---
-        # --- DYNAMIC ALARM CALCULATION ---
-        # Calculate exactly how many seconds until your custom expiration date
+        # 3. Dynamic Alarm Calculation
         now = datetime.datetime.now(datetime.timezone.utc)
         delay_seconds = (expiration_date - now).total_seconds()
         
@@ -365,14 +365,21 @@ async def rescue_my_number(update, context):
             from handlers.rental import scheduled_expire_rental 
             context.job_queue.run_once(
                 scheduled_expire_rental,
-                when=delay_seconds,  # ⏰ Perfectly matches your timedelta!
+                when=delay_seconds,
                 data={"rental_id": rental_id, "user_id": user_id},
                 name=f"expire_{rental_id}"
             )
+
+        await update.message.reply_text(
+            f"✅ <b>RESCUE SUCCESS!</b>\n\n"
+            f"User <code>{user_id}</code> created and number <code>{phone_number}</code> injected.\n"
+            f"💀 It will expire in <b>120 seconds</b>.",
+            parse_mode="HTML"
+        )
         
     except Exception as e:
-        await update.message.reply_text(f"💥 Error saving to database: {e}")
-        await notify_admin(f"Error saving to database: {e}")
+        logger.error(f"Rescue failed: {e}")
+        await update.message.reply_text(f"💥 Error: {e}")
                 
 
 async def admin_check_balance(update: Update, context: CallbackContext):
