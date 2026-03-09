@@ -150,8 +150,16 @@ async def otp_usa_one_time_or_rental_menu(update, context, method: str):
         ],
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_verif_type")],
     ]
-    await _edit(update, "Choose rental type:", keyboard)
-
+    await _edit(
+    update, 
+    f"<b>Choose Rental Type</b>\n\n"
+    f"<b>One Time</b> You can use the one time if you are looking to purchase a number to verify any platform.\n"
+    f"for a one time usage.\n\n"
+    f"</b>Rental</b> This is similar to the One Time usage But gives you the Choice of having the number for a longer day.\n"
+    f" Can receive multiple codes and it Ranges From (1 day- to Forever).",
+    keyboard,
+    parse_mode="HTML"
+)
 
 async def otp_usa_rental_type_menu(update, context, method: str):
     keyboard = [
@@ -202,9 +210,13 @@ async def otp_usa_rental_type_menu(update, context, method: str):
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_one_time_rental")],
     ]
     
-    await _edit(update, "Choose rental duration:", keyboard)
-
-
+    await _edit(
+    update, 
+    f'<b>"Choose rental duration:"</b>\n\nSelect how long you want to keep this number.', 
+    keyboard,
+    parse_mode="HTML"
+)
+    
 async def otp_usa_monthly_duration_menu(update, context, method: str):
     keyboard = [
         [
@@ -215,17 +227,17 @@ async def otp_usa_monthly_duration_menu(update, context, method: str):
                 "2 Months", callback_data=f"otp_usa_{method}_rental_monthly_2m"
             ),
         ],
+        
         [
             InlineKeyboardButton(
                 "3 Months", callback_data=f"otp_usa_{method}_rental_monthly_3m"
-            )
+            ),
+            
+             InlineKeyboardButton(
+                "6 Months", callback_data=f"otp_usa_{method}_rental_monthly_6m"
+            ),    
         ],
         
-         [
-            InlineKeyboardButton(
-                "6 Months", callback_data=f"otp_usa_{method}_rental_monthly_6m"
-            )
-        ],
          
           [
             InlineKeyboardButton(
@@ -236,7 +248,7 @@ async def otp_usa_monthly_duration_menu(update, context, method: str):
 
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_usa_rental_type")],
     ]
-    await _edit(update, "Select duration:", keyboard)
+    await _edit(update, "Select Duration:", keyboard)
     
     
   
@@ -247,6 +259,7 @@ async def _edit(update, text, keyboard):
         await update.callback_query.edit_message_text(
             text=text,
             reply_markup=InlineKeyboardMarkup(keyboard),
+            parse_mode="HTML"
         )
     except BadRequest as e:
         if "Message is not modified" in str(e):
@@ -308,7 +321,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
         await safe_send(
             update,
             context,
-            "If you've got the 4-digit Product ID, we can proceed.\n\n"
+            "If you've got the 4-digit Service ID, we can proceed.\n\n"
             "⚠️Please make sure the service is not listed before using the universal phone number.\n\n"
             "Do you want the number to be generated from a specific US state?\n"
             "Reply with: yes / no"

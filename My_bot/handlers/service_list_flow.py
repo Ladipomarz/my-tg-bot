@@ -8,7 +8,7 @@ from utils.helper import notify_admin
 def _yes_skip_keyboard(*, back_callback: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([
         [
-            InlineKeyboardButton("✅ Yes, I have the Product ID", callback_data="otp_have_id"),
+            InlineKeyboardButton("✅ Yes, I have the Service ID", callback_data="otp_have_id"),
             InlineKeyboardButton("⏭ Skip", callback_data="otp_skip_universal"),
         ],
         [InlineKeyboardButton("⬅ Back", callback_data=back_callback)],
@@ -29,7 +29,14 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
 
     # 1) short message
     try:
-        await q.edit_message_text("📄 Here is the service list. Sending the file now...")
+        await safe_send(
+            update,
+            context,
+            f"📄 Kindly Open The File Below And Search Or Find The Service \n "
+            "You Want To Get An OTP For \n\n"
+            "When You Find it Copy Out The <b> 4 Digits Code </b>, That Is Your Service ID."
+        )
+        
     except Exception as e:
         await notify_admin(f"Sending service list Failed: {e}")
         pass
@@ -45,10 +52,10 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
         update,
         context,
         text=(
-            "If you've got the 4-digit Product ID, click ✅ Yes to continue.\n"
-            "If you couldn't find the service you need, click ⏭ Skip to get a universal phone number.\n\n"
-            "⚠️ Please make sure the service is not listed before using the universal phone number, "
-            "or it may not receive OTP codes."
+            "If you've got the 4-digit Service ID, click ✅ Yes to continue.\n"
+            "If you couldn't find the service you need, after searching the Product List, click ⏭ Skip to get a universal phone number.\n\n"
+            "⚠️ Please make sure the service is not in the List sent above before using the universal phone number, "
+            "or you will not receive your code"
         ),
         reply_markup=kb,
     )

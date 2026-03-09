@@ -491,7 +491,15 @@ async def send_service_list_with_buttons(update, context):
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await safe_send(update, context, "Select your option:", reply_markup=reply_markup)
+        await safe_send(
+            update, 
+            context, 
+            f"<b>Select your option:</b>\n\n "
+            f"If you already have the 4 digit number from the Service list Above for a specific service, Click The <b>Yes Button</b> \n\n"
+            f"But If You want a number That Can Work For All Services Click The <b>Universal Button </b>",
+            reply_markup=reply_markup
+            
+        )
         
         # 👇 ADD THIS ONE LINE 👇
         context.user_data["otp_step"] = "awaiting_rental_button" 

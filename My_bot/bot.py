@@ -1607,7 +1607,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Catches any unregistered or unauthorized commands."""
     await update.message.reply_text(
-        f"❌ Unknown or unauthorized command.\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
+        f"❌ Wrong Command.\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
         reply_markup=get_main_menu() # 👈 Forces the keypad back open!
     )
     
