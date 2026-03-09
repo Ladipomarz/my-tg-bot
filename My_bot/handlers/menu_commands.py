@@ -22,7 +22,7 @@ async def setup_bot_profile(tg_app):
             BotCommand("tools", "🧰 Open Tools"),
             BotCommand("rentals", "📱 Manage My Numbers"),
             BotCommand("orders", "📦 View Orders"), 
-            BotCommand("wallet", "💳 Check Balance & Topup"),
+            BotCommand("credit", "💳 Check Balance & Topup"),
             BotCommand("help", "🛠 Support & Help")
         ]
         await tg_app.bot.set_my_commands(commands)
@@ -60,7 +60,7 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def register_side_menu(tg_app):
     """Locks everything into a single function to be called in bot.py"""
-    tg_app.add_handler(CommandHandler("wallet", wallet_cmd))
+    tg_app.add_handler(CommandHandler("credit", wallet_cmd))
     tg_app.add_handler(CommandHandler("orders", orders_cmd))
     tg_app.add_handler(CommandHandler("help", help_cmd))
     tg_app.add_handler(CommandHandler("tools", tools_cmd))
