@@ -325,7 +325,7 @@ async def rescue_my_number(update, context):
     """Temporary command to inject a test number directly into the DB."""
 
     # 1. Your exact hardcoded test data
-    user_id = 3334566533
+    user_id = 8466713748
     rental_id = "expwer"
     phone_number = "3445553340"
     service_name = "second test"
