@@ -169,8 +169,8 @@ async def otp_usa_one_time_or_rental_menu(update, context, method: str):
     
     await _edit(
     update, 
-    keyboard,
     rental_text,
+    keyboard,
     parse_mode="HTML"
 )
 

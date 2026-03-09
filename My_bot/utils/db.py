@@ -1044,7 +1044,7 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
 
     # Join all the lines into the final content
     content = "\n".join(lines) + "\n"
-    filename = f"services_{capability.lower()}.txt"
+    filename = f"ServicesList_{capability.lower()}.txt"
 
     # Return the content as bytes and the filename
     return content.encode("utf-8"), filename
