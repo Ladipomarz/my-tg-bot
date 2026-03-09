@@ -7,7 +7,9 @@ from telegram.ext import ContextTypes, CommandHandler
 # Import your existing menu functions and config
 from handlers.wallet_continue import open_wallet_menu
 from handlers.start import handle_main_menu
+from menus.main_menu import get_main_menu
 from handlers.tools import open_tools_menu
+from handlers.orders import open_orders_menu
 from config import SUPPORT_HANDLE
 
 logger = logging.getLogger(__name__)
@@ -24,7 +26,7 @@ async def setup_bot_profile(tg_app):
             BotCommand("help", "🛠 Support & Help")
         ]
         await tg_app.bot.set_my_commands(commands)
-        await tg_app.bot.set_my_name(name="The Underground Box") 
+        await tg_app.bot.set_my_name(name="The Underground ☠️ Box") 
         await tg_app.bot.set_my_description(description="Welcome! to the underground box, We provide you with premium services.\n\nClick Start below to begin.")
         await tg_app.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
         logger.info("✅ Bot Profile and Menu Button have been updated successfully!")
@@ -38,15 +40,23 @@ async def tools_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await open_tools_menu(update, context)
     
     
+async def orders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Triggers when user clicks /orders from the side menu"""
+    context.user_data["current_menu"] = "orders"
+    await open_orders_menu(update, context) 
+    
+    
 async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await open_wallet_menu(update, context)
 
-async def orders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    context.user_data["current_menu"] = "orders"
-    await handle_main_menu(update, context)
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(f"🛠 Need help? Contact {SUPPORT_HANDLE}")
+    """Triggers when user clicks /help from the side menu"""
+    # Notice we added reply_markup=get_main_menu() here!
+    await update.message.reply_text(
+        f"🛠 Need help? Contact {SUPPORT_HANDLE}", 
+        reply_markup=get_main_menu()
+    )
 
 def register_side_menu(tg_app):
     """Locks everything into a single function to be called in bot.py"""

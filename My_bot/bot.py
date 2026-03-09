@@ -1365,7 +1365,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 🛑 THE GLOBAL INTERCEPTOR 🛑
     # Put your exact button names here in all lowercase
-    global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 wallet", "🏠 home"] 
+    global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 wallet", "🏠 home", "🛠 support"] 
     
     if text.lower() in global_menu_buttons:
         # 1. Instantly wipe EVERY process they were stuck in (Rental, OTP, Wallet, Admin, etc.)
@@ -1481,7 +1481,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 
     # User main keyboard
-    if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet"}:
+    if text in {"🧰 Tools", "🛒 Orders", "💰 Wallet","🛠 Support"}:
         
         # 👇 ADD THIS LINE RIGHT HERE! 👇
         asyncio.create_task(safe_delete_user_message(update))
@@ -1490,6 +1490,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if text == "🧰 Tools": context.user_data["current_menu"] = "tools"
         elif text == "🛒 Orders": context.user_data["current_menu"] = "orders"
         elif text == "💰 Wallet": context.user_data["current_menu"] = "wallet"
+        elif text == "🛠 Support": context.user_data["current_menu"] = "support"
         
         # clear OTP step so it doesn't hijack menu navigation
         context.user_data.pop("otp_step", None)
@@ -1602,6 +1603,14 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ------------------------------
 # /admin wrapper
 # ------------------------------
+
+async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Catches any unregistered or unauthorized commands."""
+    await update.message.reply_text(
+        f"❌ Unknown or unauthorized command.\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
+        reply_markup=get_main_menu() # 👈 Forces the keypad back open!
+    )
+    
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
 
@@ -1633,6 +1642,8 @@ register_side_menu(tg_app)
 tg_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_router), group=0)
 # Lastly: Your media router
 tg_app.add_handler(MessageHandler((filters.PHOTO | filters.Document.ALL) & ~filters.COMMAND, media_router))
+
+tg_app.add_handler(MessageHandler(filters.COMMAND, unknown_command))
 
 TG_READY = False
 TG_LOCK = asyncio.Lock()
