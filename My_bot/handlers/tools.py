@@ -203,14 +203,23 @@ async def tools_callback(update: Update, context: CallbackContext):
         await start_service_list_flow(update, context, plan="one_time", capability="sms")
         return
     
+
     if data == "tool_otp_usa_voice":
-        await update.callback_query.answer("Voice verification is coming soon! Stay tuned.")
-        await show_usa_verification_menu(update, context)
+        # Pass the custom text! It reuses the same menu perfectly.
+        await show_usa_verification_menu(
+            update, 
+            context, 
+            message_text="🎙 Voice verification\n\nComing soon…"
+        )
         return
     
+
     if data == "otp_other_country":
-        await update.callback_query.answer("Other Country coming soon! Stay tuned.")
-        await otp_verification_handler(update, context, method="text")
+        await otp_verification_handler(
+            update, 
+            context, 
+            message_text="🎙 Other Country \n\nComing soon…"
+        )
         return
 
 

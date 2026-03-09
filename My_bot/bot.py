@@ -12,7 +12,7 @@ from config import SUPPORT_HANDLE
 import html
 
 from fastapi import FastAPI, Request, Response
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton,BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -1360,6 +1360,19 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Unhandled callback data: %s", data)
 
 
+
+async def post_init(application):
+    """This runs immediately after the bot starts up."""
+    commands = [
+        BotCommand("start", "🚀 Open Main Menu"),
+        BotCommand("my_rentals", "📱 Manage My Numbers"),
+        BotCommand("wallet", "💳 Check Balance & Topup"),
+        BotCommand("orders", "📦 View Order History"),
+        BotCommand("help", "🛠 Support & Help")
+    ]
+    await application.bot.set_my_commands(commands)
+    await application.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
+    print("✅ Blue Menu Button has been updated on Telegram's servers!")
 # ------------------------------
 # TEXT ROUTER
 # ------------------------------
@@ -1627,6 +1640,7 @@ tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
+tg_app = ApplicationBuilder().token(BOT_TOKEN).request(tg_request).post_init(post_init).build()
 
 
 

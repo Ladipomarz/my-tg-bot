@@ -35,8 +35,8 @@ API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
 
 
-
-async def otp_verification_handler(update: Update, context: CallbackContext, method: str):
+async def otp_verification_handler(update: Update, context: CallbackContext, method: str, message_text="Please choose your region:"):
+    
     # Show buttons for choosing between USA and Other Countries
     keyboard = [
         [
@@ -45,11 +45,16 @@ async def otp_verification_handler(update: Update, context: CallbackContext, met
         ],
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")]
     ]
-    await _edit(update, "Please choose your region:", keyboard)
+    
+    # 👇 Use the variable here! (Depending on how your _edit works, or use edit_message_text)
+    await update.callback_query.edit_message_text(
+        text=message_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
 
 
-async def show_usa_verification_menu(update: Update, context: CallbackContext):
+async def show_usa_verification_menu(update: Update, context: CallbackContext, method: str, message_text="Please choose the verification method:"):
     # Show buttons for choosing between Text and Voice verification
     keyboard = [
         [
@@ -62,7 +67,7 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext):
 
     try:
         await update.callback_query.edit_message_text(
-            "Please choose the verification method:", 
+            message_text, 
             reply_markup=reply_markup
         )
     except BadRequest as e:
