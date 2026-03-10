@@ -962,13 +962,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("callback_router got data=%r", data)
 
     # Back to main (everyone)
-    if data == "back_main":
+    if q.data == "back_main":
+        # The user clicked "❌ Close"
         try:
-            await q.edit_message_text("Back to main menu...")
-        except Exception:
-            pass
-        try:
-            await q.message.reply_text("Main menu:", reply_markup=get_main_menu())
+            await q.message.delete()
         except Exception:
             pass
         return
@@ -1491,7 +1488,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pending = None  # prevent UnboundLocalError no matter what
         
                     
-        if text == "💰 Wallet":
+        if text == "💰 Credit":
                await open_wallet_menu(update, context)
                return
 
@@ -1779,6 +1776,7 @@ async def plisio_webhook(req: Request):
     if status == "pending" or invoice_received > 0:
         detected_now = True
 
+    
     # ---------------------------
     # EXPIRED / FAILED (highest priority)
     # ---------------------------
@@ -1796,8 +1794,33 @@ async def plisio_webhook(req: Request):
             logger.exception("update_order_status(expired) failed (ignored)")
             await notify_admin(f"update_payment_status failed: {e}")
 
-        return {"ok": True}
+        # ✅ NEW: REAL-TIME EXPIRED ALERT TO USER
+        if chat_id and await ensure_telegram_ready():
+            # Check if this is the first time we are marking it expired
+            if current_pay_status != "expired": 
+                exp_text = (
+                    f"⏳ <b>Order Expired</b>\n\n"
+                    f"Your payment window for order <b>{order_number}</b> has closed. "
+                    f"If you still wish to top up, please create a new order."
+                )
+                
+                try:
+                    sent_exp_msg = await tg_app.bot.send_message(
+                        chat_id=chat_id, 
+                        text=exp_text, 
+                        parse_mode="HTML"
+                    )
+                    # Auto-delete the alert after 60 seconds
+                    tg_app.job_queue.run_once(
+                        _delete_message_later,
+                        when=60,
+                        data={"chat_id": chat_id, "message_id": sent_exp_msg.message_id}
+                    )
+                except Exception as e:
+                    logger.warning(f"Could not send expired alert to user {chat_id}: {e}")
 
+        return {"ok": True}
+    
     # ---------------------------
     # DETECTED or PAID
     # ---------------------------

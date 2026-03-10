@@ -233,11 +233,30 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"✅ You already have an active top up.\n"
                     f"⏳ Time left: {remaining//60} min\n\n"
                     f"Tap below to continue or cancel and create a new top up.",
-                    reply_markup=open_invoice_cancel_kb(existing_url, order_code), 
-                      
+                    reply_markup=open_invoice_cancel_kb(existing_url, order_code),   
                 )
+                
+                # ✅ 1. Remove it from the Interceptor's radar
+                context.user_data.pop("otp_instruction_msg_id", None)
+
+                # ✅ 2. Create the mini self-destruct function
+                async def _auto_delete_warning(ctx: ContextTypes.DEFAULT_TYPE):
+                    try:
+                        await ctx.bot.delete_message(
+                            chat_id=ctx.job.data["chat_id"], 
+                            message_id=ctx.job.data["msg_id"]
+                        )
+                    except Exception:
+                        pass
+
+                # ✅ 3. Start the 120-second timer
+                if context.job_queue and q.message:
+                    context.job_queue.run_once(
+                        _auto_delete_warning, 
+                        when=120, 
+                        data={"chat_id": update.effective_chat.id, "msg_id": q.message.message_id}
+                    )
                 return
-            
             
             # fallback for non-topup orders
             await safe_edit_message(q, context,
@@ -257,8 +276,14 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
         await safe_edit_message(q, context,
-            f"Choose a payment currency:\nAmount: ${amount_usd:.2f}",
+            f"GENERAL MINIMUM DEPOSIT IS <b> $4 BUT PLEASE NOTE THAT </b> \n"
+            f"FOR COINS LIKE USDT TRC 20 REQUIRES A MINIMUM OF $5.50,\n"
+            f"AND COINS LIKE USDT ERC 20 REQUIRES A MINIMUM OF $11.00,\n\n"                   
+            f"<b> Choose a Payment Currency:\n\n"
+            f"Amount: ${amount_usd:.2f} </b>",
             reply_markup=coin_picker_kb(order_code, amount_usd),
+            parse_mode="HTML",
+            
         )
         return
 
@@ -353,7 +378,27 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Tap below to open payment page:",
                 reply_markup=open_invoice_kb(invoice_url),
             )
-            return  # ✅ CRITICAL: prevent falling into Unknown action
+            
+            context.user_data.pop("otp_instruction_msg_id", None)
+            # 3. Create the mini self-destruct function
+            async def _auto_delete_invoice(ctx: ContextTypes.DEFAULT_TYPE):
+                
+                try:
+                    await ctx.bot.delete_message(
+                        chat_id=ctx.job.data["chat_id"], 
+                        message_id=ctx.job.data["msg_id"]
+                    )
+                except Exception:
+                    pass
+                
+                # 4. Start the 120-second (2 minute) timer
+            if context.job_queue and q.message:
+                context.job_queue.run_once(
+                    _auto_delete_invoice, 
+                    when=120, 
+                    data={"chat_id": q.message.chat_id, "msg_id": q.message.message_id}
+                )
+                return
 
         except Exception as e:
             # 1. Log the real error to your server console

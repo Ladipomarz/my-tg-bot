@@ -63,6 +63,7 @@ async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggers when user clicks /help from the side menu"""
     asyncio.create_task(safe_delete_user_message(update)) # Deletes "/help"
+    await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
     
     # ✅ REWRITE: Use safe_send and track the ID
     msg = await safe_send(

@@ -12,7 +12,7 @@ def get_tools_inline():
             ],
         
         [InlineKeyboardButton("📣 Social Services", callback_data="social_menu")],
-        [InlineKeyboardButton("⬅ Back", callback_data="back_main")],
+        [InlineKeyboardButton("Close", callback_data="back_main")],
     ]
     return InlineKeyboardMarkup(buttons)
 

@@ -8,7 +8,7 @@ def get_orders_menu():
             InlineKeyboardButton("📂 Order History", callback_data="orders_history")
         ],
         [
-            InlineKeyboardButton("⬅ Back", callback_data="back_main")
+            InlineKeyboardButton("Close", callback_data="back_main")
         ]
     ]
 

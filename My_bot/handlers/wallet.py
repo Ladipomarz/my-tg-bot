@@ -66,31 +66,56 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
     amount = pending.get("amount_usd")
     currency = (pending.get("pay_currency") or "Not chosen").upper()
 
-   
-    # Prefer replying on message if available (callback vs text)
     msg_target = update.callback_query.message if update.callback_query else update.message
     if not msg_target:
         return False
 
+    # ✅ 1. Create the mini self-destruct function
+    async def _auto_delete_warning(ctx: ContextTypes.DEFAULT_TYPE):
+        try:
+            await ctx.bot.delete_message(
+                chat_id=ctx.job.data["chat_id"], 
+                message_id=ctx.job.data["msg_id"]
+            )
+        except Exception:
+            pass # Fails silently if user already clicked 'Cancel and new'
+
     if invoice_url:
-        await msg_target.reply_text(
-            "✅ You already have an active top up.\n"
-            f"Order: {order_code}\n"
-            f"Amount: ${float(amount):.2f}\n"
-            f"Currency: {currency}\n"
+        # ✅ 2. Capture the message when sending
+        sent_msg = await msg_target.reply_text(
+            "<b>✅ You already have an active top up.  ❗</b>\n"
+            f"<b> <Order: {order_code}\n\n"
+            f"Amount In USD: ${float(amount):.2f} </b> \n\n"
+            f"<b> Currency: {currency}</b>\n\n"
             f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
             "Tap below to continue or cancel and create a new top up.",
             reply_markup=open_invoice_cancel_kb(invoice_url, order_code),
+            parse_mode="HTML",
         )
+        
+        # ✅ 3. Start the 120-second timer
+        if context.job_queue:
+            context.job_queue.run_once(
+                _auto_delete_warning, 
+                when=120, 
+                data={"chat_id": update.effective_chat.id, "msg_id": sent_msg.message_id}
+            )
         return True
 
     # No invoice yet -> send them to payment menu (coin selection happens in payments.py)
-    await msg_target.reply_text(
+    sent_msg = await msg_target.reply_text(
         "✅ You already started a top up.\n"
         f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
         "Continue to payment:",
         reply_markup=make_payment_kb(order_code),
     )
+    # Start the 120-second timer here too
+    if context.job_queue:
+        context.job_queue.run_once(
+            _auto_delete_warning, 
+            when=120, 
+            data={"chat_id": update.effective_chat.id, "msg_id": sent_msg.message_id}
+        )
     return True
 
 
@@ -101,7 +126,12 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     user_id = update.effective_user.id
 
     if q.data == "back_main":
-        await q.message.reply_text("⬅ Back. Use the main menu buttons below.")
+        # ❌ The user clicked "Close" on the top-level menu
+        # Just quietly delete the inline menu to clean the screen!
+        try:
+            await q.message.delete()
+        except Exception:
+            pass
         return
 
     if q.data == "wallet_topup":
