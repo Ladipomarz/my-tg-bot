@@ -6,6 +6,7 @@ from telegram.ext import ContextTypes
 
 from handlers.payments import show_make_payment, open_invoice_cancel_kb, make_payment_kb
 
+
 from utils.db import (
     create_order,
     expire_pending_order_if_needed,
@@ -117,12 +118,13 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         # 3) Otherwise ask for amount
         context.user_data["wallet_step"] = "await_amount"
         context.user_data.pop("otp_step", None)
-        await safe_send(
+        msg = await safe_send(
             update,
             context,
             "💳 <b>Top up Wallet</b>\n\nEnter the amount in USD (example: <b>10</b>).",
             parse_mode="HTML",
         )
+        context.user_data["otp_instruction_msg_id"] = msg.message_id # 👈 Track it
         return
 
 

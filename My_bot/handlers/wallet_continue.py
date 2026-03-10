@@ -16,70 +16,69 @@ def _fmt_usd(x) -> str:
 async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id
 
-    # Expire old pending orders so wallet doesn’t get stuck
+    # 1. Cleanup before starting
     expire_pending_order_if_needed(user_id)
 
+    # 2. Fetch Data
     bal = get_user_balance_usd(user_id)
     txs = get_last_wallet_transactions(user_id, limit=5)
 
+    # 3. Build the Transaction list
     lines = []
     for t in txs:
         amt = t.get("amount_usd")
         status = (t.get("status") or t.get("pay_status") or "unknown").lower()
         
-        # 🗓️ THE UX FIX: Extract and format the date nicely (e.g., "Mar 07")
+        # Format the date nicely
         date_obj = t.get("created_at")
         date_str = ""
         if date_obj:
             try:
                 date_str = date_obj.strftime("%b %d") + " - "
             except Exception:
-                pass # Fails silently if the date format is weird
+                pass 
         
-        if status in ("paid", "confirmed", "completed"):
+        # Determine status text
+        if status in ("paid", "confirmed", "completed", "detected"):
             status_txt = "Completed"
         elif status in ("expired",):
             status_txt = "Expired"
         elif status in ("cancelled", "canceled", "cancel"):
             status_txt = "Canceled"
-        elif status in ("detected",):
-            status_txt = "Completed"
         elif status in ("processing", "pending"):
             status_txt = "Pending"
         else:
             status_txt = status.capitalize()
 
-        # Added date_str to the display line!
         lines.append(f"• {date_str}{_fmt_usd(amt or 0)} Top-up ({status_txt})")
 
     tx_block = "\n".join(lines) if lines else "- No transactions yet."
 
-    msg = (
+    # 4. Construct Full Message Text
+    wallet_text = (
         f"<b>💰 Wallet</b>\n\n"
         f"<b>Balance:</b> {_fmt_usd(bal)}\n\n"
         f"<b>Last 5 transactions:</b>\n{tx_block}\n\n"
         "➕ To top up: press <b>Top up</b>."
     )
 
-    keyboard = [
-    [
-        InlineKeyboardButton("➕ Top up", callback_data="wallet_topup"),
-        InlineKeyboardButton("⬅ Back", callback_data="back_main"),
-    ],
-]
+    # 5. Define the Keyboard
+    keyboard = InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("➕ Top up", callback_data="wallet_topup"),
+            InlineKeyboardButton("⬅ Back", callback_data="back_main"),
+        ],
+    ])
 
+    # 6. SEND ONCE using safe_send
+    # safe_send automatically handles edits vs new messages!
+    msg = await safe_send(
+        update,
+        context,
+        wallet_text,
+        reply_markup=keyboard,
+        parse_mode="HTML"
+    )
 
-    if update.message:
-        await safe_send(update, context, msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
-    else:
-        q = update.callback_query
-        try:
-            await q.edit_message_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
-        except BadRequest as e:
-            em = str(e).lower()
-            if "message is not modified" in em:
-                return
-            if "message can't be edited" in em:
-                await q.message.reply_text(msg, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(keyboard))
-                return
-            raise
+    # 7. TRACK THE ID for global menu cleanup (bot.py text_router)
+    context.user_data["otp_instruction_msg_id"] = msg.message_id

@@ -1411,6 +1411,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Wallet flow
     if context.user_data.get("wallet_step"):
+        await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
+        
         if await handle_wallet_text_input(update, context):
             asyncio.create_task(safe_delete_user_message(update))
             return
@@ -1778,7 +1780,8 @@ async def plisio_webhook(req: Request):
     # Detect real payment activity from the verified invoice
     detected_now = False
     invoice_received = _to_float(inv.get("received_amount") or 0)
-
+    
+    status = (inv.get("status") or "").lower().strip()
     # In Plisio API, 'pending' status means crypto is officially on the blockchain unconfirmed
     if status == "pending" or invoice_received > 0:
         detected_now = True
@@ -1885,14 +1888,22 @@ async def plisio_webhook(req: Request):
                             except Exception:
                                 new_bal = None
 
-                            msg = f"✅ Wallet topped up: ${float(usd_paid):.2f}"
+                            msg_text = f"✅ Wallet topped up: ${float(usd_paid):.2f}"
                             if new_bal is not None:
                                 try:
                                     msg += f"\nNew balance: ${float(new_bal):.2f}"
                                 except Exception:
                                     pass
+                                
+                            sent_wallet_msg = await tg_app.bot.send_message(chat_id=order["user_id"], text=msg_text) 
+                             
+                            tg_app.job_queue.run_once(
+                                _delete_message_later,
+                                when=10,
+                                data={"chat_id": order["user_id"], "message_id": sent_wallet_msg.message_id}
+                            )  
 
-                            asyncio.create_task(_safe_send_message(order["user_id"], msg))
+                            
 
 
 
@@ -1900,18 +1911,25 @@ async def plisio_webhook(req: Request):
         if first_time:
             try:
                 if await ensure_telegram_ready():
+                    
                     asyncio.create_task(_notify_admin_new_paid_order(order))
             except Exception as e:
                 logger.exception("Admin notify failed (ignored)")
                 await notify_admin(f"Couldnt Notify Admin : {e}")
 
             if chat_id and await ensure_telegram_ready():
-                asyncio.create_task(
-                    _safe_send_message(
-                        chat_id,
-                        f"✅ Payment detected for order {order_number}. Kindly wait while your order is being fulfilled.\n\n"
-                        "You can return to Telegram now.",
-                    )
+                det_text = (
+                    f"✅ Payment detected for order {order_number}. "
+                    "Kindly wait while your order is being fulfilled.\n\n"
+                    "You can return to Telegram now."
+                )
+                
+                sent_det_msg = await tg_app.bot.send_message(chat_id=chat_id, text=det_text)
+                
+                tg_app.job_queue.run_once(
+                    _delete_message_later,
+                    when=10,
+                    data={"chat_id": chat_id, "message_id": sent_det_msg.message_id}
                 )
 
                 # Optional eSIM processing notice
