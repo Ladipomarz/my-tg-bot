@@ -143,10 +143,10 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             update,
             context,
             f"💳<b>Top up Wallet</b>\n\n"
-            f"GENERAL MINIMUM DEPOSIT IS <b> $4 </b> BUT PLEASE NOTE THAT \n\n"
-            f"COINS LIKE USDT TRC 20 REQUIRES A MINIMUM OF <b>$5.50</b>\n\n"
-            f"COINS LIKE USDT ERC 20 REQUIRES A MINIMUM OF <b>$11.00</b>\n\n"
-            f"Enter the Amount in USD (example: <b>4</b>).",
+            f"General Minimum Deposit Is <b>$4</b> *BUT PLEASE NOTE THAT* \n\n"
+            f"Coins Like Usdt Trc 20 Requires a Minimum Of<b>$5.50</b>\n\n"
+            f"Coins Like Usdt Erc 20 Requires a Minimum Of <b>$11.00</b>\n\n\n" 
+            f"Enter the Amount in USD (Example: <b>4</b>for $4).",
             parse_mode="HTML",
         )
         context.user_data["otp_instruction_msg_id"] = msg.message_id # 👈 Track it

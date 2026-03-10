@@ -308,9 +308,9 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
         await safe_edit_message(q, context,
-            f"GENERAL MINIMUM DEPOSIT IS <b>$4</b> BUT PLEASE NOTE THAT \n\n"
-            f"COINS LIKE USDT TRC 20 REQUIRES A MINIMUM OF <b>$5.50</b>\n\n"
-            f"COINS LIKE USDT ERC 20 REQUIRES A MINIMUM OF <b>$11.00</b>\n\n"                   
+            f"General Minimum Deposit Is <b>$4</b> *BUT PLEASE NOTE THAT* \n\n"
+            f"Coins Like Usdt Trc 20 Requires a Minimum Of<b>$5.50</b>\n\n"
+            f"Coins Like Usdt Erc 20 Requires a Minimum Of <b>$11.00</b>\n\n"                   
             f"<b>Choose a Payment Currency:\n\n"
             f"Amount: ${amount_usd:.2f} </b>",
             reply_markup=coin_picker_kb(order_code, amount_usd),
