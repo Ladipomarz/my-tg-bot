@@ -99,6 +99,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_wallet_menu(update, context)    
     
     if key == "support":
+        
         await update.message.reply_text(f"🛠 Need help? Contact {SUPPORT_HANDLE}")
         return
 

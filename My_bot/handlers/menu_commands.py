@@ -10,7 +10,7 @@ from handlers.start import handle_main_menu
 from menus.main_menu import get_main_menu
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
-from utils.auto_delete import safe_delete_user_message, delete_tracked_message
+from utils.auto_delete import safe_delete_user_message, delete_tracked_message,safe_send
 from config import SUPPORT_HANDLE
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,7 @@ async def setup_bot_profile(tg_app):
         await tg_app.bot.set_my_commands(commands)
         await tg_app.bot.set_my_name(name="The Underground ☠️ Box") 
         await tg_app.bot.set_my_description(description="🤖 Welcome! to the underground box,🔨 We provide you with premium services.😎 \n\nClick Start below to begin. 🌍")
-        await tg_app.bot.set_my_short_description(short_description="Premium Numbers & eSIMs.")
+        await tg_app.bot.set_my_short_description(short_description="Premium Numbers & More.")
         logger.info("✅ Bot Profile and Menu Button have been updated successfully!")
     except Exception as e:
         logger.error(f"⚠️ Failed to update Bot Profile: {e}")
@@ -58,15 +58,21 @@ async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await open_wallet_menu(update, context)
 
 
+# My_bot/handlers/menu_commands.py
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    asyncio.create_task(safe_delete_user_message(update)) 
-    await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
     """Triggers when user clicks /help from the side menu"""
-    # Notice we added reply_markup=get_main_menu() here!
-    await update.message.reply_text(
-        f"🛠 Need help? Contact {SUPPORT_HANDLE}", 
+    asyncio.create_task(safe_delete_user_message(update)) # Deletes "/help"
+    
+    # ✅ REWRITE: Use safe_send and track the ID
+    msg = await safe_send(
+        update,
+        context,
+        f"🛠 Need help? Contact {SUPPORT_HANDLE}",
         reply_markup=get_main_menu()
     )
+    # This allows the keypad buttons to delete this message later
+    context.user_data["otp_instruction_msg_id"] = msg.message_id
 
 def register_side_menu(tg_app):
     """Locks everything into a single function to be called in bot.py"""

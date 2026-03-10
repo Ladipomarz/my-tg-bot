@@ -285,7 +285,7 @@ async def ensure_telegram_ready():
             await tg_app.start()
             TG_READY = True
             logger.info("Telegram app is ready")
-            #await setup_bot_profile(tg_app)
+            await setup_bot_profile(tg_app)
              
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
@@ -351,18 +351,6 @@ async def ensure_telegram_ready():
 
 async def on_error(update, context):
     logger.exception("Unhandled Telegram error", exc_info=context.error)
-
-
-
-async def _safe_send_message(chat_id: int, text: str):
-    for attempt in range(1, 4):
-        try:
-            await tg_app.bot.send_message(chat_id=chat_id, text=text)
-            return
-        except Exception as e:
-            await notify_admin(f"Telegram send_message failed {e}")
-            logger.exception("Telegram send_message failed attempt %s/3: %s", attempt, e)
-            await asyncio.sleep(1.5 * attempt)
 
 
 async def _notify_admin_new_paid_order(order: dict):
@@ -1486,7 +1474,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 
     # User main keyboard
-    if text in {"🧰 Tools", "🛒 Orders", "💰 Credit","🛠 Support"}:
+    if text in {"🧰 Tools", "🛒 Orders", "💰 Credit","🛠 support"}:
         
         # 👇 ADD THIS LINE RIGHT HERE! 👇
         asyncio.create_task(safe_delete_user_message(update))
@@ -1611,10 +1599,15 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Catches any unregistered or unauthorized commands."""
-    await update.message.reply_text(
-        f"❌ Wrong Command.\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
-        reply_markup=get_main_menu() # 👈 Forces the keypad back open!
+    # ✅ REWRITE: Use safe_send and track the ID
+    msg = await safe_send(
+        update,
+        context,
+        f"❌ <b>Wrong Command.</b>\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
+        reply_markup=get_main_menu()
     )
+    # Track it so the next valid menu click deletes it
+    context.user_data["otp_instruction_msg_id"] = msg.message_id
     
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
@@ -1921,7 +1914,6 @@ async def plisio_webhook(req: Request):
                 det_text = (
                     f"✅ Payment detected for order {order_number}. "
                     "Kindly wait while your order is being fulfilled.\n\n"
-                    "You can return to Telegram now."
                 )
                 
                 sent_det_msg = await tg_app.bot.send_message(chat_id=chat_id, text=det_text)
