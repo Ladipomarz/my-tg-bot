@@ -1775,13 +1775,12 @@ async def plisio_webhook(req: Request):
     is_expired = status in expired_statuses
 
     # Detect real payment activity from the verified invoice
+    # Detect real payment activity from the verified invoice
     detected_now = False
-    invoice_total = _to_float(inv.get("invoice_total_sum") or inv.get("amount") or 0)
     invoice_received = _to_float(inv.get("received_amount") or 0)
-    pending_amt = _to_float(inv.get("pending_amount") or 0)
 
-    # If Plisio confirms money has actually hit the blockchain
-    if invoice_received > 0 or (invoice_total > 0 and pending_amt > 0):
+    # In Plisio API, 'pending' status means crypto is officially on the blockchain unconfirmed
+    if status == "pending" or invoice_received > 0:
         detected_now = True
 
     # ---------------------------
