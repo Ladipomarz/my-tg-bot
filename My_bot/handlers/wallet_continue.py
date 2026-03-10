@@ -30,8 +30,6 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         status = (t.get("status") or t.get("pay_status") or "unknown").lower()
         order_id = t.get("order_code") or "N/A"
         
-        lines.append(f"• {date_str}{_fmt_usd(amt or 0)} Top-up ({status_txt}) | <code>{order_id}</code>")
-        
         # Format the date nicely
         date_obj = t.get("created_at")
         date_str = ""
@@ -39,6 +37,7 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             try:
                 date_str = date_obj.strftime("%b %d") + " - "
             except Exception:
+                date_str = ""
                 pass 
         
         # Determine status text

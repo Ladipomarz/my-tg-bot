@@ -1351,21 +1351,17 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Safety Check: Ensure there is actually a message and text
     if not update.message or not update.message.text:
         return    
+    
     text = update.message.text.strip()
     low_text = text.lower()
     
-    # 3. ✅ FUZZY SUPPORT MATCH (Fixes the Support button crash)
-    if "support" in low_text:
-        await help_cmd(update, context)
-        return
-    
-    # 🛑 THE GLOBAL INTERCEPTOR 🛑
+    # 🛑 1. THE GLOBAL INTERCEPTOR 🛑
     # Put your exact button names here in all lowercase
     global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 credit", "🏠 home", "🛠 support"] 
     
-    if text.lower() in global_menu_buttons:
+    if any(k in low_text for k in global_menu_buttons):
         await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
-        # 1. Instantly wipe EVERY process they were stuck in (Rental, OTP, Wallet, Admin, etc.)
+        # Instantly wipe EVERY process they were stuck in (Rental, OTP, Wallet, Admin, etc.)
         trap_doors = [
             "otp_step", 
             "wallet_step", 
@@ -1375,7 +1371,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         for trap in trap_doors:
             context.user_data.pop(trap, None)
-            
+
+    # 🛠 2. FUZZY SUPPORT MATCH (Fixes the Support button crash)
+    if "support" in low_text:
+        await help_cmd(update, context)
+        return
+
     # 👇 ... The rest of your normal routing logic continues down here ... 👇
     step = context.user_data.get("otp_step")
     
@@ -1384,14 +1385,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await confirm_rental(update, context)
         return  # Stop here if they are in the rental flow
         
-    # inside text_router, very early:
     if await handle_otp_text_input(update, context):
         asyncio.create_task(safe_delete_user_message(update))
         return
         
-    
-    
-    #🛑 1. THE EXTENSION INTERCEPTOR 🛑
+    # 🛑 3. THE EXTENSION INTERCEPTOR 🛑
     if context.user_data.get("awaiting_extension_choice"):
         await handle_extension_text(update, context)
         asyncio.create_task(safe_delete_user_message(update))
@@ -1410,33 +1408,32 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             asyncio.create_task(safe_delete_user_message(update))
             return
         
-      #RENTAL FLOWWWW
-        
-      # Rental Product ID Step
+    # --- RENTAL FLOW ---
+    # Rental Product ID Step
     if context.user_data.get("otp_step") == "awaiting_rental_product_id":
         # Delegate to your rental handler for processing
-        await handle_rental_product_id(update, context)  # Your existing rental handler
+        await handle_rental_product_id(update, context)
         asyncio.create_task(safe_delete_user_message(update))
         return
             
-    # 1. THE RENTAL BUTTON INTERCEPTOR
+    # THE RENTAL BUTTON INTERCEPTOR
     if step == "awaiting_rental_button":
         # Starts the 10-sec user delete in the background (Zero lag!)
         asyncio.create_task(safe_delete_user_message(update)) 
         await resend_rental_menu(update, context) 
         return
         
-    # 2. THE ONE-TIME OTP BUTTON INTERCEPTOR
+    # THE ONE-TIME OTP BUTTON INTERCEPTOR
     if step == "awaiting_otp_button":
         # Starts the 10-sec user delete in the background (Zero lag!)
         asyncio.create_task(safe_delete_user_message(update))
         await resend_otp_menu(update, context)
         return
     
-      # Handle the state selection step for rental
+    # Handle the state selection step for rental
     if context.user_data.get("otp_step") == "awaiting_state":
         # Ask for the state after validating product ID
-        await handle_rental_state(update, context)  # Your function to handle the state input
+        await handle_rental_state(update, context)
         asyncio.create_task(safe_delete_user_message(update))
         return
     
@@ -1444,23 +1441,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_state_or_random(update, context)
         asyncio.create_task(safe_delete_user_message(update))
         return
-        
-    
-    # Final confirmation step
-    if context.user_data.get("otp_step") == "rental_final_confirm":
-        # Handle confirmation (yes/no)
-        await confirm_rental(update, context)  # Confirm rental process
-        asyncio.create_task(safe_delete_user_message(update))
-        return
-    
-    
-    
-    
-   
-    ## STOPHERE
 
+    # --- MAIN KEYPAD ROUTING ---
     user_id = update.effective_user.id
-    text = (update.message.text or "").strip()
 
     # delete pending warning on ANY new text / keypad press
     await delete_tracked_message(
@@ -1474,36 +1457,28 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("admin_wizard", None)
         await update.message.reply_text("Admin menu: use /admin")
         return
-    
-    
-    
 
     # User main keyboard
-    if text in {"🧰 Tools", "🛒 Orders", "💰 Credit","🛠 support"}:
+    if any(k in low_text for k in ["tools", "orders", "credit"]):
         
-        # 👇 ADD THIS LINE RIGHT HERE! 👇
         asyncio.create_task(safe_delete_user_message(update))
         
-        # 👇 1. ADD THIS MEMORY TRACKER 👇
-        if text == "🧰 Tools": context.user_data["current_menu"] = "tools"
-        elif text == "🛒 Orders": context.user_data["current_menu"] = "orders"
-        elif text == "💰 Credit": context.user_data["current_menu"] = "wallet"
-        elif text == "🛠 Support": context.user_data["current_menu"] = "support"
+        # MEMORY TRACKER
+        if "tools" in low_text: context.user_data["current_menu"] = "tools"
+        elif "orders" in low_text: context.user_data["current_menu"] = "orders"
+        elif "credit" in low_text: context.user_data["current_menu"] = "wallet"
         
         # clear OTP step so it doesn't hijack menu navigation
         context.user_data.pop("otp_step", None)
         context.user_data.pop("wallet_step", None)
         pending = None  # prevent UnboundLocalError no matter what
-        
                     
-        if text == "💰 Credit":
+        if "credit" in low_text:
                await open_wallet_menu(update, context)
                return
 
-
-
         # if Tools clicked and there is a pending order, redirect to pending page
-        if text == "🧰 Tools":
+        if "tools" in low_text:
             pending = expire_pending_order_if_needed(user_id)
 
         if pending and pending.get("status") == "pending":
@@ -1545,6 +1520,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         return await handle_main_menu(update, context)
 
+    # --- FALLBACK FLOWS ---
     # MSN flow
     if context.user_data.get("msn_step"):
         try:
@@ -1583,7 +1559,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
     
-    # 2. Vaporize their rubbish and the warning after 4 seconds
+    # Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():
         await asyncio.sleep(4)
         try:
