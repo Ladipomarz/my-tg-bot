@@ -27,6 +27,7 @@ from telegram.request import HTTPXRequest
 from utils.auto_delete import safe_send
 from handlers.admin import fix_db_sequence,rescue_my_number,admin_get_stats
 from utils.helper import notify_admin
+from handlers.menu_commands import help_cmd
 
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
@@ -1347,6 +1348,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # TEXT ROUTER
 # ------------------------------
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    low_text = text.lower()
     
     text = update.message.text.strip()
     
@@ -1376,6 +1378,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return  # Stop here if they are in the rental flow
         
 
+    # ✅ Route Support properly (Fuzzy match ignores tricky emojis!)
+    if "support" in low_text:
+        await help_cmd(update, context)
+        return
+    
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
         asyncio.create_task(safe_delete_user_message(update))
@@ -1569,9 +1576,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # This creates a temporary bubble at the bottom without destroying your menus above.
     
     warning_msg = await update.message.reply_text(
-        "⚠️ <b>Invalid input. Please use the menu buttons above.</b>", 
+        "⚠️<b>Invalid input. Please use the menu buttons above.</b>", 
+        reply_markup=get_main_menu(),
         parse_mode="HTML"
     )
+    context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
     
     # 2. Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():

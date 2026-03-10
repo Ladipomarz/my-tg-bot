@@ -66,7 +66,7 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     keyboard = InlineKeyboardMarkup([
         [
             InlineKeyboardButton("➕ Top up", callback_data="wallet_topup"),
-            InlineKeyboardButton("⬅ Back", callback_data="back_main"),
+            InlineKeyboardButton("Close", callback_data="back_main"),
         ],
     ])
 

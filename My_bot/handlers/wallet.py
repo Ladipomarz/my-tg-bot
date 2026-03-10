@@ -49,6 +49,8 @@ def _fmt_left(seconds: int) -> str:
     return f"{s}s"
 
 
+import asyncio # 👈 Make sure this is at the very top of your file!
+
 async def _show_existing_topup_or_continue(update: Update, context: ContextTypes.DEFAULT_TYPE, pending: dict) -> bool:
     """
     Returns True if it handled the flow (pending exists),
@@ -70,54 +72,43 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
     if not msg_target:
         return False
 
-    # ✅ 1. Create the mini self-destruct function
-    async def _auto_delete_warning(ctx: ContextTypes.DEFAULT_TYPE):
+    # ✅ 1. Create the bulletproof asyncio self-destruct function
+    async def _delete_after_delay(chat_id, msg_id, delay=120):
+        await asyncio.sleep(delay) # Pauses in the background for 120 seconds
         try:
-            await ctx.bot.delete_message(
-                chat_id=ctx.job.data["chat_id"], 
-                message_id=ctx.job.data["msg_id"]
-            )
+            await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
         except Exception:
             pass # Fails silently if user already clicked 'Cancel and new'
 
     if invoice_url:
-        # ✅ 2. Capture the message when sending
+        # ✅ 2. Send the correctly formatted HTML message
         sent_msg = await msg_target.reply_text(
-            "<b>✅ You already have an active top up.  ❗</b>\n"
-            f"<b> <Order: {order_code}\n\n"
-            f"Amount In USD: ${float(amount):.2f} </b> \n\n"
-            f"<b> Currency: {currency}</b>\n\n"
-            f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
+            "✅ <b>You already have an active top up. ❗</b>\n\n"
+            f"<b>Order:</b> {order_code} \n\n"
+            f"<b>Amount In USD:</b> ${float(amount):.2f}\n"
+            f"<b>Currency:</b> {currency}\n\n"
+            f"⏳ <b>Time left:</b> {_fmt_left(secs_left)}\n\n"
             "Tap below to continue or cancel and create a new top up.",
             reply_markup=open_invoice_cancel_kb(invoice_url, order_code),
-            parse_mode="HTML",
+            parse_mode="HTML", # 👈 Renders the bold and code blocks
         )
         
-        # ✅ 3. Start the 120-second timer
-        if context.job_queue:
-            context.job_queue.run_once(
-                _auto_delete_warning, 
-                when=120, 
-                data={"chat_id": update.effective_chat.id, "msg_id": sent_msg.message_id}
-            )
+        # ✅ 3. Start the 120-second background timer
+        asyncio.create_task(_delete_after_delay(update.effective_chat.id, sent_msg.message_id))
         return True
 
     # No invoice yet -> send them to payment menu (coin selection happens in payments.py)
     sent_msg = await msg_target.reply_text(
-        "✅ You already started a top up.\n"
-        f"⏳ Time left: {_fmt_left(secs_left)}\n\n"
+        "✅ <b>You already started a top up.</b>\n\n"
+        f"⏳ <b>Time left:</b> {_fmt_left(secs_left)}\n\n"
         "Continue to payment:",
         reply_markup=make_payment_kb(order_code),
+        parse_mode="HTML",
     )
-    # Start the 120-second timer here too
-    if context.job_queue:
-        context.job_queue.run_once(
-            _auto_delete_warning, 
-            when=120, 
-            data={"chat_id": update.effective_chat.id, "msg_id": sent_msg.message_id}
-        )
+    
+    # ✅ Start the 120-second background timer for this one too
+    asyncio.create_task(_delete_after_delay(update.effective_chat.id, sent_msg.message_id))
     return True
-
 
 async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     q = update.callback_query
@@ -151,7 +142,11 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         msg = await safe_send(
             update,
             context,
-            "💳 <b>Top up Wallet</b>\n\nEnter the amount in USD (example: <b>10</b>).",
+            f"💳<b>Top up Wallet</b>\n\n"
+            f"GENERAL MINIMUM DEPOSIT IS <b> $4 </b> BUT PLEASE NOTE THAT \n\n"
+            f"COINS LIKE USDT TRC 20 REQUIRES A MINIMUM OF <b>$5.50</b>\n\n"
+            f"COINS LIKE USDT ERC 20 REQUIRES A MINIMUM OF <b>$11.00</b>\n\n"
+            f"Enter the Amount in USD (example: <b>4</b>).",
             parse_mode="HTML",
         )
         context.user_data["otp_instruction_msg_id"] = msg.message_id # 👈 Track it
@@ -165,30 +160,35 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
 
     text = (update.message.text or "").strip()
     
-        # ✅ if user types a command, don't treat it as amount
+    # ✅ if user types a command, don't treat it as amount
     if text.startswith("/"):
         return False
     
     if text.lower() in ("cancel", "back"):    
         context.user_data.pop("wallet_step", None)
+        from utils.auto_delete import safe_send
         await safe_send(update, context, "✅ Cancelled. Use menu buttons.")
         return True
 
 
     if step == "await_amount":
+        from decimal import Decimal, InvalidOperation
         try:
             amt = Decimal(text)
         except (InvalidOperation, ValueError):
-            await safe_send(update, context,"❌ Invalid amount. Example: 10")
+            from utils.auto_delete import safe_send
+            await safe_send(update, context,"❌ Invalid amount. Example: 4")
             return True
 
         if amt <= 0:
+            from utils.auto_delete import safe_send
             await safe_send(update, context, "❌ Amount must be greater than 0.")
             return True
 
         user_id = update.effective_user.id
 
         # Expire old pending so we don’t block user forever
+        from utils.db import expire_pending_order_if_needed, get_pending_order
         expire_pending_order_if_needed(user_id)
 
         # If pending wallet_topup exists, do NOT create a new one. Show existing.
@@ -198,20 +198,13 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
             context.user_data.pop("wallet_step", None)
             return True
 
-        # Create top-up order
-        desc = f"WALLET_TOPUP:{float(amt):.2f}"
-        _, order_code = create_order(
-            user_id,
-            desc,
-            ttl_seconds=3600,
-            amount_usd=float(amt),
-            order_type="wallet_topup",
-        )
-
+        # 👻 1. GHOST ORDER: Save amount to memory, DO NOT create DB order!
+        context.user_data["pending_wallet_amount"] = float(amt)
         context.user_data.pop("wallet_step", None)
 
-        # Send to existing payment UI (coin selection happens there)
-        await show_make_payment(update, context, order_code)
+        # 👻 2. Send the "Make Payment" button using the fake PENDING code
+        from handlers.payments import show_make_payment
+        await show_make_payment(update, context, "PENDING")
         return True
 
     return False

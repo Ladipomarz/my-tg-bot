@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 from telegram.error import BadRequest
 
 from payments.plisio import create_plisio_invoice
-from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status,update_payment_status_by_order_code
+from utils.db import get_pending_order, set_order_payment,expire_pending_order_if_needed,update_order_status,update_payment_status_by_order_code,create_order
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 import datetime
 from handlers.wallet_continue import open_wallet_menu
@@ -173,19 +173,53 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await q.answer()
 
     data = (q.data or "").strip()
+    
+    # --- 👻 THE GHOST ORDER INTERCEPTOR ---
+    if ":PENDING" in data:
+        amt = context.user_data.get("pending_wallet_amount")
+        if not amt:
+            await q.edit_message_text("❌ Session expired. Please restart.")
+            return
 
-    # Fetch pending order
-    pending = get_pending_order(q.from_user.id)
-    if not pending:
-        await q.edit_message_text("❌ No pending order.")
-        return
-   
-    # Expire ONLY if expires_at says so
-    chk = expire_pending_order_if_needed(q.from_user.id)
-    if chk and chk.get("status") == "expired":
-        await q.edit_message_text("Your previous order expired. Please create a new order.")
-        return
+        # If they finally click a crypto coin, WE CREATE THE REAL ORDER NOW!
+        if data.startswith("pay_coin:"):
+            user_id = q.from_user.id
+            expire_pending_order_if_needed(user_id)
+            desc = f"WALLET_TOPUP:{float(amt):.2f}"
+            
+            # ✅ Write to database!
+            _, real_order_code = create_order(
+                user_id, desc, ttl_seconds=3600, amount_usd=float(amt), order_type="wallet_topup"
+            )
+            # Swap PENDING with the real code so the rest of the function works
+            data = data.replace("PENDING", real_order_code)
+            pending = get_pending_order(user_id)
+            chk = None
+            
+        else:
+            # They just clicked "Make Payment", "USDT", or "Back". Keep it a Ghost!
+            pending = {
+                "order_code": "PENDING", 
+                "amount_usd": amt, 
+                "order_type": "wallet_topup",
+                "invoice_url": "",
+                "pay_status": ""
+            }
+            chk = None
 
+    # --- NORMAL FLOW (Existing DB Orders like eSIM or Rentals) ---
+    else:
+        pending = get_pending_order(q.from_user.id)
+        if not pending:
+            await q.edit_message_text("❌ No pending order.")
+            return
+       
+        chk = expire_pending_order_if_needed(q.from_user.id)
+        if chk and chk.get("status") == "expired":
+            await q.edit_message_text("Your previous order expired. Please create a new order.")
+            return
+
+    # --- NORMAL ROUTING CONTINUES BELOW ---
     order_code = pending["order_code"]
     desc = (pending.get("description") or "").strip() or "Service"
     order_type = (pending.get("order_type") or "").lower().strip()
@@ -198,17 +232,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if amount_usd is None:
         await safe_edit_message(q, context,
-            "❌ Could not determine price for this order.\nPlease restart the order and try again.",
-            )
-        
+            "❌ Could not determine price for this order.\nPlease restart the order and try again."
+        )
         return
-    
-    
     
     existing_url = (pending.get("invoice_url") or "").strip()
     existing_status = (pending.get("pay_status") or "").lower().strip()
         
-    
     expires_at = pending.get("expires_at")
     remaining = None
     if expires_at:
@@ -217,15 +247,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         if expires_at.tzinfo is None:
             expires_at = expires_at.astimezone(datetime.timezone.utc).replace(tzinfo=None)
-
             
         now = datetime.datetime.utcnow()
         remaining = int((expires_at - now).total_seconds())    
         if remaining < 0:
             remaining = 0
 
-        # If invoice already exists and still usable, reuse it
-        
+    # If invoice already exists and still usable, reuse it
     if not data.startswith("pay_cancel:"):
         if existing_url and existing_status in {"pending", "processing", "detected"}:
             if order_type == "wallet_topup" and remaining and remaining > 0:
@@ -262,13 +290,17 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await safe_edit_message(q, context,
                 f"✅ Payment link already created for this order.\n Tap below to open payment page:",
                 reply_markup=open_invoice_kb(existing_url),
-                
-                )
+            )
             return
-    
 
     # ---- ROUTING: handle the pressed button ----
     if data.startswith("pay_back:"):
+        # ✅ If they back out of the Ghost Order, return to Wallet Menu entirely
+        if data == "pay_back:PENDING":
+            context.user_data.pop("pending_wallet_amount", None)
+            await open_wallet_menu(update, context)
+            return
+            
         await q.edit_message_text("Tap below to pay:", reply_markup=make_payment_kb(order_code))
         return
 
@@ -276,14 +308,13 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
         await safe_edit_message(q, context,
-            f"GENERAL MINIMUM DEPOSIT IS <b> $4 BUT PLEASE NOTE THAT </b> \n"
-            f"FOR COINS LIKE USDT TRC 20 REQUIRES A MINIMUM OF $5.50,\n"
-            f"AND COINS LIKE USDT ERC 20 REQUIRES A MINIMUM OF $11.00,\n\n"                   
-            f"<b> Choose a Payment Currency:\n\n"
+            f"GENERAL MINIMUM DEPOSIT IS <b>$4</b> BUT PLEASE NOTE THAT \n\n"
+            f"COINS LIKE USDT TRC 20 REQUIRES A MINIMUM OF <b>$5.50</b>\n\n"
+            f"COINS LIKE USDT ERC 20 REQUIRES A MINIMUM OF <b>$11.00</b>\n\n"                   
+            f"<b>Choose a Payment Currency:\n\n"
             f"Amount: ${amount_usd:.2f} </b>",
             reply_markup=coin_picker_kb(order_code, amount_usd),
             parse_mode="HTML",
-            
         )
         return
 
@@ -295,21 +326,21 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if data.startswith("pay_cancel:"):
-        update_order_status(pending["id"], "cancelled")
-        update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
+        # Only cancel in DB if it's a real order
+        if order_code != "PENDING":
+            update_order_status(pending["id"], "cancelled")
+            update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
         
         # 🧹 THE FIX: Vaporize ALL flow memory when they cancel a payment
         keys_to_clear = [
             "wallet_step", "otp_step", "msn_step", "esim_step", 
             "esim_email", "esim_duration", "esim_country", "custom_price_usd",
-            "order_pending_description", "current_menu"
+            "order_pending_description", "current_menu", "pending_wallet_amount"
         ]
         for k in keys_to_clear:
             context.user_data.pop(k, None)
-
         await open_wallet_menu(update, context)
         return
-
     
     if data.startswith("pay_coin:"):
         # Expected: pay_coin:<order_code>:<coin_key>
@@ -318,7 +349,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except ValueError:
             await safe_edit_message(q, context,"❌ Invalid selection. Try again.")
             return
-        
 
         plisio_currency = COIN_MAP.get(coin_key)
         if not plisio_currency:
@@ -359,30 +389,35 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             invoice_url = inv["invoice_url"] if isinstance(inv, dict) else inv
-
-            set_order_payment(
-                pending["id"],
-                invoice_url=invoice_url,
-                pay_currency=plisio_currency,
-                pay_provider="plisio",
-                pay_status="pending",
-            )
             
+            # Safety check: Update payment only if order exists in DB
+            if pending and "id" in pending:
+                set_order_payment(
+                    pending["id"],
+                    invoice_url=invoice_url,
+                    pay_currency=plisio_currency,
+                    pay_provider="plisio",
+                    pay_status="pending",
+                )
+            
+            # Safely calculate remaining time for display (Fallback to 59 if brand new)
+            display_rem = remaining // 60 if remaining else 59
 
             await q.edit_message_text(
-                f"✅ Payment link created\n"
-                f"Order: {order_code}\n"
-                f"Amount: ${amount_usd:.2f}\n"
-                f"Currency: {plisio_currency}\n\n"
-                f"⏳ Time left: {remaining//60} min\n\n"
+                f"✅ <b>Payment link created</b>\n\n"
+                f"<b>Order:</b> <code>{order_code}</code>\n"
+                f"<b>Amount:</b> ${amount_usd:.2f}\n"
+                f"<b>Currency:</b> {plisio_currency}\n\n"
+                f"⏳ <b>Time left:</b> {display_rem} min\n\n"
                 f"Tap below to open payment page:",
                 reply_markup=open_invoice_kb(invoice_url),
+                parse_mode="HTML"
             )
             
             context.user_data.pop("otp_instruction_msg_id", None)
+            
             # 3. Create the mini self-destruct function
             async def _auto_delete_invoice(ctx: ContextTypes.DEFAULT_TYPE):
-                
                 try:
                     await ctx.bot.delete_message(
                         chat_id=ctx.job.data["chat_id"], 
@@ -391,14 +426,14 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 except Exception:
                     pass
                 
-                # 4. Start the 120-second (2 minute) timer
+            # 4. Start the 120-second (2 minute) timer
             if context.job_queue and q.message:
                 context.job_queue.run_once(
                     _auto_delete_invoice, 
                     when=120, 
                     data={"chat_id": q.message.chat_id, "msg_id": q.message.message_id}
                 )
-                return
+            return
 
         except Exception as e:
             # 1. Log the real error to your server console
