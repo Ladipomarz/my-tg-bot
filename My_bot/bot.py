@@ -1370,6 +1370,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 credit", "🏠 home", "🛠 support"] 
     
     if text.lower() in global_menu_buttons:
+        await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
         # 1. Instantly wipe EVERY process they were stuck in (Rental, OTP, Wallet, Admin, etc.)
         trap_doors = [
             "otp_step", 

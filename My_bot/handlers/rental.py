@@ -623,7 +623,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         # ---------------------------------------------------------
         # 🧪 THE GHOST INTERCEPTOR (TEST MODE)
         # ⚠️ Change to False when you are ready for real users!
-        TEST_MODE = True
+        TEST_MODE = False
         
         if TEST_MODE:
             await asyncio.sleep(2)  # Simulate network delay

@@ -43,7 +43,7 @@ async def create_plisio_invoice(
         "email_required": 0,
         "required_email": 0,
         "email": "",
-        "return_existing": 1   # if order_number exists, return it instead of 422
+        "return_existing": 0   # if order_number exists, return it instead of 422
     }
 
     async with httpx.AsyncClient(timeout=20) as client:

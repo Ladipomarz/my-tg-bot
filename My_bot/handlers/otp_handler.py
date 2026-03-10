@@ -153,21 +153,20 @@ async def otp_usa_one_time_or_rental_menu(update, context, method: str):
     ]
     
     rental_text=f"""
-    "<b>Choose Rental Type</b>"
+"<b>Choose Rental Type</b>"
+        
+<b>One Time:</b>
+ You can use the one time if you are looking to purchase
+ a number to verify any platform for a one time usage.
+    
+<b>Rental:</b> 
+ This is similar to the One Time usage But gives you the choice
+ of having the number for a longer period of time, receive 
+ multiple codes, and it Ranges From 
+ <b>(1 DAY- TO FOREVER)</b>.
     
     
-    <b>One Time:</b>
-    You can use the one time if you are looking to purchase
-    a number to verify any platform for a one time usage.
-    
-    
-    <b>Rental:</b> 
-    This is similar to the One Time usage But gives you the choice
-    of having the number for a longer period of time, receive multiple codes,
-    and it Ranges From <b>(1 DAY- TO FOREVER)</b>.
-    
-    
-    Select What Suits You
+<b>Select What Suits You</b>
     """
     
     await _edit(
@@ -228,8 +227,8 @@ async def otp_usa_rental_type_menu(update, context, method: str):
     
     await _edit(
     update, 
-    f'<b>"Choose rental duration:"</b>\n\nSelect how long you want to keep this number.\n\n'
-    f"<b>Forever Number Option:</b> If You Select The Forever Option,\n"
+    f'<b>"Choose rental duration:"</b>\n\n<i>Select how long you want to keep this number.</i>\n\n'
+    f"<b>Forever Number Option:</b>\n If You Select The Forever Option,\n"
     f"you would have to renew it every <b>3 Years</b>",
     keyboard,
     parse_mode="HTML"
