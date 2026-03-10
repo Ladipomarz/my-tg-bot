@@ -286,7 +286,7 @@ async def ensure_telegram_ready():
             await tg_app.start()
             TG_READY = True
             logger.info("Telegram app is ready")
-            await setup_bot_profile(tg_app)
+            #await setup_bot_profile(tg_app)
              
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
@@ -1348,9 +1348,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # TEXT ROUTER
 # ------------------------------
 async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # 1. Safety Check: Ensure there is actually a message and text
+    if not update.message or not update.message.text:
+        return    
+    text = update.message.text.strip()
     low_text = text.lower()
     
-    text = update.message.text.strip()
+    # 3. ✅ FUZZY SUPPORT MATCH (Fixes the Support button crash)
+    if "support" in low_text:
+        await help_cmd(update, context)
+        return
     
     # 🛑 THE GLOBAL INTERCEPTOR 🛑
     # Put your exact button names here in all lowercase
@@ -1377,12 +1384,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await confirm_rental(update, context)
         return  # Stop here if they are in the rental flow
         
-
-    # ✅ Route Support properly (Fuzzy match ignores tricky emojis!)
-    if "support" in low_text:
-        await help_cmd(update, context)
-        return
-    
     # inside text_router, very early:
     if await handle_otp_text_input(update, context):
         asyncio.create_task(safe_delete_user_message(update))
@@ -1606,14 +1607,14 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Catches any unregistered or unauthorized commands."""
     # ✅ REWRITE: Use safe_send and track the ID
-    msg = await safe_send(
+    warning_msg = await safe_send(
         update,
         context,
         f"❌ <b>Wrong Command.</b>\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
         reply_markup=get_main_menu()
     )
     # Track it so the next valid menu click deletes it
-    context.user_data["otp_instruction_msg_id"] = msg.message_id
+    context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
     
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
