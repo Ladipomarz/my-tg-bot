@@ -3,9 +3,7 @@ from datetime import datetime, timezone
 
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-
 from handlers.payments import show_make_payment, open_invoice_cancel_kb, make_payment_kb
-
 
 from utils.db import (
     create_order,
@@ -146,7 +144,7 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"General Minimum Deposit Is <b>$4</b> *BUT PLEASE NOTE THAT* \n\n"
             f"Coins Like Usdt Trc 20 Requires a Minimum Of<b>$5.50</b>\n\n"
             f"Coins Like Usdt Erc 20 Requires a Minimum Of <b>$11.00</b>\n\n\n" 
-            f"Enter the Amount in USD (Example: <b>4</b>for $4).",
+            f"Enter the Amount in USD (Example: <b>4</b> for $4).",
             parse_mode="HTML",
         )
         context.user_data["otp_instruction_msg_id"] = msg.message_id # 👈 Track it
@@ -180,15 +178,15 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
             await safe_send(update, context,"❌ Invalid amount. Example: 4")
             return True
 
-        if amt <= 0:
+        if amt <= 4:
             from utils.auto_delete import safe_send
-            await safe_send(update, context, "❌ Amount must be greater than 0.")
+            await safe_send(update, context, "❌ Amount must be greater than 4.")
             return True
 
         user_id = update.effective_user.id
 
         # Expire old pending so we don’t block user forever
-        from utils.db import expire_pending_order_if_needed, get_pending_order
+       
         expire_pending_order_if_needed(user_id)
 
         # If pending wallet_topup exists, do NOT create a new one. Show existing.

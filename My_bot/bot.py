@@ -1791,19 +1791,18 @@ async def plisio_webhook(req: Request):
     # EXPIRED / FAILED (highest priority)
     # ---------------------------
     if is_expired:
+        if current_pay_status in {"expired", "cancelled", "canceled"}:
+            return {"ok": True}
+        
         try:
             update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
-        except Exception as e:
-            logger.exception("update_payment_status_by_order_code(expired) failed (ignored)")
-            await notify_admin(f"update_payment_status Failed: {e}")
-
-        try:
             if order.get("id"):
                 update_order_status(order["id"], "expired")
         except Exception as e:
-            logger.exception("update_order_status(expired) failed (ignored)")
-            await notify_admin(f"update_payment_status failed: {e}")
-
+            logger.exception("update_payment_status_by_order_code(expired) failed")
+            await notify_admin(f"update_payment_status Failed: {e}")
+            
+            
         # ✅ NEW: REAL-TIME EXPIRED ALERT TO USER
         if chat_id and await ensure_telegram_ready():
             # Check if this is the first time we are marking it expired

@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton,ReplyKeyboardMarkup
 from telegram.ext import ContextTypes
@@ -308,11 +309,10 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
         await safe_edit_message(q, context,
-            f"General Minimum Deposit Is <b>$4</b> *BUT PLEASE NOTE THAT* \n\n"
-            f"Coins Like Usdt Trc 20 Requires a Minimum Of<b>$5.50</b>\n\n"
-            f"Coins Like Usdt Erc 20 Requires a Minimum Of <b>$11.00</b>\n\n"                   
+            f"Minimum Deposit $4\n"
+            f"Coins Like Usdt Trc *$5.50*, Usdt Erc *11*\n\n"             
             f"<b>Choose a Payment Currency:\n\n"
-            f"Amount: ${amount_usd:.2f} </b>",
+            f"Amount You Entered Is: <b>${amount_usd:.2f}</b>",
             reply_markup=coin_picker_kb(order_code, amount_usd),
             parse_mode="HTML",
         )
@@ -403,7 +403,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Safely calculate remaining time for display (Fallback to 59 if brand new)
             display_rem = remaining // 60 if remaining else 59
 
-            await q.edit_message_text(
+            sent_msg = await q.edit_message_text(
                 f"✅ <b>Payment link created</b>\n\n"
                 f"<b>Order:</b> <code>{order_code}</code>\n"
                 f"<b>Amount:</b> ${amount_usd:.2f}\n"
@@ -416,23 +416,15 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             context.user_data.pop("otp_instruction_msg_id", None)
             
-            # 3. Create the mini self-destruct function
-            async def _auto_delete_invoice(ctx: ContextTypes.DEFAULT_TYPE):
+            # ✅ Start the 2-minute timer
+            async def _delete_after_delay(chat_id, msg_id, delay=120):
+                await asyncio.sleep(delay)
                 try:
-                    await ctx.bot.delete_message(
-                        chat_id=ctx.job.data["chat_id"], 
-                        message_id=ctx.job.data["msg_id"]
-                    )
+                    await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
                 except Exception:
-                    pass
+                    pass 
                 
-            # 4. Start the 120-second (2 minute) timer
-            if context.job_queue and q.message:
-                context.job_queue.run_once(
-                    _auto_delete_invoice, 
-                    when=120, 
-                    data={"chat_id": q.message.chat_id, "msg_id": q.message.message_id}
-                )
+            asyncio.create_task(_delete_after_delay(q.message.chat_id, sent_msg.message_id))
             return
 
         except Exception as e:
