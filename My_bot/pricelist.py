@@ -39,19 +39,19 @@ def get_price(service_code: str) -> float:
 
 # Plisio currency minimums (USD) — prevents 422 errors
 PLISIO_MIN_USD = {
-    "BTC": 1.00,
-    "ETH": 2.00,
-    "LTC": 1.00,
-    "SOL": 1.00,
-    "TRX": 1.00,
-    "XMR": 2.00,
-    "USDT_TRX": 5.10,
-    "USDT_ETH": 10.00,
+    "BTC": 4.00,
+    "ETH": 4.00,
+    "LTC": 4.00,
+    "SOL": 4.00,
+    "TRX": 4.00,
+    "XMR": 4.00,
+    "USDT_TRX": 5.50,
+    "USDT_ETH": 11.00,
 }
 
 
 def get_plisio_min_usd(plisio_currency: str) -> float:
-    return float(PLISIO_MIN_USD.get(plisio_currency.upper(), 1.00))
+    return float(PLISIO_MIN_USD.get(plisio_currency.upper(), 4.00))
 
 
 # Optional: map your UX coin keys -> Plisio codes (if you want a single source of truth)

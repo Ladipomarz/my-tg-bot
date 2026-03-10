@@ -23,11 +23,15 @@ def make_payment_kb(order_code: str) -> InlineKeyboardMarkup:
     ])
     
 
-
 def coin_picker_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
+    """
+    Standard Crypto Picker with 2 columns.
+    USDT leads to the network selection menu.
+    """
     def label_for(plisio_code: str, text: str) -> str:
         min_req = get_plisio_min_usd(plisio_code)
-        return f"{text} (min ${min_req:g})" if amount_usd < min_req else text
+        # ✅ Updated to use "minimum" as requested
+        return f"{text} (minimum ${min_req:g})" if amount_usd < min_req else text
 
     return InlineKeyboardMarkup([
         [
@@ -47,15 +51,20 @@ def coin_picker_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
 
 
 def usdt_network_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
+    """
+    Specific USDT Network selector (TRC20 vs ERC20).
+    """
     trc_min = get_plisio_min_usd("USDT_TRX")
     erc_min = get_plisio_min_usd("USDT_ETH")
 
     trc_label = "USDT (TRC20)"
     erc_label = "USDT (ERC20)"
+    
+    # ✅ Updated to use "minimum" as requested
     if amount_usd < trc_min:
-        trc_label += f" (min ${trc_min:g})"
+        trc_label += f" (minimum ${trc_min:g})"
     if amount_usd < erc_min:
-        erc_label += f" (min ${erc_min:g})"
+        erc_label += f" (minimum ${erc_min:g})"
 
     return InlineKeyboardMarkup([
         [
@@ -63,8 +72,7 @@ def usdt_network_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
             InlineKeyboardButton(erc_label, callback_data=f"pay_coin:{order_code}:usdterc20"),
         ],
         [InlineKeyboardButton("⬅ Back", callback_data=f"pay_make:{order_code}")],
-    ])
-    
+    ])    
 
 
 def open_invoice_kb(invoice_url: str) -> InlineKeyboardMarkup:
@@ -282,7 +290,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if context.job_queue and q.message:
                     context.job_queue.run_once(
                         _auto_delete_warning, 
-                        when=120, 
+                        when=60, 
                         data={"chat_id": update.effective_chat.id, "msg_id": q.message.message_id}
                     )
                 return
