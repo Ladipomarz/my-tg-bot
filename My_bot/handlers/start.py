@@ -41,9 +41,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     admin_badge = " (Admin)" if user.id in ADMIN_IDS else ""
 
-    await update.message.reply_text(
+    await safe_send(
+        update,
+        context,
         f"Hello User {user.id}{admin_badge}! Welcome to your underground bot.",
-        reply_markup=get_main_menu(),
+        reply_markup=get_main_menu()
     )
 
 
@@ -69,23 +71,28 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("msn_step"):
         return
         
-    # ✅ Tools (ReplyKeyboard)
-
     # ✅ Keypad: Purchase USA Number
     if key == "purchase usa number":
-        return await show_usa_verification_menu(
+        # Capture the message so we can track it!
+        msg = await show_usa_verification_menu(
             update, 
             context, 
             message_text="Please choose the verification method:"
         )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return
 
-    # ✅ Keypad: Purchase Non Number (Routes DIRECTLY to the new function)
+    # ✅ Keypad: Purchase Non Number
     if key == "purchase non number":
-        return await show_other_countries_menu(
+        msg = await show_other_countries_menu(
             update, 
             context, 
             message_text="🌍 Other Countries \n\nComing soon…"
         )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return
     
     if key == "tools":
         pending = expire_pending_order_if_needed(update.effective_user.id)
@@ -122,6 +129,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ✅ Support
     if key == "support":
-        # Using msg.reply_text is safer than update.message.reply_text
-        await msg.reply_text(f"🛠 Need help? Contact {SUPPORT_HANDLE}")
-        return
+        msg = await safe_send(
+            update,
+            context,
+            f"🛠 Need help? Contact {SUPPORT_HANDLE}",
+            reply_markup=get_main_menu() # ✅ Keeps the 4 dots visible
+        )

@@ -1425,7 +1425,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=get_main_menu(), # 👈 Re-attaches the keypad
             parse_mode="HTML"
         )
-        context.user_data["otp_instruction_msg_id"] = msg.message_id
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
         return
             
 

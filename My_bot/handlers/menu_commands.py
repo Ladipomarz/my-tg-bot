@@ -48,6 +48,13 @@ async def usa_number_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Opens the USA verification menu directly
     msg = await show_usa_verification_menu(update, context)
     
+    # ✅ FORCE the persistent keyboard to refresh
+    await safe_send(
+        update, context, 
+        "📱 Use the menu below to navigate.", 
+        reply_markup=get_main_menu()
+    )
+    
     # ✅ Track it so the next click cleans it up
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
