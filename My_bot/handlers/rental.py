@@ -1252,7 +1252,9 @@ async def scheduled_6h_reminder(context: CallbackContext):
     if user_id:
         try:
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("⏳ Extend Rental Now", callback_data=f"extend_rental:{rental_id}")]])
-            await context.bot.send_message(
+            await safe_send(
+                update_or_query=None, 
+                context=context,
                 chat_id=user_id,
                 text=(
                     f"⚠️ <b>Rental Expiring Soon!</b>\n\n"
@@ -1282,7 +1284,9 @@ async def scheduled_expire_rental(context: CallbackContext):
     # 3. Tell the user it expired!
     if user_id:
         try:
-            await context.bot.send_message(
+            await safe_send(
+                update_or_query=None, 
+                context=context,
                 chat_id=user_id,
                 text=(
                     f"🔴 <b>Rental Expired</b>\n\nYour line <code>{phone_number}</code> has been removed from your rentals."

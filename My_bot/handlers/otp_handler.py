@@ -721,7 +721,9 @@ async def _otp_poll_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         await notify_admin(f"OTP Polling API Error: {e}")
         
         # 2. The user sees this safe, white-labeled message
-        await context.bot.send_message(
+        await safe_send(
+            update_or_query=None, 
+            context=context,
             chat_id=chat_id, 
             text=(
                 "❌ <b>Connection Error</b>\n"
@@ -821,7 +823,9 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
             await notify_admin(f"🚨 Refund attempt failed: {e}")
             
             # 👇 The completely fixed message block
-            await context.bot.send_message(
+            await safe_send(
+                update_or_query=None, 
+                context=context,
                 chat_id=chat_id, 
                 text=(
                     "❌ Refund attempt failed.\n\n"

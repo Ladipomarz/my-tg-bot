@@ -1420,7 +1420,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         # ✅ FIX: Explicitly send the help text WITH the main keypad markup
         # This prevents the '4 dots' from vanishing.
-        await update.message.reply_text(
+        await safe_send(update,context,
             f"🛠 <b>Support Center</b>\n\nNeed help? Contact {SUPPORT_HANDLE}",
             reply_markup=get_main_menu(), # 👈 Re-attaches the keypad
             parse_mode="HTML"
