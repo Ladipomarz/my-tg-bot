@@ -46,7 +46,11 @@ async def usa_number_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["current_menu"] = "usa_number"
     
     # Opens the USA verification menu directly
-    await show_usa_verification_menu(update, context, method="text")
+    msg = await show_usa_verification_menu(update, context)
+    
+    # ✅ Track it so the next click cleans it up
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
     
   # ✅ New Safe Function for Non-USA Number
 async def other_number_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
