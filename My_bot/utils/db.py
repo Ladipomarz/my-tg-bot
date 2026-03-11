@@ -101,6 +101,9 @@ def migrate_orders_schema():
                 );
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_odf_order_code ON order_delivery_files(order_code);")
+            
+            # ✅ Add this line to store the exact coin amount (e.g., 0.00012)
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS amount_crypto TEXT;")
 
         conn.commit()
 
@@ -491,6 +494,7 @@ def set_order_payment(
     pay_provider: str = "plisio",
     pay_txn_id: str | None = None,
     pay_status: str = "pending",
+    amount_crypto: str | None = None
 ):
     migrate_orders_schema()
     with get_connection() as conn:
@@ -502,7 +506,8 @@ def set_order_payment(
                     pay_provider = %s,
                     pay_txn_id = %s,
                     pay_status = %s,
-                    pay_updated_at = %s
+                    pay_updated_at = %s,
+                    amount_crypto = %s
                 WHERE id = %s;
             """, (
                 invoice_url,
@@ -511,6 +516,7 @@ def set_order_payment(
                 pay_txn_id,
                 pay_status,
                 datetime.datetime.utcnow(),
+                amount_crypto,
                 order_id
             ))
         conn.commit()

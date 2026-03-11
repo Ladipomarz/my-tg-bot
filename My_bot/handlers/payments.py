@@ -413,6 +413,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
 
             invoice_url = inv["invoice_url"] if isinstance(inv, dict) else inv
+            coin_amount = inv.get("invoice_total_sum") if isinstance(inv, dict) else "N/A"
             
             # Safety check: Update payment only if order exists in DB
             if pending and "id" in pending:
@@ -422,6 +423,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     pay_currency=plisio_currency,
                     pay_provider="plisio",
                     pay_status="pending",
+                    amount_crypto=str(coin_amount)
                 )
             
             # Safely calculate remaining time for display (Fallback to 59 if brand new)
@@ -431,6 +433,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"✅ <b>Payment link created</b>\n\n"
                 f"<b>Order:</b> <code>{order_code}</code>\n"
                 f"<b>Amount In Usd:</b> ${amount_usd:.2f}\n"
+                f"<b>Amount In {plisio_currency}:</b> <code>{coin_amount}</code>\n"
                 f"<b>Currency:</b> {plisio_currency}\n\n"
                 f"⏳ <b>Time left:</b> {display_rem} min\n\n"
                 f"Tap below to open payment page:",

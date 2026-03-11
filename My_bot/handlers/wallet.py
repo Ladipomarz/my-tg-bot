@@ -66,6 +66,10 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
     order_code = pending.get("order_code")
     amount = pending.get("amount_usd")
     currency = (pending.get("pay_currency") or "Not chosen").upper()
+    
+    # ✅ Pull the saved crypto amount from the DB record
+    crypto_amt = pending.get("amount_crypto") 
+    crypto_display = f" ({crypto_amt} {currency})" if crypto_amt else ""
 
     msg_target = update.callback_query.message if update.callback_query else update.message
     if not msg_target:
@@ -85,6 +89,7 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
             "✅ <b>You already have an active top up. ❗</b>\n\n"
             f"<b>Order:</b> {order_code} \n\n"
             f"<b>Amount In Usd:</b> ${float(amount):.2f}\n"
+            f"<b>Amount In {currency}:</b> <code>{crypto_amt}</code>\n"
             f"<b>Currency:</b> {currency}\n\n"
             f"⏳ <b>Time left:</b> {_fmt_left(secs_left)}\n\n"
             "Tap below to continue or cancel and create a new top up.",
