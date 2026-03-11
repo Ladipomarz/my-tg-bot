@@ -84,7 +84,7 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
         sent_msg = await msg_target.reply_text(
             "✅ <b>You already have an active top up. ❗</b>\n\n"
             f"<b>Order:</b> {order_code} \n\n"
-            f"<b>Amount In USD:</b> ${float(amount):.2f}\n"
+            f"<b>Amount In Usd:</b> ${float(amount):.2f}\n"
             f"<b>Currency:</b> {currency}\n\n"
             f"⏳ <b>Time left:</b> {_fmt_left(secs_left)}\n\n"
             "Tap below to continue or cancel and create a new top up.",

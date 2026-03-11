@@ -1343,6 +1343,42 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info("Unhandled callback data: %s", data)
 
 
+     
+async def force_expire_order_test(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Manually triggers the silent expiration logic for testing.
+    Usage: /force_expire_order ORD-XXXXX
+    """
+    if not _is_admin(update.effective_user.id):
+        return
+
+    if not context.args:
+        await update.message.reply_text("❌ Usage: /force_expire_order ORD-XXXXX")
+        return
+
+    order_number = context.args[0].strip()
+    order = get_order_by_code(order_number)
+
+    if not order:
+        await update.message.reply_text(f"❌ Order {order_number} not found in database.")
+        return
+
+    # 1. Update the Database exactly like the webhook does
+    try:
+        update_payment_status_by_order_code(order_number, pay_status="expired")
+        if order.get("id"):
+            update_order_status(order["id"], "expired")
+        
+        # 2. Log it so you can verify it worked
+        logger.info(f"TEST: Order {order_number} manually expired. (No notification sent).")
+        
+        await update.message.reply_text(
+            f"✅ <b>Success:</b> {order_number} is now marked as 'expired' in the DB.\n\n"
+            f"The user received <b>no notification</b>, which is correct.",
+            parse_mode="HTML"
+        )
+    except Exception as e:
+        await update.message.reply_text(f"❌ Failed to update DB: {e}")
         
 # ------------------------------
 # TEXT ROUTER
@@ -1615,6 +1651,7 @@ tg_app.add_handler(CommandHandler("test_extend", force_test_auto_extend))
 tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
+tg_app.add_handler(CommandHandler("force_expire_order", force_expire_order_test))
 register_side_menu(tg_app)
 
 
@@ -1764,47 +1801,25 @@ async def plisio_webhook(req: Request):
         detected_now = True
 
     
-    # ---------------------------
     # EXPIRED / FAILED (highest priority)
     # ---------------------------
     if is_expired:
+        # 1. Check if the order is already marked dead in our DB
         if current_pay_status in {"expired", "cancelled", "canceled"}:
+            logger.info(f"Ignoring Plisio timeout for already dead order: {order_number}")
             return {"ok": True}
         
+        # 2. Update the Database so the order is no longer "Pending"
         try:
             update_payment_status_by_order_code(order_number, pay_status="expired", pay_txn_id=txn_id)
             if order.get("id"):
                 update_order_status(order["id"], "expired")
+            logger.info(f"Order {order_number} marked as expired in DB (No notification sent to user).")
         except Exception as e:
             logger.exception("update_payment_status_by_order_code(expired) failed")
             await notify_admin(f"update_payment_status Failed: {e}")
-            
-            
-        # ✅ NEW: REAL-TIME EXPIRED ALERT TO USER
-        if chat_id and await ensure_telegram_ready():
-            # Check if this is the first time we are marking it expired
-            if current_pay_status != "expired": 
-                exp_text = (
-                    f"⏳ <b>Order Expired</b>\n\n"
-                    f"Your payment window for order <b>{order_number}</b> has closed. "
-                    f"If you still wish to top up, please create a new order."
-                )
-                
-                try:
-                    sent_exp_msg = await tg_app.bot.send_message(
-                        chat_id=chat_id, 
-                        text=exp_text, 
-                        parse_mode="HTML"
-                    )
-                    # Auto-delete the alert after 60 seconds
-                    tg_app.job_queue.run_once(
-                        _delete_message_later,
-                        when=60,
-                        data={"chat_id": chat_id, "message_id": sent_exp_msg.message_id}
-                    )
-                except Exception as e:
-                    logger.warning(f"Could not send expired alert to user {chat_id}: {e}")
 
+        # ✅ User notification block removed per your request.
         return {"ok": True}
     
     # ---------------------------

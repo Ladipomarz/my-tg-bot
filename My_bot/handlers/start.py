@@ -49,28 +49,32 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    raw_text = update.message.text or ""
+    # 1. Identify where the interaction came from (Message or Button)
+    query = update.callback_query
+    
+    if query:
+        # It's a button click (callback)
+        raw_text = "" 
+        msg = query.message
+    else:
+        # It's a typed message or keypad tap
+        raw_text = update.message.text or ""
+        msg = update.message
+
+    # 2. Key normalization
     key = _norm_menu_text(raw_text)
+    print(f"user tapped: {repr(raw_text)} -> {repr(key)}")
 
-    print("user tapped:", repr(raw_text), "->", repr(key))
-
+    # 3. Flow Check
     if context.user_data.get("msn_step"):
         return
-
+        
     # ✅ Tools (ReplyKeyboard)
     if key == "tools":
         pending = expire_pending_order_if_needed(update.effective_user.id)
 
-        # ✅ DEBUG (shows what gate sees)
         if pending:
-            print(
-                "GATE CHECK:",
-                pending.get("order_code"),
-                "status=",
-                pending.get("status"),
-                "pay_status=",
-                pending.get("pay_status"),
-            )
+            print(f"GATE CHECK: {pending.get('order_code')} status={pending.get('status')} pay_status={pending.get('pay_status')}")
         else:
             print("GATE CHECK: no pending order")
 
@@ -79,27 +83,29 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
             # 🚫 Block ONLY if payment NOT detected yet
             if pay_status in {"pending", "", "new"}:
+                from utils.auto_delete import safe_send
+                from menus.orders_menu import get_pending_order_menu
                 await safe_send(
                     update,
                     context,
-                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                    f"🕒 You have a pending order <code>{pending['order_code']}</code>.\nWhat do you want to do?",
                     reply_markup=get_pending_order_menu(),
                 )
                 return
 
-        # ✅ If pay_status is "detected" or "paid" -> allow tools normally
         return await open_tools_menu(update, context)
 
-    # ✅ Orders (ReplyKeyboard)
+    # ✅ Orders
     if key == "orders":
         return await open_orders_menu(update, context)
     
-    
+    # ✅ Credit (Wallet)
     if key == "credit":
+        from handlers.wallet_continue import open_wallet_menu
         return await open_wallet_menu(update, context)    
     
+    # ✅ Support
     if key == "support":
-        
-        await update.message.reply_text(f"🛠 Need help? Contact {SUPPORT_HANDLE}")
+        # Using msg.reply_text is safer than update.message.reply_text
+        await msg.reply_text(f"🛠 Need help? Contact {SUPPORT_HANDLE}")
         return
-

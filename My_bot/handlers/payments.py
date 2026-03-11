@@ -46,7 +46,8 @@ def coin_picker_kb(order_code: str, amount_usd: float) -> InlineKeyboardMarkup:
             InlineKeyboardButton(label_for("SOL", "◎ SOL"), callback_data=f"pay_coin:{order_code}:sol"),
             InlineKeyboardButton(label_for("XMR", "🕵️ XMR"), callback_data=f"pay_coin:{order_code}:xmr"),
         ],
-        [InlineKeyboardButton("⬅ Back", callback_data=f"pay_back:{order_code}")],
+        
+        [InlineKeyboardButton("❌ Close", callback_data="close_menu")],
     ])
 
 
@@ -429,7 +430,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent_msg = await q.edit_message_text(
                 f"✅ <b>Payment link created</b>\n\n"
                 f"<b>Order:</b> <code>{order_code}</code>\n"
-                f"<b>Amount:</b> ${amount_usd:.2f}\n"
+                f"<b>Amount In Usd:</b> ${amount_usd:.2f}\n"
                 f"<b>Currency:</b> {plisio_currency}\n\n"
                 f"⏳ <b>Time left:</b> {display_rem} min\n\n"
                 f"Tap below to open payment page:",
