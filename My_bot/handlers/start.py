@@ -127,11 +127,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key == "credit":
         return await open_wallet_menu(update, context)    
     
-    # ✅ Support
+    # ✅ Support (Keypad Tapped)
     if key == "support":
+        # 1. Use safe_send so the message can be tracked
         msg = await safe_send(
             update,
             context,
-            f"🛠 Need help? Contact {SUPPORT_HANDLE}",
-            reply_markup=get_main_menu() # ✅ Keeps the 4 dots visible
+            f"🛠 <b>Support Center</b>\n\nNeed help? Contact {SUPPORT_HANDLE}",
+            reply_markup=get_main_menu() # Keep the 4 dots!
         )
+        
+        # 2. Track this ID using the same key the Janitor uses
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return
