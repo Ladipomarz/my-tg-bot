@@ -10,7 +10,6 @@ from config import ADMIN_IDS
 from config import SUPPORT_HANDLE
 from handlers.wallet_continue import open_wallet_menu
 from utils.auto_delete import safe_send
-from handlers.menu_commands import help_cmd
 from handlers.otp_handler import otp_verification_handler,show_usa_verification_menu,show_other_countries_menu
 
 
@@ -131,4 +130,5 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # ✅ Support (Keypad Tapped)
     # ✅ Support Keypad (Redirecting to your existing help_cmd)
     if key == "support":
+        from handlers.menu_commands import help_cmd
         return await help_cmd(update, context)
