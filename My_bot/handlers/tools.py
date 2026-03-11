@@ -184,7 +184,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     # ---------- OTP ROUTER ----------
 
     if data == "tool_otp_usa":
-        await otp_verification_handler(update, context, method="text")
+        await otp_verification_handler(update, context,)
         return
     
     # Handle the data if it's 'otp_usa'

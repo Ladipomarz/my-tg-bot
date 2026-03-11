@@ -35,6 +35,8 @@ def get_connection():
     Because of how Python's 'with' statement works, when the function finishes,
     it automatically returns the connection to the pool instead of destroying it!
     """
+    stats = db_pool.pop_stats()
+    print(f"📊 POOL STATS: {stats}")
     return db_pool.connection()
 
 
