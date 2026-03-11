@@ -1,10 +1,9 @@
 from decimal import Decimal, InvalidOperation
 from datetime import datetime, timezone
-
+from utils.auto_delete import safe_send
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from handlers.payments import show_make_payment, open_invoice_cancel_kb, make_payment_kb
-from utils.auto_delete import safe_send
 from utils.db import (
     create_order,
     expire_pending_order_if_needed,
@@ -109,6 +108,7 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
     return True
 
 async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+
     q = update.callback_query
     await q.answer()
 
@@ -152,6 +152,7 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    from utils.auto_delete import safe_send
     step = context.user_data.get("wallet_step")
     if not step:
         return False
@@ -171,13 +172,14 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
 
     if step == "await_amount":
         from decimal import Decimal, InvalidOperation
+        clean_text = text.replace("$", "").strip()
         try:
-            amt = Decimal(text)
+            amt = Decimal(clean_text)
         except (InvalidOperation, ValueError):
             await safe_send(update, context,"! Invalid amount. Example: 4")
             return True
 
-        if amt <= 4:
+        if amt < 4:
             await safe_send(update, context, "! Minimum deposit is $4.")
             return True
 
