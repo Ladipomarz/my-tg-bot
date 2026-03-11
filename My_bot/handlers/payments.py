@@ -357,7 +357,6 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 🚀 5. SMART REDIRECT
         if last_menu == "wallet":
-            from handlers.wallet_continue import open_wallet_menu
             await open_wallet_menu(update, context)
         else:
             # Go to Main Menu (Tools/Orders)

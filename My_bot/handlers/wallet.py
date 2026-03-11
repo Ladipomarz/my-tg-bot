@@ -3,7 +3,9 @@ from datetime import datetime, timezone
 from utils.auto_delete import safe_send
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
+from decimal import Decimal, InvalidOperation
 from handlers.payments import show_make_payment, open_invoice_cancel_kb, make_payment_kb
+from utils.auto_delete import safe_send, safe_delete_user_message
 from utils.db import (
     create_order,
     expire_pending_order_if_needed,
@@ -144,7 +146,7 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"General Minimum Deposit Is <b>$4</b> *BUT PLEASE NOTE THAT* \n\n"
             f"Coins Like Usdt Trc 20 Requires a Minimum Of<b> $5.50</b>\n"
             f"Coins Like Usdt Erc 20 Requires a Minimum Of <b> $11.00</b>\n\n\n" 
-            f"Enter the Amount in USD (Example: <b>4</b> for $4).",
+            f"Enter the Amount in USD (Example: <b>4</b> for <b>$ 4</b>).",
             parse_mode="HTML",
         )
         context.user_data["otp_instruction_msg_id"] = msg.message_id # 👈 Track it
@@ -165,22 +167,25 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
     
     if text.lower() in ("cancel", "back"):    
         context.user_data.pop("wallet_step", None)
-        from utils.auto_delete import safe_send
         await safe_send(update, context, "✅ Cancelled. Use menu buttons.")
         return True
 
-
     if step == "await_amount":
-        from decimal import Decimal, InvalidOperation
+        asyncio.create_task(safe_delete_user_message(update))
         clean_text = text.replace("$", "").strip()
         try:
             amt = Decimal(clean_text)
         except (InvalidOperation, ValueError):
-            await safe_send(update, context,"! Invalid amount. Example: 4")
+            msg = await safe_send(update, context,"! Invalid Input, Example: 4,Kindly Enter a valid amount ")
+            
+            if msg:
+                context.user_data["otp_instruction_msg_id"] = msg.message_id
             return True
-
+            
         if amt < 4:
-            await safe_send(update, context, "! Minimum deposit is $4.")
+            msg = await safe_send(update, context, "! Minimum deposit is $4, Please Input Amount.")
+            if msg:
+                context.user_data["otp_instruction_msg_id"] = msg.message_id
             return True
 
         user_id = update.effective_user.id

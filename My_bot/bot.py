@@ -1459,7 +1459,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # User main keyboard
-    if any(k in low_text for k in ["tools", "orders", "credit"]):
+    if any(k in low_text for k in ["tools", "orders", "credit", "support"]):
         
         asyncio.create_task(safe_delete_user_message(update))
         
@@ -1467,6 +1467,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "tools" in low_text: context.user_data["current_menu"] = "tools"
         elif "orders" in low_text: context.user_data["current_menu"] = "orders"
         elif "credit" in low_text: context.user_data["current_menu"] = "wallet"
+        elif "support" in low_text: context.user_data["current_menu"] = "support"
         
         # clear OTP step so it doesn't hijack menu navigation
         context.user_data.pop("otp_step", None)
