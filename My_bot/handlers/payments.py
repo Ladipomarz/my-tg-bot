@@ -10,9 +10,6 @@ from utils.db import get_pending_order, set_order_payment,expire_pending_order_i
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 import datetime
 from handlers.wallet_continue import open_wallet_menu
-from handlers.menu_commands import handle_main_menu
-from utils.auto_delete import delete_tracked_message
-
 from utils.helper import notify_admin
 
 
@@ -355,6 +352,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data.pop(k, None)
 
         # 4. Clear the "Pending Order" prompt if it exists
+        from utils.auto_delete import delete_tracked_message
         await delete_tracked_message(context, update.effective_chat.id, "pending_prompt_msg_id")
 
         # 🚀 5. SMART REDIRECT
@@ -363,7 +361,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await open_wallet_menu(update, context)
         else:
             # Go to Main Menu (Tools/Orders)
-          
+            from handlers.menu_commands import handle_main_menu
             await handle_main_menu(update, context)
             
         return
