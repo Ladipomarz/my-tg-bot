@@ -10,7 +10,7 @@ from config import ADMIN_IDS
 from config import SUPPORT_HANDLE
 from handlers.wallet_continue import open_wallet_menu
 from utils.auto_delete import safe_send
-from handlers.otp_handler import otp_verification_handler,show_usa_verification_menu
+from handlers.otp_handler import otp_verification_handler,show_usa_verification_menu,show_other_countries_menu
 
 
 def _norm_menu_text(t: str) -> str:
@@ -70,15 +70,22 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     # ✅ Tools (ReplyKeyboard)
-    if key == "purchase usa number":
-        
-        # This will open the USA OTP menu securely
-        return await show_usa_verification_menu(update, context, method="text")
 
-    # ✅ NEW: Purchase Non Number router
+    # ✅ Keypad: Purchase USA Number
+    if key == "purchase usa number":
+        return await show_usa_verification_menu(
+            update, 
+            context, 
+            message_text="Please choose the verification method:"
+        )
+
+    # ✅ Keypad: Purchase Non Number (Routes DIRECTLY to the new function)
     if key == "purchase non number":
-        return await otp_verification_handler(update, context,method="text", message_text="🎙 Other Country \n\nComing soon…")
-    
+        return await show_other_countries_menu(
+            update, 
+            context, 
+            message_text="🌍 Other Countries \n\nComing soon…"
+        )
     
     if key == "tools":
         pending = expire_pending_order_if_needed(update.effective_user.id)

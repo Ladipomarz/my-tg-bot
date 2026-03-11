@@ -219,7 +219,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_verification_handler(
             update, 
             context, 
-            method="text",
             message_text="🎙 Other Country \n\nComing soon…"
         )
         return

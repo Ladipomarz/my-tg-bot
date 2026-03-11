@@ -47,34 +47,44 @@ async def otp_verification_handler(update: Update, context: CallbackContext, met
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")]
     ]
     
-    # 👇 Use the variable here! (Depending on how your _edit works, or use edit_message_text)
-    await update.callback_query.edit_message_text(
+    await safe_send(
+        update_or_query=update.callback_query or update, # Handle both clicks and keypad
+        context=context,
         text=message_text,
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
     )
 
-
-
-async def show_usa_verification_menu(update: Update, context: CallbackContext, method: str, message_text="Please choose the verification method:"):
-    # Show buttons for choosing between Text and Voice verification
+async def show_usa_verification_menu(update: Update, context: CallbackContext, message_text="Please choose the verification method:"):
     keyboard = [
         [
             InlineKeyboardButton("Text Verification", callback_data="tool_otp_usa_text"),
             InlineKeyboardButton("Voice Verification (Coming Soon)", callback_data="tool_otp_usa_voice")
         ],
-        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")],  # Back button to the OTP menu
+        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")], 
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    try:
-        await update.callback_query.edit_message_text(
-            message_text, 
-            reply_markup=reply_markup
-        )
-    except BadRequest as e:
-        if "Message is not modified" in str(e):
-            return
-        raise  # Reraise if any other error happens  
+    
+    await safe_send(
+        update_or_query=update.callback_query or update, 
+        context=context,
+        text=f"🇺🇸 {message_text}",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+    
+async def show_other_countries_menu(update: Update, context: CallbackContext, message_text="🌍 Other Countries\n\nComing soon..."):
+    # Customize this keyboard later when you add actual countries!
+    keyboard = [
+        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")]
+    ]
+    
+    await safe_send(
+        update_or_query=update.callback_query or update, 
+        context=context,
+        text=message_text,
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )    
 
 
 # Initialize TextVerified client
