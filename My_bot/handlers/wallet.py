@@ -4,13 +4,13 @@ from datetime import datetime, timezone
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from handlers.payments import show_make_payment, open_invoice_cancel_kb, make_payment_kb
-
+from utils.auto_delete import safe_send
 from utils.db import (
     create_order,
     expire_pending_order_if_needed,
     get_pending_order,
 )
-from utils.auto_delete import safe_send
+
 
 
 def _fmt_usd(x) -> str:
@@ -177,7 +177,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
             await safe_send(update, context,"! Invalid amount. Example: 4")
             return True
 
-        if amt <= 3:
+        if amt <= 4:
             await safe_send(update, context, "! Minimum deposit is $4.")
             return True
 

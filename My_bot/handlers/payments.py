@@ -10,6 +10,9 @@ from utils.db import get_pending_order, set_order_payment,expire_pending_order_i
 from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 import datetime
 from handlers.wallet_continue import open_wallet_menu
+from handlers.menu_commands import handle_main_menu
+from utils.auto_delete import delete_tracked_message
+
 from utils.helper import notify_admin
 
 
@@ -317,8 +320,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         kb = coin_picker_kb(order_code, amount_usd)
         logger.info("pay_make keyboard=%r", kb.to_dict())
         await safe_edit_message(q, context,
-            f"Minimum Deposit $4\n"
-            f"Coins Like Usdt Trc *$5.50*, Usdt Erc *11*\n\n"             
+            f"Minimum Deposit <b>$4</b>\n"
+            f"Coins Like Usdt Trc Miniumums are $5.50, Usdt Erc $11\n\n"             
             f"<b>Choose a Payment Currency:\n\n</b>"
             f"Amount You Entered Is: <b> ${amount_usd:.2f}</b>",
             reply_markup=coin_picker_kb(order_code, amount_usd),
@@ -334,20 +337,35 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if data.startswith("pay_cancel:"):
-        # Only cancel in DB if it's a real order
-        if order_code != "PENDING":
+        # 1. Update DB only if it's a real record
+        if order_code != "PENDING" and pending:
             update_order_status(pending["id"], "cancelled")
             update_payment_status_by_order_code(order_code, pay_status="cancelled", pay_txn_id=None)
         
-        # 🧹 THE FIX: Vaporize ALL flow memory when they cancel a payment
+        # 2. Get the menu they were on BEFORE clearing memory
+        last_menu = context.user_data.get("current_menu")
+
+        # 🧹 3. Vaporize ALL flow memory
         keys_to_clear = [
             "wallet_step", "otp_step", "msn_step", "esim_step", 
             "esim_email", "esim_duration", "esim_country", "custom_price_usd",
-            "order_pending_description", "current_menu", "pending_wallet_amount"
+            "order_pending_description", "pending_wallet_amount"
         ]
         for k in keys_to_clear:
             context.user_data.pop(k, None)
-        await open_wallet_menu(update, context)
+
+        # 4. Clear the "Pending Order" prompt if it exists
+        await delete_tracked_message(context, update.effective_chat.id, "pending_prompt_msg_id")
+
+        # 🚀 5. SMART REDIRECT
+        if last_menu == "wallet":
+            from handlers.wallet_continue import open_wallet_menu
+            await open_wallet_menu(update, context)
+        else:
+            # Go to Main Menu (Tools/Orders)
+          
+            await handle_main_menu(update, context)
+            
         return
     
     if data.startswith("pay_coin:"):
@@ -431,6 +449,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
                 except Exception:
                     pass 
+                
                 
             asyncio.create_task(_delete_after_delay(q.message.chat_id, sent_msg.message_id))
             return
