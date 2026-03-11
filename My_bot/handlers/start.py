@@ -10,6 +10,7 @@ from config import ADMIN_IDS
 from config import SUPPORT_HANDLE
 from handlers.wallet_continue import open_wallet_menu
 from utils.auto_delete import safe_send
+from handlers.menu_commands import help_cmd
 from handlers.otp_handler import otp_verification_handler,show_usa_verification_menu,show_other_countries_menu
 
 
@@ -128,16 +129,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await open_wallet_menu(update, context)    
     
     # ✅ Support (Keypad Tapped)
+    # ✅ Support Keypad (Redirecting to your existing help_cmd)
     if key == "support":
-        # 1. Use safe_send so the message can be tracked
-        msg = await safe_send(
-            update,
-            context,
-            f"🛠 <b>Support Center</b>\n\nNeed help? Contact {SUPPORT_HANDLE}",
-            reply_markup=get_main_menu() # Keep the 4 dots!
-        )
-        
-        # 2. Track this ID using the same key the Janitor uses
-        if msg:
-            context.user_data["otp_instruction_msg_id"] = msg.message_id
-        return
+        return await help_cmd(update, context)
