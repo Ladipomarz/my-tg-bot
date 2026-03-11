@@ -84,6 +84,8 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
             pass # Fails silently if user already clicked 'Cancel and new'
 
     if invoice_url:
+        # ✅ Get the crypto amount we saved to the DB earlier
+        crypto_amt = pending.get("amount_crypto") or "N/A"
         # ✅ 2. Send the correctly formatted HTML message
         sent_msg = await msg_target.reply_text(
             "✅ <b>You already have an active top up. ❗</b>\n\n"

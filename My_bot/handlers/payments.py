@@ -11,6 +11,7 @@ from pricelist import get_price, COIN_MAP, get_plisio_min_usd
 import datetime
 from handlers.wallet_continue import open_wallet_menu
 from utils.helper import notify_admin
+from utils.auto_delete import safe_send
 
 
 
@@ -221,7 +222,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         pending = get_pending_order(q.from_user.id)
         if not pending:
-            await q.edit_message_text("❌ No pending order.")
+            await safe_send(update, context,"❌ No pending order.")
             return
        
         chk = expire_pending_order_if_needed(q.from_user.id)
@@ -470,11 +471,11 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 return
 
             # 3. 🚨 Send a completely safe, white-labeled error to the user
-            await q.edit_message_text(
+            await safe_send( update,context,
                 "❌ The payment network is currently unresponsive. Please wait a moment and try again, or choose another coin.",
                 reply_markup=coin_picker_kb(order_code, amount_usd),
             )
             return
 
     # Unknown callback
-    await q.edit_message_text("❌ Unknown action. Please try again.")
+    await safe_send(update,context,"❌ Unknown action. Please try again.")
