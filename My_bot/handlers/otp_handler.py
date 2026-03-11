@@ -36,7 +36,7 @@ API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
 
 
 
-async def otp_verification_handler(update: Update, context: CallbackContext, method: str, message_text="Please choose your region:"):
+async def otp_verification_handler(update: Update, context: CallbackContext, message_text="Please choose your region:"):
     
     # Show buttons for choosing between USA and Other Countries
     keyboard = [
