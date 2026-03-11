@@ -158,7 +158,9 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         )
         
         try:
-            await context.bot.send_message(
+            await safe_send(
+                update,
+                context,
                 chat_id=update.effective_chat.id,
                 text=safe_message,
                 parse_mode="HTML"
@@ -1605,12 +1607,16 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V7 - NO-AMNESIA FIX) 🚨
     # This creates a temporary bubble at the bottom without destroying your menus above.
     
-    warning_msg = await update.message.reply_text(
+    warning_msg = await safe_send(
+        update,
+        context,
         "⚠️<b>Invalid input. Please use the menu buttons above.</b>", 
         reply_markup=get_main_menu(),
         parse_mode="HTML"
     )
-    context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
+    
+    if warning_msg:
+        context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
     
     # Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():
@@ -1640,10 +1646,12 @@ async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         update,
         context,
         f"❌ <b>Wrong Command.</b>\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu(),
+        parse_mode="HTML"
     )
     # Track it so the next valid menu click deletes it
-    context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
+    if warning_msg:
+        context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
     
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)
