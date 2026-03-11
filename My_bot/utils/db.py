@@ -377,8 +377,6 @@ def update_order_status(order_id: int, status: str):
     # backwards compatible alias
     return set_order_status(order_id, status)
 
-
-
 def get_pending_order(user_id: int):
     migrate_orders_schema()
     with get_connection() as conn:
@@ -388,12 +386,13 @@ def get_pending_order(user_id: int):
                 FROM orders
                 WHERE user_id = %s
                   AND status = 'pending'
+                  -- ✅ FIX: Ignore orders that are already marked as paid
+                  AND pay_status NOT IN ('paid', 'confirmed', 'completed', 'detected')
                   AND (expires_at IS NULL OR expires_at > (NOW() AT TIME ZONE 'utc'))
                 ORDER BY id DESC
                 LIMIT 1;
             """, (user_id,))
             return cur.fetchone()
-
 
 
 def expire_pending_order_if_needed(user_id: int):

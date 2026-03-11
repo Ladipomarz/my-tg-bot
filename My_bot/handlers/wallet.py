@@ -142,8 +142,8 @@ async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             context,
             f"💳<b>Top up Wallet</b>\n\n"
             f"General Minimum Deposit Is <b>$4</b> *BUT PLEASE NOTE THAT* \n\n"
-            f"Coins Like Usdt Trc 20 Requires a Minimum Of<b>$5.50</b>\n\n"
-            f"Coins Like Usdt Erc 20 Requires a Minimum Of <b>$11.00</b>\n\n\n" 
+            f"Coins Like Usdt Trc 20 Requires a Minimum Of<b> $5.50</b>\n"
+            f"Coins Like Usdt Erc 20 Requires a Minimum Of <b> $11.00</b>\n\n\n" 
             f"Enter the Amount in USD (Example: <b>4</b> for $4).",
             parse_mode="HTML",
         )
@@ -174,13 +174,11 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         try:
             amt = Decimal(text)
         except (InvalidOperation, ValueError):
-            from utils.auto_delete import safe_send
-            await safe_send(update, context,"❌ Invalid amount. Example: 4")
+            await safe_send(update, context,"! Invalid amount. Example: 4")
             return True
 
-        if amt <= 4:
-            from utils.auto_delete import safe_send
-            await safe_send(update, context, "❌ Amount must be greater than 4.")
+        if amt <= 3:
+            await safe_send(update, context, "! Minimum deposit is $4.")
             return True
 
         user_id = update.effective_user.id

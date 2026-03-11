@@ -319,8 +319,8 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await safe_edit_message(q, context,
             f"Minimum Deposit $4\n"
             f"Coins Like Usdt Trc *$5.50*, Usdt Erc *11*\n\n"             
-            f"<b>Choose a Payment Currency:\n\n"
-            f"Amount You Entered Is: <b>${amount_usd:.2f}</b>",
+            f"<b>Choose a Payment Currency:\n\n</b>"
+            f"Amount You Entered Is: <b> ${amount_usd:.2f}</b>",
             reply_markup=coin_picker_kb(order_code, amount_usd),
             parse_mode="HTML",
         )
