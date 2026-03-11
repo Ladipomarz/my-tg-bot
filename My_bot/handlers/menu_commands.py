@@ -11,6 +11,7 @@ from menus.main_menu import get_main_menu
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
 from utils.auto_delete import safe_delete_user_message, delete_tracked_message,safe_send
+from handlers.otp_handler import show_usa_verification_menu, otp_verification_handler
 from config import SUPPORT_HANDLE
 
 logger = logging.getLogger(__name__)
@@ -20,6 +21,8 @@ async def setup_bot_profile(tg_app):
     try:
         commands = [
             BotCommand("start", "🚀 Open Main Menu"),
+            BotCommand("usa_number", "🇺🇸 Purchase USA Number"),
+            BotCommand("other_number", "🌍 Purchase Non Number"),
             BotCommand("tools", "🧰 Open Tools"),
             BotCommand("rentals", "📱 Manage My Numbers"),
             BotCommand("orders", "📦 View Orders"), 
@@ -35,6 +38,25 @@ async def setup_bot_profile(tg_app):
         logger.error(f"⚠️ Failed to update Bot Profile: {e}")
 
 # --- Side Menu Command Functions ---
+
+# ✅ New Safe Function for USA Number
+async def usa_number_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    asyncio.create_task(safe_delete_user_message(update)) 
+    await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
+    context.user_data["current_menu"] = "usa_number"
+    
+    # Opens the USA verification menu directly
+    await show_usa_verification_menu(update, context, method="text")
+    
+  # ✅ New Safe Function for Non-USA Number
+async def other_number_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    asyncio.create_task(safe_delete_user_message(update)) 
+    await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
+    context.user_data["current_menu"] = "other_number"
+    
+    # Opens the "Other Country" placeholder directly
+    await otp_verification_handler(update, context, message_text="🎙 Other Country \n\nComing soon…")  
+
 async def tools_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(safe_delete_user_message(update)) 
     await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
@@ -77,6 +99,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def register_side_menu(tg_app):
     """Locks everything into a single function to be called in bot.py"""
+    tg_app.add_handler(CommandHandler("usa_number", usa_number_cmd))
+    tg_app.add_handler(CommandHandler("other_number", other_number_cmd))
     tg_app.add_handler(CommandHandler("credit", wallet_cmd))
     tg_app.add_handler(CommandHandler("orders", orders_cmd))
     tg_app.add_handler(CommandHandler("help", help_cmd))

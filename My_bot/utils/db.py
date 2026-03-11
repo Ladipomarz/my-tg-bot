@@ -7,20 +7,35 @@ from psycopg.rows import dict_row
 from io import BytesIO
 from psycopg.errors import UndefinedColumn, UndefinedTable
 import logging
+# ✅ 1. Import the Connection Pool
+from psycopg_pool import ConnectionPool 
+
 from config import DATABASE_URL
 from utils.helper import notify_admin_sync
 
 logger = logging.getLogger(__name__)
 
+if not DATABASE_URL:
+    raise RuntimeError("DATABASE_URL not set")
 
+# ✅ 2. Create the Global Pool
+# This keeps a minimum of 1 door open at all times, and up to 20 doors 
+# if 20 users click exactly at the same millisecond.
+db_pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=1,
+    max_size=20,
+    timeout=30.0 # If all 20 are busy, wait up to 30s before failing
+)
 
-
-
+# ✅ 3. Update get_connection
 def get_connection():
-    if not DATABASE_URL:
-        raise RuntimeError("DATABASE_URL not set")
-    return psycopg.connect(DATABASE_URL) 
-
+    """
+    Instead of building a brand-new connection, this 'borrows' one from the pool.
+    Because of how Python's 'with' statement works, when the function finishes,
+    it automatically returns the connection to the pool instead of destroying it!
+    """
+    return db_pool.connection()
 
 
 # ---------------- MIGRATIONS ----------------

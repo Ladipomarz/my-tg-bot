@@ -1393,7 +1393,11 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 🛑 1. THE GLOBAL INTERCEPTOR 🛑
     # Put your exact button names here in all lowercase
-    global_menu_buttons = ["🧰 tools", "🛒 orders", "💰 credit", "🏠 home", "🛠 support"] 
+    global_menu_buttons = [
+        "🧰 tools", "🛒 orders", "💰 credit", "🛠 support",
+        "🇺🇸 purchase usa number", "🌍 purchase non number"
+                           
+    ] 
     
     if any(k in low_text for k in global_menu_buttons):
         await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
@@ -1407,11 +1411,21 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         for trap in trap_doors:
             context.user_data.pop(trap, None)
-
-    # 🛠 2. FUZZY SUPPORT MATCH (Fixes the Support button crash)
+            
+            
+             # 🛠 2. FUZZY SUPPORT MATCH (Fixes the Support button crash)
     if "support" in low_text:
-        await help_cmd(update, context)
+        
+        # ✅ FIX: Explicitly send the help text WITH the main keypad markup
+        # This prevents the '4 dots' from vanishing.
+        await update.message.reply_text(
+            f"🛠 <b>Support Center</b>\n\nNeed help? Contact {SUPPORT_HANDLE}",
+            reply_markup=get_main_menu(), # 👈 Re-attaches the keypad
+            parse_mode="HTML"
+        )
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
         return
+            
 
     # 👇 ... The rest of your normal routing logic continues down here ... 👇
     step = context.user_data.get("otp_step")
@@ -1495,11 +1509,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # User main keyboard
-    if any(k in low_text for k in ["tools", "orders", "credit", "support"]):
+    if any(k in low_text for k in ["tools", "orders", "credit", "support", "purchase usa number", "purchase non number"]):
         
         asyncio.create_task(safe_delete_user_message(update))
         
         # MEMORY TRACKER
+        if "purchase usa number" in low_text: context.user_data["current_menu"] = "usa_number"
+        elif "purchase non number" in low_text: context.user_data["current_menu"] = "other_number"
         if "tools" in low_text: context.user_data["current_menu"] = "tools"
         elif "orders" in low_text: context.user_data["current_menu"] = "orders"
         elif "credit" in low_text: context.user_data["current_menu"] = "wallet"
