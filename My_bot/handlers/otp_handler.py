@@ -349,8 +349,8 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             context,
             "If you've got the 4-digit Service ID, we can proceed.\n\n"
             "Please make sure the service is not listed before using the universal phone number.\n\n"
-            "Do you want the number to be generated from a specific US state?\n"
-            "Reply with: yes / no"
+            "<b>Do you want the number to be generated from a specific US state?</b>\n\n"
+            "<b>Reply with: yes / no</b>"
         )
         return True
 
@@ -581,20 +581,28 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
         (context.user_data.get("otp_api_service_name") == "servicenotlisted")
         or not context.user_data.get("otp_service_name")
     )
-
+    
+    # --- THE FIX: Determine what the user sees ---
+    if is_general:
+        display_name = "Service Not Here"
+    else:
+        display_name = service_name.title()
+        
+    # 3. Calculate Price
     specific_state = bool(state) and str(state).lower() != "random"
     price_val = get_otp_price_usd(is_general_service=is_general, specific_state=specific_state)
     context.user_data["otp_price"] = price_val
-    price = f"${price_val:.2f}"
-
+    
+    # 4. Construct the Pretty Message
     msg = (
-        "FINAL CONFIRMATION\n\n"
-        f"Service: {service_name}\n"
-        f"State: {state or 'Random'}\n"
-        f"Price: {price}\n\n"
-        "Please reply with either yes or no to confirm."
+        "<b>FINAL CONFIRMATION</b>\n\n"
+        f"Service: <b>{display_name}</b>\n" # Now shows 'Service Not Here'
+        f"State: <b>{str(state or 'Random').title()}</b>\n"
+        f"Price: <b>${price_val:.2f}</b>\n\n"
+        "Please reply with either <b>yes</b> or <b>no</b> to confirm."
     )
-    await safe_send(update, context, msg)
+    
+    await safe_send(update, context, msg, parse_mode="HTML")
 
 def refund_kb() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup([

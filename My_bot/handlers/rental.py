@@ -175,7 +175,7 @@ async def handle_state_or_random(update: Update, context: CallbackContext):
         await final_confirmation(update, context)
     else:
         # If the input is invalid, prompt the user again
-        await safe_send(update,context, "❌ Please reply with either 'yes' or 'no' to confirm.")   
+        await safe_send(update,context, " Please reply with either <b>'yes'</b> or <b>'no'</b> to confirm.")   
 
                         
             
@@ -230,7 +230,7 @@ State: <b>{state.title()}</b>
 
 Price: <b>${price:.2f}</b>
 
- Please reply with either 'yes' or 'no' to confirm.
+ <b>Please reply with either 'yes' or 'no' to confirm.</b>
 """
         await safe_send(update, context, confirmation_message)
         context.user_data["otp_step"] = "rental_final_confirm" 
@@ -343,7 +343,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
             context,
             f"✅ <b>Payment Secured! (${price:.2f})</b>\n\n"
             f"Because you selected a massive <b>{duration_text}</b> package, your dedicated line is being manually provisioned by our admin team for the highest quality.\n\n"
-            f"<i>Please allow up to 24 hours. You can track the status of this number directly in your <b>Orders</b> menu.</i>",
+            f"<i>Please allow up to 30 minutes.</i>",
             parse_mode="HTML"
         )
         
@@ -434,7 +434,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
         # 3. Create the Styled Message
         success_message = (
             "✅ <b>Rental Successful!</b>\n\n"
-            f"📱 <b>Global Format:</b> <code>{global_num}</code>\n\n"
+            f"📱 <b>Global Format:</b> <b>{global_num}</b>\n\n"
             f"📱 <b>Local Format:</b> <code>{local_num}</code>\n\n"
             f"📍 <b>State:</b> {state}\n\n"
             f"💬 <b>Service:</b> {service.title()}\n\n"
@@ -1192,7 +1192,6 @@ async def handle_extension_text(update, context):
                     )
                 except Exception:
                     pass
-    # 9. 💾 UPDATE THE DATABASE & RESET REMINDERS
     # 9. 💾 UPDATE THE DATABASE & RESET REMINDERS
     try:
         # 1. Update PostgreSQL
