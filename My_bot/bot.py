@@ -1414,20 +1414,14 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for trap in trap_doors:
             context.user_data.pop(trap, None)
             
-            
-             # 🛠 2. FUZZY SUPPORT MATCH (Fixes the Support button crash)
+
+    # 🛠 2. FUZZY SUPPORT MATCH
     if "support" in low_text:
+        from handlers.menu_commands import help_cmd
         
-        # ✅ FIX: Explicitly send the help text WITH the main keypad markup
-        # This prevents the '4 dots' from vanishing.
-        msg = await safe_send(update,context,
-            f"🛠 <b>Support Center</b>\n\nNeed help? Contact {SUPPORT_HANDLE}",
-            reply_markup=get_main_menu(), # 👈 Re-attaches the keypad
-            parse_mode="HTML"
-        )
-        if msg:
-            context.user_data["otp_instruction_msg_id"] = msg.message_id
-        return
+        # ✅ Redirect to the official help command 
+        # This uses the same text and cleanup logic as /help
+        return await help_cmd(update, context)
             
 
     # 👇 ... The rest of your normal routing logic continues down here ... 👇

@@ -93,20 +93,32 @@ async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # My_bot/handlers/menu_commands.py
 
+# In My_bot/handlers/menu_commands.py
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Triggers when user clicks /help from the side menu"""
-    asyncio.create_task(safe_delete_user_message(update)) # Deletes "/help"
+    # 1. Standard Cleanup (Janitor logic)
+    asyncio.create_task(safe_delete_user_message(update))
+    from utils.auto_delete import delete_tracked_message
     await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
-    
-    # ✅ REWRITE: Use safe_send and track the ID
+
+    # 2. This is the text both the command and keypad will use
+    # Change this text ONCE here, and it updates everywhere!
+    help_text = (
+        "💡 <b>Help & Support</b>\n\n"
+        "Need assistance with your orders or balance?\n"
+        f"Contact our team here: {SUPPORT_HANDLE}"
+    )
+
     msg = await safe_send(
         update,
         context,
-        f"🛠 Need help? Contact {SUPPORT_HANDLE}",
-        reply_markup=get_main_menu()
+        text=help_text,
+        reply_markup=get_main_menu() # Re-pins the 4 dots
     )
-    # This allows the keypad buttons to delete this message later
-    context.user_data["otp_instruction_msg_id"] = msg.message_id
+
+    # 3. Save ID so it disappears when you click 'Tools'
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
 
 def register_side_menu(tg_app):
     """Locks everything into a single function to be called in bot.py"""
