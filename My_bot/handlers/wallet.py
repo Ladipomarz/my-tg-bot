@@ -183,7 +183,7 @@ async def handle_wallet_text_input(update: Update, context: ContextTypes.DEFAULT
         try:
             amt = Decimal(clean_text)
         except (InvalidOperation, ValueError):
-            msg = await safe_send(update, context,"! Invalid Input, Example: 4,Kindly Enter a valid amount ")
+            msg = await safe_send(update, context,"! Invalid Input, Example:Enter <b>4</b> for $4\n\n Kindly Enter a valid amount ")
             
             if msg:
                 context.user_data["otp_instruction_msg_id"] = msg.message_id

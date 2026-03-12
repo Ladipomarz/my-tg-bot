@@ -622,7 +622,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
         # ---------------------------------------------------------
         # 🧪 THE GHOST INTERCEPTOR (TEST MODE)
         # ⚠️ Change to False when you are ready for real users!
-        TEST_MODE = False
+        TEST_MODE = True
         
         if TEST_MODE:
             await asyncio.sleep(2)  # Simulate network delay
@@ -630,7 +630,7 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             
             # We return a fake phone number, a fake rental ID, and No Errors!
             # Your bot will think it successfully bought the number and continue the flow.
-            return "+14581992837", "two_month_rental_334", None
+            return "+1200098655", "one_month_rent_111", None
         # ---------------------------------------------------------   
 
         # 1. Buy the number and get the "mini-receipt"
