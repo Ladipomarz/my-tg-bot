@@ -44,7 +44,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await safe_send(
         update,
         context,
-        f"Hello User {user.id}{admin_badge}! Welcome to your underground bot.",
+        f"Hello User 😊{user.id}{admin_badge} Welcome 👋 to your Number One underground bot.",
         reply_markup=get_main_menu()
     )
 
