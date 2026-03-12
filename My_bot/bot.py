@@ -1852,33 +1852,32 @@ async def plisio_webhook(req: Request):
             await notify_admin(f"update_payment_status failed: {e}")
 
         # ✅ CREDIT WALLET ON DETECTED (idempotent)
-        # NOTE: This credits FULL order amount as soon as any payment is detected.
-        # If you allow partial payments, this is risky.
         if is_wallet_topup and order and not order.get("wallet_credited"):
-            # Try reading the invoice details used above
+            
             usd_paid = 0.0
-            # If invoice detail was fetched above (inv), try to read source_amount
+            
+            # 1. ONLY extract the ACTUAL received fiat amount from the verified Plisio invoice
             if isinstance(inv, dict):
                 try:
-                    # Some Plisio invoice APIs return `source_amount` or similar
-                    usd_paid = _to_float(inv.get("source_amount") or inv.get("amount_usd") or inv.get("usd_amount"))
+                    # FIX 2: Look for 'received_amount_fiat' (Actual), NOT 'source_amount' (Expected)
+                    usd_paid = _to_float(inv.get("received_amount_fiat") or 0)
                 except Exception:
-                    usd_paid = None
+                    # FIX 3: Default to 0.0 instead of None to prevent Python crashes
+                    usd_paid = 0.0
                     
-            # Fallback: if webhook payload includes fiat amount directly
-            if usd_paid <= 0:
-                # This is uncommon, but we try parsing a field like received_amount_usd
-                usd_paid = _to_float(p.get("received_amount_usd") or p.get("received_amount_fiat")or p.get("source_amount"))
-        
-            # If still nothing, fallback to your stored order amount
+            # 2. Secondary fallback: Check the webhook payload for actual received amounts
             if usd_paid <= 0:
                 try:
-                    usd_paid = float(order.get("amount_usd") or 0)
+                    usd_paid = _to_float(p.get("received_amount_fiat") or p.get("received_amount_usd") or 0)
                 except Exception:
-                    usd_paid = 0.0  
+                    usd_paid = 0.0
                     
-            # Credit if value is positive
+            
+            # 🚨 FIX 1: THE DANGEROUS FALLBACK TO order.get("amount_usd") HAS BEEN DELETED 🚨
+
+            # 3. Credit if value is positive (It will now ONLY credit the real USD value received)
             if usd_paid > 0:
+                
                 try:
                     add_user_balance_usd(order["user_id"], float(usd_paid))
                     logger.info("WALLET CREDIT OK user_id=%s usd_paid=%s order=%s", order["user_id"], usd_paid, order_number)
