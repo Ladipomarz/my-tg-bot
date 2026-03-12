@@ -1865,31 +1865,41 @@ async def plisio_webhook(req: Request):
             tx_url = "#"
 
             try:
-                # 1. PULL FROM API OR WEBHOOK PAYLOAD
-                # 🚨 THE FIX: Check both 'received_amount' AND 'pending_amount'
-                c_rec = _to_float(
-                    inv.get("received_amount") or 
-                    inv.get("pending_amount") or 
-                    p.get("received_amount") or 
-                    p.get("pending_amount") or 0.0
-                )
+                # 1. PULL THE TRUTH FROM THE TX LIST (UNCONFIRMED FUNDS)
+                c_rec = 0.0
+                tx_list = inv.get("tx") or []
                 
-                c_exp = _to_float(inv.get("amount") or p.get("amount") or 1.0) # Prevent divide by zero
+                # We check the 'tx' list first because it shows unconfirmed SOL/Crypto
+                if isinstance(tx_list, list) and len(tx_list) > 0:
+                    for t in tx_list:
+                        c_rec += _to_float(t.get("value") or 0)
+                
+                # Fallback to standard fields only if tx list is empty
+                if c_rec <= 0:
+                    c_rec = _to_float(inv.get("received_amount") or p.get("received_amount") or 0.0)
+
+                c_exp = _to_float(inv.get("amount") or p.get("amount") or 1.0)
+                # Ensure we have the original USD amount from DB or Plisio
                 fiat_exp = _to_float(inv.get("source_amount") or p.get("source_amount") or order.get("amount_usd") or 0.0)
-              
+                
                 crypto_received = str(c_rec)
                 currency = inv.get("currency") or p.get("currency") or "CRYPTO"
-                tx_url = inv.get("tx_url") or p.get("tx_url") or f"https://plisio.net/invoice/{txn_id}"
+                
+                # Handle tx_url being a list (common for Solana/SOL)
+                raw_url = inv.get("tx_url") or p.get("tx_url")
+                if isinstance(raw_url, list) and len(raw_url) > 0:
+                    tx_url = raw_url[0]
+                else:
+                    tx_url = raw_url or f"https://plisio.net/invoice/{txn_id}"
 
-                # 2. DO THE MATH
+                # 2. DO THE MATH (Ratio: Received / Expected * USD Price)
                 if c_rec > 0 and c_exp > 0:
                     usd_actual_received = (c_rec / c_exp) * fiat_exp
                     
-                # Print the math to your Railway logs so you can see it working!
-                logger.info(f"MATH CHECK | Expected: {c_exp} {currency} (${fiat_exp}) | Received: {c_rec} {currency} (${usd_actual_received})")
+                logger.info(f"✅ MATH SUCCESS | Expected: {c_exp} | Received: {c_rec} | Crediting: ${usd_actual_received}")
 
             except Exception as e:
-                logger.error(f"Error during ratio math: {e}")
+                logger.error(f"❌ Error during ratio math: {e}")
                 usd_actual_received = 0.0
 
             # 3. Credit if the math proves funds actually arrived
