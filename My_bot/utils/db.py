@@ -1270,9 +1270,11 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
     migrate_orders_schema()
     with get_connection() as conn:
         with conn.cursor(row_factory=dict_row) as cur:
+            # Safely create the column if it doesn't exist yet
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE;")
             cur.execute(
                 """
-                SELECT order_code, amount_usd, pay_status, status, created_at
+                SELECT order_code, amount_usd, pay_status, status, created_at, is_partial
                 FROM orders
                 WHERE user_id=%s
                   AND (order_type='wallet_topup' OR LEFT(description, 12) = 'WALLET_TOPUP:')
@@ -1282,6 +1284,17 @@ def get_last_wallet_transactions(user_id: int, limit: int = 5):
                 (user_id, limit),
             )
             return cur.fetchall()
+
+def update_order_actual_amount(order_code: str, actual_usd: float, is_partial: bool = False):
+    """Overwrites the requested amount with the actual paid amount and flags partials."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE orders ADD COLUMN IF NOT EXISTS is_partial BOOLEAN DEFAULT FALSE;")
+            cur.execute(
+                "UPDATE orders SET amount_usd = %s, is_partial = %s WHERE order_code = %s;",
+                (actual_usd, is_partial, order_code)
+            )
+        conn.commit()
 
 
 

@@ -52,6 +52,7 @@ from utils.db import (
     create_wallet_transactions_table,
     get_all_active_rentals,
     auto_expire_rentals,
+    update_order_actual_amount
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -427,7 +428,7 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
             logger.warning("Plisio invoice details not success: %s", str(data)[:300])
             return None
 
-        inv = (data.get("data") or {}).get("invoice") or {}
+        inv = data.get("data") or {}
         return inv if isinstance(inv, dict) else None
     except Exception as e:
         logger.exception("Failed to fetch Plisio invoice details")
@@ -1848,6 +1849,7 @@ async def plisio_webhook(req: Request):
         except Exception as e:
             logger.exception("update_order_status(processing) failed (ignored)")
             await notify_admin(f"update_payment_status failed: {e}")
+            
 
         # ✅ CREDIT WALLET ON DETECTED/PAID (RATIO MATH FIX + PENDING CHECK)
         if is_wallet_topup and order and not order.get("wallet_credited"):
@@ -1868,8 +1870,8 @@ async def plisio_webhook(req: Request):
                 )
                 
                 c_exp = _to_float(inv.get("amount") or p.get("amount") or 1.0) # Prevent divide by zero
-                fiat_exp = _to_float(inv.get("source_amount") or p.get("source_amount") or 0.0)
-                
+                fiat_exp = _to_float(inv.get("source_amount") or p.get("source_amount") or order.get("amount_usd") or 0.0)
+              
                 crypto_received = str(c_rec)
                 currency = inv.get("currency") or p.get("currency") or "CRYPTO"
                 tx_url = inv.get("tx_url") or p.get("tx_url") or f"https://plisio.net/invoice/{txn_id}"
@@ -1891,7 +1893,15 @@ async def plisio_webhook(req: Request):
                     add_user_balance_usd(order["user_id"], float(usd_actual_received))
                     mark_order_wallet_credited(order_number)
                     
-                    # ✅ Save it to memory so the Admin Notifier can see it!
+                    # ✅ DETECT PARTIAL PAYMENT
+                    is_partial = False
+                    if fiat_exp > 0 and usd_actual_received < (fiat_exp - 0.02):
+                        is_partial = True
+                        
+                    # ✅ REWRITE DB HISTORY & FLAG PARTIAL
+                    update_order_actual_amount(order_number, usd_actual_received, is_partial)
+                    
+                    # Save it to memory so the Admin Notifier can see it!
                     order["credited_amount"] = usd_actual_received
                     
                     # Update status to completed immediately 

@@ -30,29 +30,38 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         status = (t.get("status") or t.get("pay_status") or "unknown").lower()
         order_id = t.get("order_code") or "N/A"
         
+        # ✅ Fetch the new partial flag from the database
+        is_partial = t.get("is_partial", False) 
+        
         # Format the date nicely
         date_obj = t.get("created_at")
         date_str = ""
+        date_clean = ""
         if date_obj:
             try:
-                date_str = date_obj.strftime("%b %d") + " - "
+                date_clean = date_obj.strftime("%b %d")
+                date_str = date_clean + " - "
             except Exception:
-                date_str = ""
                 pass 
         
-        # Determine status text
+        # ✅ Determine status text and formatting
         if status in ("paid", "confirmed", "completed", "detected"):
-            status_txt = "Completed"
-        elif status in ("expired",):
-            status_txt = "Expired"
-        elif status in ("cancelled", "canceled", "cancel"):
-            status_txt = "Canceled"
-        elif status in ("processing", "pending"):
-            status_txt = "Pending"
+            # Option 3: The "Partial Reminder" Format (with Green Check)
+            label = "Partial Top-up" if is_partial else "Top-up"
+            lines.append(f"• {date_clean} | +{_fmt_usd(amt or 0)} ({label}) ✅ | <code>{order_id}</code>")
+            
         else:
-            status_txt = status.capitalize()
+            # Standard formatting for Pending, Expired, Canceled
+            if status in ("expired",):
+                status_txt = "Expired"
+            elif status in ("cancelled", "canceled", "cancel"):
+                status_txt = "Canceled"
+            elif status in ("processing", "pending"):
+                status_txt = "Pending"
+            else:
+                status_txt = status.capitalize()
 
-        lines.append(f"• {date_str}{_fmt_usd(amt or 0)} Top-up ({status_txt}) | <code>{order_id}</code>")
+            lines.append(f"• {date_str}{_fmt_usd(amt or 0)} Top-up ({status_txt}) | <code>{order_id}</code>")
 
     tx_block = "\n".join(lines) if lines else "- No transactions yet."
 
@@ -73,7 +82,6 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     ])
 
     # 6. SEND ONCE using safe_send
-    # safe_send automatically handles edits vs new messages!
     msg = await safe_send(
         update,
         context,
@@ -82,5 +90,6 @@ async def open_wallet_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         parse_mode="HTML"
     )
 
-    # 7. TRACK THE ID for global menu cleanup (bot.py text_router)
-    context.user_data["otp_instruction_msg_id"] = msg.message_id
+    # 7. TRACK THE ID for global menu cleanup
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
