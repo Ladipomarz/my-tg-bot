@@ -41,35 +41,24 @@ def get_connection():
 
 
 def reset_database_data():
-    """
-    Safely clears all rows from tables without deleting the tables themselves.
-    """
-    # List all your table names here
     tables = [
         "users", 
         "orders", 
         "active_rentals", 
-        "referrals", 
-        "wallet_history",
-        "expired_rentals"
+        "expired_rentals",
+        "wallet_transactions" # Correct name from your db.py
     ]
     
-    conn = get_connection() # Uses your existing connection logic
-    cur = conn.cursor()
-    try:
-        for table in tables:
-            # TRUNCATE is faster and cleaner than DELETE for a full reset
-            # 'RESTART IDENTITY' resets your ID counters back to 1
-            cur.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;")
-        
-        conn.commit()
-        print("✅ Database reset successful. All tables are empty and counters reset.")
-    except Exception as e:
-        conn.rollback()
-        print(f"❌ Error resetting database: {e}")
-    finally:
-        cur.close()
-        conn.close()
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            try:
+                for table in tables:
+                    cur.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;")
+                conn.commit()
+                print("✅ Full Database & Service Cache reset successful.")
+            except Exception as e:
+                conn.rollback()
+                print(f"❌ Error resetting database: {e}")
 
 # ---------------- MIGRATIONS ----------------
 
