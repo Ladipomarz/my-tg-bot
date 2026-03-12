@@ -97,10 +97,10 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key == "tools":
         pending = expire_pending_order_if_needed(update.effective_user.id)
 
-        if pending:
-            print(f"GATE CHECK: {pending.get('order_code')} status={pending.get('status')} pay_status={pending.get('pay_status')}")
-        else:
-            print("GATE CHECK: no pending order")
+        #if pending:
+            #print(f"GATE CHECK: {pending.get('order_code')} status={pending.get('status')} pay_status={pending.get('pay_status')}")
+        #else:
+           # print("GATE CHECK: no pending order")
 
         if pending and pending.get("status") == "pending":
             pay_status = (pending.get("pay_status") or "").lower().strip()
