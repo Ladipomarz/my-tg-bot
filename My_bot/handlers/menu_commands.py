@@ -3,6 +3,7 @@ import asyncio
 import logging
 from telegram import BotCommand, Update
 from telegram.ext import ContextTypes, CommandHandler
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Import your existing menu functions and config
 from handlers.wallet_continue import open_wallet_menu
@@ -96,22 +97,24 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(safe_delete_user_message(update))
     await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
 
-    # 2. Unified Text
+    # 2. Unified text
     help_text = (
         "💡 <b>Help & Support</b>\n\n"
         "Need assistance with your orders or balance?\n"
         f"Contact our team here: {SUPPORT_HANDLE}"
     )
 
-    # 3. Sending with Keyboard ATTACHED (This stops the flickering)
+
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="back_main")]])
+
     msg = await safe_send(
         update,
         context,
         text=help_text,
-        reply_markup=get_main_menu() # 👈 THIS keeps the keypad from closing
+        reply_markup=kb # 👈 This stops the keypad from closing/opening
     )
 
-    # 4. Save ID for auto-deletion
+    # 4. Save ID
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
 
