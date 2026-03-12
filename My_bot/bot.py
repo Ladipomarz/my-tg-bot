@@ -1709,7 +1709,7 @@ async def telegram_webhook(req: Request):
     return Response(status_code=200)
 
 
-# ------------------------------
+
 # PLISIO WEBHOOK
 # ------------------------------
 async def plisio_webhook(req: Request):
@@ -1767,13 +1767,13 @@ async def plisio_webhook(req: Request):
     )
     
     logger.info(
-    "WEBHOOK order=%s type=%r desc=%r is_wallet_topup=%s wallet_credited=%r",
-    order_number,
-    order.get("order_type"),
-    order.get("description"),
-    is_wallet_topup,
-    order.get("wallet_credited"),
-)
+        "WEBHOOK order=%s type=%r desc=%r is_wallet_topup=%s wallet_credited=%r",
+        order_number,
+        order.get("order_type"),
+        order.get("description"),
+        is_wallet_topup,
+        order.get("wallet_credited"),
+    )
 
     # ---------------------------
     # 🚨 SECURITY LOCK: Verify directly with Plisio
@@ -1796,7 +1796,6 @@ async def plisio_webhook(req: Request):
     is_paid = status in paid_statuses
     is_expired = status in expired_statuses
 
-    # Detect real payment activity from the verified invoice
     # Detect real payment activity from the verified invoice
     detected_now = False
     invoice_received = _to_float(inv.get("received_amount") or 0)
@@ -1825,7 +1824,6 @@ async def plisio_webhook(req: Request):
             logger.exception("update_payment_status_by_order_code(expired) failed")
             await notify_admin(f"update_payment_status Failed: {e}")
 
-        # ✅ User notification block removed per your request.
         return {"ok": True}
     
     # ---------------------------
@@ -1851,89 +1849,95 @@ async def plisio_webhook(req: Request):
             logger.exception("update_order_status(processing) failed (ignored)")
             await notify_admin(f"update_payment_status failed: {e}")
 
-        # ✅ CREDIT WALLET ON DETECTED (idempotent)
+        # ✅ CREDIT WALLET ON DETECTED/PAID (RATIO MATH FIX)
         if is_wallet_topup and order and not order.get("wallet_credited"):
-            
-            usd_paid = 0.0
-            
-            # 1. ONLY extract the ACTUAL received fiat amount from the verified Plisio invoice
+            usd_actual_received = 0.0
+            fiat_exp = 0.0  # NEW: We track the expected invoice amount
+            crypto_received = "0.0"
+            currency = "CRYPTO"
+            tx_url = "#"
+
+            # 1. CALCULATE EXACT USD FROM CRYPTO RATIO
             if isinstance(inv, dict):
+                crypto_received = str(inv.get("received_amount") or "0.0")
+                currency = inv.get("currency") or "CRYPTO"
+                tx_url = inv.get("tx_url") or f"https://plisio.net/invoice/{txn_id}"
+                
                 try:
-                    # FIX 2: Look for 'received_amount_fiat' (Actual), NOT 'source_amount' (Expected)
-                    usd_paid = _to_float(inv.get("received_amount_fiat") or 0)
-                except Exception:
-                    # FIX 3: Default to 0.0 instead of None to prevent Python crashes
-                    usd_paid = 0.0
+                    # Parse the exact crypto received vs expected
+                    c_rec = float(crypto_received)
+                    c_exp = float(inv.get("amount") or 1.0) # Prevent divide by zero
+                    fiat_exp = float(inv.get("source_amount") or 0.0)
                     
-            # 2. Secondary fallback: Check the webhook payload for actual received amounts
-            if usd_paid <= 0:
-                try:
-                    usd_paid = _to_float(p.get("received_amount_fiat") or p.get("received_amount_usd") or 0)
+                    # Do the math: (Received Crypto / Expected Crypto) * Expected USD
+                    if c_rec > 0 and c_exp > 0:
+                        usd_actual_received = (c_rec / c_exp) * fiat_exp
                 except Exception:
-                    usd_paid = 0.0
-                    
+                    usd_actual_received = 0.0
             
-            # 🚨 FIX 1: THE DANGEROUS FALLBACK TO order.get("amount_usd") HAS BEEN DELETED 🚨
-
-            # 3. Credit if value is positive (It will now ONLY credit the real USD value received)
-            if usd_paid > 0:
-                
+            # 2. Credit if the math proves funds actually arrived
+            if usd_actual_received > 0:
                 try:
-                    add_user_balance_usd(order["user_id"], float(usd_paid))
-                    logger.info("WALLET CREDIT OK user_id=%s usd_paid=%s order=%s", order["user_id"], usd_paid, order_number)
+                    add_user_balance_usd(order["user_id"], float(usd_actual_received))
                     mark_order_wallet_credited(order_number)
-                except Exception as e:
-                    logger.exception("Wallet credit failed for order_number=%s (ignored)", order_number)  
-                    await notify_admin(f"Wallet credit failed for order_number: {e}")            
-                
-                else:   
                     
-                        # ✅ ADD THIS RIGHT HERE (after credit succeeded)
-                    try:
-                        update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
-                    except Exception as e:
-                        logger.exception("update_payment_status_by_order_code(paid) failed (ignored)")
-                        await notify_admin(f"update_payment_statusFailed: {e}")
-                        
-                    try:
-                        if order.get("id"):
-                            update_order_status(order["id"], "completed")
-                    except Exception as e:
-                        logger.exception("update_order_status(completed) failed (ignored)")   
-                        await notify_admin(f"update_payment_status Failed: {e}")
+                    # ✅ Save it to memory so the Admin Notifier can see it!
+                    order["credited_amount"] = usd_actual_received
+                    
+                    # Update status to completed immediately 
+                    update_payment_status_by_order_code(order_number, pay_status="paid", pay_txn_id=txn_id)
+                    if order.get("id"):
+                        update_order_status(order["id"], "completed")
 
-                    
-                    # Notify user about wallet the credit
+                    # 3. SUCCESS MESSAGE WITH BLOCKCHAIN TRUTH & UNDERPAYMENT ALERT
                     if await ensure_telegram_ready():
-                            try:
-                                new_bal = get_user_balance_usd(order["user_id"])
-                            except Exception:
-                                new_bal = None
-
-                            msg_text = f"✅ Wallet topped up: ${float(usd_paid):.2f}"
-                            if new_bal is not None:
-                                try:
-                                    msg += f"\nNew balance: ${float(new_bal):.2f}"
-                                except Exception:
-                                    pass
-                                
-                            sent_wallet_msg = await tg_app.bot.send_message(chat_id=order["user_id"], text=msg_text) 
-                             
-                            tg_app.job_queue.run_once(
-                                _delete_message_later,
-                                when=10,
-                                data={"chat_id": order["user_id"], "message_id": sent_wallet_msg.message_id}
-                            )  
-
-                            
-
-
+                        new_bal = get_user_balance_usd(order["user_id"])
+                        
+                        msg_text = f"✅ <b>Wallet Credited: +${float(usd_actual_received):.2f}</b>\n\n"
+                        
+                        # 🚨 THE NEW UNDERPAYMENT ALERT 🚨
+                        # If the actual received is less than the expected invoice amount (minus a 2-cent margin for rounding)
+                        if fiat_exp > 0 and usd_actual_received < (fiat_exp - 0.02):
+                            msg_text += (
+                                f"⚠️ <b>PARTIAL PAYMENT DETECTED</b>\n"
+                                f"<b>Invoice Expected:</b> ${fiat_exp:.2f}\n"
+                                f"<b>Actually Paid:</b> ${usd_actual_received:.2f}\n"
+                                f"<i>(You were credited for exactly what arrived on the blockchain)</i>\n\n"
+                            )
+                        
+                        # Continue building the rest of the message
+                        msg_text += (
+                            f"💵 <b>Amount Received:</b> ${float(usd_actual_received):.2f}\n"
+                            f"🪙 <b>Blockchain Value:</b> {crypto_received} {currency}\n"
+                            f"🔗 <b>Transaction:</b> <a href='{tx_url}'>View on Explorer</a>\n\n"
+                            f"💰 <b>New Total Balance:</b> ${new_bal:.2f}"
+                        )
+                        
+                        sent_wallet_msg = await tg_app.bot.send_message(
+                            chat_id=order["user_id"], 
+                            text=msg_text,
+                            parse_mode="HTML",
+                            disable_web_page_preview=True
+                        ) 
+                         
+                        tg_app.job_queue.run_once(
+                            _delete_message_later,
+                            when=60,
+                            data={"chat_id": order["user_id"], "message_id": sent_wallet_msg.message_id}
+                        )
+                except Exception as e:
+                    logger.exception(f"Wallet credit failed: {e}")
+                    await notify_admin(f"Wallet credit failed for {order_number}: {e}")
 
         # Notify admin/user only on first transition to detected/paid
         if first_time:
             try:
                 if await ensure_telegram_ready():
-                    
+                    # ✅ Inject the actual credited amount into the Admin's notification on a new line!
+                    if order.get("credited_amount"):
+                        original_desc = order.get("description") or "Wallet Top Up"
+                        order["description"] = f"{original_desc}\n💵 Actual Credited: ${order['credited_amount']:.2f}"
+                        
                     asyncio.create_task(_notify_admin_new_paid_order(order))
             except Exception as e:
                 logger.exception("Admin notify failed (ignored)")
@@ -1966,7 +1970,7 @@ async def plisio_webhook(req: Request):
                                     data={"chat_id": chat_id},
                                     name=job_name,
                                 )
-                    except Exception :
+                    except Exception:
                         logger.exception("Failed to schedule eSIM notice (ignored)")
 
         return {"ok": True}
