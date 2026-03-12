@@ -127,7 +127,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if key == "credit":
         return await open_wallet_menu(update, context)    
     
-    # ✅ Support (Keypad Tapped)
+    
     # ✅ Support Keypad (Redirecting to your existing help_cmd)
     if key == "support":
         from handlers.menu_commands import help_cmd
