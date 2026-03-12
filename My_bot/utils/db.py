@@ -39,37 +39,6 @@ def get_connection():
     #print(f"📊 POOL STATS: {stats}")
     return db_pool.connection()
 
-
-def reset_database_factory():
-    """
-    PERMANENT DATA WIPE:
-    Clears all users, balances, rentals, and orders.
-    Counters (IDs) are reset to 1.
-    """
-    # These table names are derived from your db.py schema
-    tables = [
-        "users",                # Wipes accounts and balances
-        "wallet_transactions",   # Wipes deposit/debit history
-        "orders",               # Wipes all purchase records
-        "active_rentals",       # Wipes active numbers
-        "expired_rentals",      # Wipes archived numbers
-        "order_delivery_files"  # Wipes record of delivered files
-    ]
-    
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            try:
-                for table in tables:
-                    # TRUNCATE + RESTART IDENTITY resets the ID counters
-                    # CASCADE ensures all linked data is cleared together
-                    cur.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;")
-                
-                conn.commit()
-                print("✅ Factory Reset successful: All users, balances, and history cleared.")
-            except Exception as e:
-                conn.rollback()
-                print(f"❌ Error during reset: {e}")
-
 # ---------------- MIGRATIONS ----------------
 
 def migrate_users_schema():
