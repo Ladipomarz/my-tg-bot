@@ -42,7 +42,6 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
             update,
             context,
             instruction_text,
-            reply_markup=get_main_menu() # 👈 The "Safety Pin"
         )
         
         context.user_data["otp_instruction_msg_id"] = msg.message_id
@@ -71,8 +70,6 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
     # 👇 1. WE SET THE TRAP HERE 👇
     context.user_data["otp_step"] = "awaiting_otp_button"
 
-
-# 👇 2. WE ADD THE REPROMPT HELPER HERE 👇
 # 👇 2. WE ADD THE REPROMPT HELPER HERE 👇
 async def resend_otp_menu(update, context):
     """Silently pushes the One-Time OTP buttons back to the user if they type text."""
