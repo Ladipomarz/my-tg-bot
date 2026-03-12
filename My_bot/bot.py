@@ -96,11 +96,12 @@ test_expire_alarm
 
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
 logger = logging.getLogger("server")
+logger.setLevel(logging.INFO)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
@@ -424,12 +425,16 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
             return None
 
         data = r.json()
+        # 🚨 THE TRUTH: Print the exact raw API response to the console!
+        logger.info(f"RAW PLISIO API RESPONSE: {data}")
+        
         if data.get("status") != "success":
             logger.warning("Plisio invoice details not success: %s", str(data)[:300])
             return None
 
-        inv = data.get("data") or {}
+        inv = (data.get("data") or {}).get("invoice") or {}
         return inv if isinstance(inv, dict) else None
+    
     except Exception as e:
         logger.exception("Failed to fetch Plisio invoice details")
         await notify_admin(f"Couldnt fetch Plisio Inv: {e}")

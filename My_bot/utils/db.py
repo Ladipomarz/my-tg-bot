@@ -1298,14 +1298,6 @@ def update_order_actual_amount(order_code: str, actual_usd: float, is_partial: b
 
 
 
-
-
-
-
-
-
-
-
 def get_user_active_rentals(user_id: int):
     """Fetches all active rentals for a specific user from the database."""
     query = "SELECT rental_id, phone_number, service_name FROM active_rentals WHERE user_id = %s AND status = 'active'"
