@@ -1417,10 +1417,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # 🛠 2. FUZZY SUPPORT MATCH
     if "support" in low_text:
-        from handlers.menu_commands import help_cmd
-        
-        # ✅ Redirect to the official help command 
-        # This uses the same text and cleanup logic as /help
         return await help_cmd(update, context)
             
 

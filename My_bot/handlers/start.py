@@ -130,5 +130,6 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ✅ Support Keypad (Redirecting to your existing help_cmd)
     if key == "support":
+        
         from handlers.menu_commands import help_cmd
         return await help_cmd(update, context)

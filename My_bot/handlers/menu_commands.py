@@ -91,35 +91,27 @@ async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await open_wallet_menu(update, context)
 
 
-# My_bot/handlers/menu_commands.py
-
-# In My_bot/handlers/menu_commands.py
-
-# In My_bot/handlers/menu_commands.py
-
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    from utils.auto_delete import safe_send, delete_tracked_message, safe_delete_user_message
-    from menus.main_menu import get_main_menu
-    import asyncio
-
-    # 1. Clean up old bot messages so they don't stack
-    await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
-    # 2. Delete the user's typed command/tap
+    # 1. Standard Cleanup
     asyncio.create_task(safe_delete_user_message(update))
+    await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
 
-    # 3. Send the official message
+    # 2. Unified Text
+    help_text = (
+        "💡 <b>Help & Support</b>\n\n"
+        "Need assistance with your orders or balance?\n"
+        f"Contact our team here: {SUPPORT_HANDLE}"
+    )
+
+    # 3. Sending with Keyboard ATTACHED (This stops the flickering)
     msg = await safe_send(
         update,
         context,
-        text=(
-            "💡 <b>Help & Support</b>\n\n"
-            "Need assistance with your orders or balance?\n"
-            f"Contact our team here: {SUPPORT_HANDLE}"
-        ),
-        reply_markup=get_main_menu() # Re-pins the keypad
+        text=help_text,
+        reply_markup=get_main_menu() # 👈 THIS keeps the keypad from closing
     )
 
-    # 4. Save ID so it vanishes when they click "Tools"
+    # 4. Save ID for auto-deletion
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
 
