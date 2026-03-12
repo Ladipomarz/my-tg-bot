@@ -119,8 +119,6 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
 async def wallet_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     q = update.callback_query
-    await q.answer()
-
     user_id = update.effective_user.id
 
     if q.data == "back_main":

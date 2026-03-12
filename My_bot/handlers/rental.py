@@ -222,11 +222,13 @@ async def final_confirmation(update: Update, context: CallbackContext):
         context.user_data["rental_price"] = price
 
         confirmation_message = f"""
-FINAL CONFIRMATION:
+<b>FINAL CONFIRMATION:</b>
 
-Service: {service}
-State: {state}
-Price: ${price:.2f}
+Service: <b>{service.title()}</b>
+
+State: <b>{state.title()}</b>
+
+Price: <b>${price:.2f}</b>
 
  Please reply with either 'yes' or 'no' to confirm.
 """
@@ -254,16 +256,22 @@ async def confirm_rental(update: Update, context: CallbackContext):
             await notify_admin(f"Failed to Pass here: {e}")
             pass
 
+    # 1. THE SAFETY CHECKS (What you already have)
     if text not in ['yes', 'no']:
-        await safe_send(update, context, " Please reply with exactly 'yes' or 'no'.")
+        await safe_send(update, context, "Please reply with exactly 'yes' or 'no'.")
         return
 
-    # If they say no, safely cancel and wipe the memory
     if text == 'no':
-        await safe_send(update, context,"✅ Rental cancelled.")
+        await safe_send(update, context, "✅ Rental cancelled.")
         context.user_data.pop("otp_step", None)
         return
 
+    # 2. THE PURCHASE GATE (Only executes if it's 'yes')
+    if text == 'yes':
+        # Now, move your rental API call and confirmation message inside here!
+        await safe_send(update, context, "🔄 <i>Processing your rental...</i>", parse_mode="HTML")
+        
+        
     # Grab variables
     user_id = update.effective_user.id
     price = context.user_data.get("rental_price", 0.0)
@@ -411,21 +419,38 @@ async def confirm_rental(update: Update, context: CallbackContext):
             pass
             
         set_delivery_status(order_id, "delivered")
-        success_message = f"""
-✅ <b>Rental Successful!</b>
 
-📱 <b>Number:</b> <code>{phone_number}</code>
-💬 <b>Service:</b> {service.capitalize()}
-⏱️ <b>Duration:</b> {days_to_expire} Days
+        # --- NEW FORMATTING LOGIC ---
+        # 1. Get the typed/selected values (Pull from context)
+        service = context.user_data.get("otp_service_name", "Allservices")
+        state = context.user_data.get("otp_state_name", "Random")
+        duration = context.user_data.get("otp_duration_text", f"{days_to_expire} Days")
 
-💵 Your wallet was successfully charged <b>${price:.2f}</b>.
-<i>You can manage your rental in the 'My Numbers' menu.</i>
-"""
+        # 2. Format Phone Numbers (Assume phone_number is raw like 13024079919)
+        global_num = f"+{phone_number.lstrip('+')}"
+        clean = phone_number.replace("+1", "").lstrip("1")
+        local_num = f"({clean[:3]}) {clean[3:6]}-{clean[6:]}"
 
-        # 🔘 ADD THE BUTTON TO JUMP STRAIGHT TO THEIR NUMBERS
+        # 3. Create the Styled Message
+        success_message = (
+            "✅ <b>Rental Successful!</b>\n\n"
+            f"📱 <b>Global Format:</b> <code>{global_num}</code>\n\n"
+            f"📱 <b>Local Format:</b> <code>{local_num}</code>\n\n"
+            f"📍 <b>State:</b> {state}\n\n"
+            f"💬 <b>Service:</b> {service.title()}\n\n"
+            f"⏱️ <b>Duration:</b> {duration}\n\n"
+            f"<b>Verification ID:</b> <code>{rental_id}</code>\n\n"
+            f"💵 Your wallet was successfully charged <b>${price:.2f}</b>.\n\n"
+            "<i>You can manage your rental in the rentals menu, Or use the /rentals command</i>"
+            ""
+        )
+
+        # 4. Attach the Button
         kb = InlineKeyboardMarkup([[InlineKeyboardButton("📱 Manage My Numbers", callback_data="my_rentals_back")]])
-        await safe_send(update, context, success_message, parse_mode="HTML")
-   
+        
+        # 5. Send using your safe_send
+        await safe_send(update, context, success_message, parse_mode="HTML", reply_markup=kb)
+
         # ⏰ SET THE EXACT ALARMS!
         delay_seconds = days_to_expire * 24 * 3600
         reminder_seconds = delay_seconds - (6 * 3600) # 6 hours before expiration!

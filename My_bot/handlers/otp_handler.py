@@ -348,7 +348,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             update,
             context,
             "If you've got the 4-digit Service ID, we can proceed.\n\n"
-            "⚠️Please make sure the service is not listed before using the universal phone number.\n\n"
+            "Please make sure the service is not listed before using the universal phone number.\n\n"
             "Do you want the number to be generated from a specific US state?\n"
             "Reply with: yes / no"
         )
@@ -389,9 +389,9 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
             await safe_send(
                 update,
                 context,
-                f"Specific State Price: {specific_price}\n"
+                f"Specific State Price: {specific_price}\n\n"
                 f"Random State Price: {random_price}\n\n"
-                "🇺🇸 Which US state do you want the phone number to be generated from?\n"
+                "🇺🇸 Which US state do you want the phone number to be generated from?\n\n"
                 "✅ Example: California"
             )
             return True
@@ -592,7 +592,7 @@ async def _send_final_confirmation(update: Update, context: CallbackContext) -> 
         f"Service: {service_name}\n"
         f"State: {state or 'Random'}\n"
         f"Price: {price}\n\n"
-        "⚠️Please reply with either yes or no to confirm."
+        "Please reply with either yes or no to confirm."
     )
     await safe_send(update, context, msg)
 
@@ -858,7 +858,7 @@ async def _otp_refund_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         # don't break refund flow if wallet credit fails
         pass
 
-    await context.bot.send_message(
+    await safe_send(
         chat_id=chat_id,
         text=(
             "⌛ No OTP received within 5 minutes.\n"

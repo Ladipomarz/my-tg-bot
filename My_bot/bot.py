@@ -957,13 +957,6 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = (q.data or "").strip()
     user_id = q.from_user.id
 
-    try:
-        await q.answer(cache_time=2)
-    except Exception as e:
-        logger.warning("q.answer() failed (ignored): %s", e)
-
-    logger.info("callback_router got data=%r", data)
-
     # Back to main (everyone)
     if q.data == "back_main":
         # The user clicked "❌ Close"
