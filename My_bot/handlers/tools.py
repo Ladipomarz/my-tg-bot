@@ -140,7 +140,6 @@ async def tools_callback(update: Update, context: CallbackContext):
     print("Callback received for:", update.callback_query.data)
     q = update.callback_query
     data = q.data.strip()
-    await q.answer()  # Acknowledge the button click
 
     # Early exit if there is no query data
     if not q or not q.data:
@@ -157,9 +156,15 @@ async def tools_callback(update: Update, context: CallbackContext):
     
     # Handle RDP service
     if data == "tool_rdp":
-        await q.answer("🖥️ RDP Service is coming soon! 🚧", show_alert=True)
-                
+        await q.answer("🖥️ RDP Service is coming soon! 🚧", show_alert=True)      
         return
+    
+    if data == "social_menu":
+        await q.answer("📣 Social Services is coming soon! 🚧", show_alert=True)
+        return
+    
+    
+    await q.answer()  
 
     # Pending-order gate (block if unpaid)
     pending = get_pending_order(user_id)
@@ -340,19 +345,12 @@ async def tools_callback(update: Update, context: CallbackContext):
         
     if data == "otp_rental_universal":
             await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
-            await q.answer()
             # 1. Inject the ID into memory silently
             context.user_data['rental_service'] = "allservices" # Make sure this key matches your actual variable name!
             
             # 2. Hand the wheel directly to your existing state function
             return await ask_state_or_random(update, context)    
-        
-        
-    
-        
-    if data == "social_menu":
-        await q.answer("📣 Social Services is coming soon! 🚧", show_alert=True)
-        return # We don't even need to edit the message!
+
 
     
 # BACK NAVIGATION
