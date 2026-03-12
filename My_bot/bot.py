@@ -425,9 +425,7 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
             return None
 
         data = r.json()
-        # 🚨 THE TRUTH: Print the exact raw API response to the console!
-        logger.info(f"RAW PLISIO API RESPONSE: {data}")
-        
+        # 🚨 THE TRUTH: Print the exact raw API response to the console!        
         if data.get("status") != "success":
             logger.warning("Plisio invoice details not success: %s", str(data)[:300])
             return None
@@ -1955,7 +1953,7 @@ async def plisio_webhook(req: Request):
                          
                         tg_app.job_queue.run_once(
                             _delete_message_later,
-                            when=60,
+                            when=3600,
                             data={"chat_id": order["user_id"], "message_id": sent_wallet_msg.message_id}
                         )
                 except Exception as e:
@@ -1986,7 +1984,7 @@ async def plisio_webhook(req: Request):
                 
                 tg_app.job_queue.run_once(
                     _delete_message_later,
-                    when=10,
+                    when=3600,
                     data={"chat_id": chat_id, "message_id": sent_det_msg.message_id}
                 )
 
