@@ -1625,17 +1625,22 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Catches any unregistered or unauthorized commands."""
-    # ✅ REWRITE: Use safe_send and track the ID
+    # 1. Instantly delete the wrong command they typed (e.g., /rubbish)
+    asyncio.create_task(safe_delete_user_message(update))
+
+    # 2. Send the warning WITHOUT attaching the keypad!
     warning_msg = await safe_send(
         update,
         context,
         f"❌ <b>Wrong Command.</b>\n\n🛠 Need help? Contact {SUPPORT_HANDLE}",
-        reply_markup=get_main_menu(),
         parse_mode="HTML"
+        # ❌ Notice there is no reply_markup here. The 4-dots are safe!
     )
-    # Track it so the next valid menu click deletes it
+    
+    # 3. Save it to the Janitor so it gets wiped the moment they click any other button
     if warning_msg:
         context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
+                
     
 async def admin_entry(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return await admin_command(update, context, ADMIN_IDS)

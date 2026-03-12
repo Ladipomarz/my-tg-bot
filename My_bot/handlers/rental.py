@@ -491,7 +491,6 @@ This code is required for the next step.
             update, 
             context, 
             instruction_text_rental,
-            reply_markup=get_main_menu()  
         )
         
         context.user_data["otp_instruction_msg_id"] = msg.message_id

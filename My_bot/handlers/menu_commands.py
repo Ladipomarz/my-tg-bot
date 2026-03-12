@@ -102,7 +102,6 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Contact our team here: {SUPPORT_HANDLE}"
     )
 
-    # 3. NO MORE get_main_menu() HERE! Use the Inline Close button instead.
     # This prevents the flicker AND prevents the Janitor from killing your 4-dots.
     kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="back_main")]])
 

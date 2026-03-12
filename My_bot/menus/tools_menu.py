@@ -2,14 +2,17 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 def get_tools_inline():
     buttons = [
-        [
-            InlineKeyboardButton("MSN Services", callback_data="tool_msn_services"),
-             InlineKeyboardButton("Esim", callback_data="esim_services"),
-        ],
+        #HIDDEN FOR NOW
+        #[
+         #   InlineKeyboardButton("MSN Services", callback_data="tool_msn_services"),
+          #   InlineKeyboardButton("Esim", callback_data="esim_services"),
+        #],
 
-        [   InlineKeyboardButton("🖥️RDP", callback_data="tool_rdp"),
+        [  
+            InlineKeyboardButton("🖥️RDP", callback_data="tool_rdp"),
             InlineKeyboardButton("OTP Verification", callback_data="tool_otp_usa"),
-            ],
+            
+        ],
         
         [InlineKeyboardButton("📣 Social Services", callback_data="social_menu")],
         [InlineKeyboardButton("Close", callback_data="back_main")],
