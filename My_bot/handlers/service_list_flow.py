@@ -73,13 +73,33 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
 
 
 # 👇 2. WE ADD THE REPROMPT HELPER HERE 👇
+# 👇 2. WE ADD THE REPROMPT HELPER HERE 👇
 async def resend_otp_menu(update, context):
     """Silently pushes the One-Time OTP buttons back to the user if they type text."""
+    import asyncio
+    from utils.auto_delete import safe_delete_user_message
+    
+    # 1. Instantly delete the nonsense they just typed
+    asyncio.create_task(safe_delete_user_message(update))
+    
     kb = _yes_skip_keyboard(back_callback="otp_back_usa_one_time_rental")
-    await safe_send(
+    
+    # 2. Send the warning
+    warning_msg = await safe_send(
         update,
         context,
-        "⚠️ <b>Please click an option below:</b>", 
+        "⚠️ <b>Invalid input. Please click an option below:</b>", 
         reply_markup=kb, 
         parse_mode="HTML"
     )
+    
+    # 3. Make the warning self-destruct after 4 seconds so it doesn't break the UI!
+    async def cleanup_warning():
+        await asyncio.sleep(4)
+        try:
+            await warning_msg.delete()
+        except Exception:
+            pass
+            
+    asyncio.create_task(cleanup_warning())
+    

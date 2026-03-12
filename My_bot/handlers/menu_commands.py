@@ -86,9 +86,13 @@ async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    import asyncio
+    from utils.auto_delete import delete_tracked_message, safe_delete_user_message, safe_send
+    from telegram import InlineKeyboardMarkup, InlineKeyboardButton
+    from config import SUPPORT_HANDLE
+
     # 1. Standard Cleanup
     asyncio.create_task(safe_delete_user_message(update))
-    from utils.auto_delete import delete_tracked_message
     await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
 
     # 2. Unified text
@@ -98,16 +102,18 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Contact our team here: {SUPPORT_HANDLE}"
     )
 
-    # 3. USE THE MAIN MENU TO KEEP THE 4-DOTS ALIVE
-    # (We sacrifice the Inline "Close" button to keep the keypad visible)
+    # 3. NO MORE get_main_menu() HERE! Use the Inline Close button instead.
+    # This prevents the flicker AND prevents the Janitor from killing your 4-dots.
+    kb = InlineKeyboardMarkup([[InlineKeyboardButton("❌ Close", callback_data="back_main")]])
+
     msg = await safe_send(
         update,
         context,
         text=help_text,
-        reply_markup=get_main_menu() # 👈 This forces the 4-dots to stay
+        reply_markup=kb 
     )
 
-    # 4. Save ID so the Janitor deletes it when they click something else
+    # 4. Save ID for the Janitor
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
 
