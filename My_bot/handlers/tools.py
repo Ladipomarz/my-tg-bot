@@ -140,6 +140,17 @@ async def tools_callback(update: Update, context: CallbackContext):
     print("Callback received for:", update.callback_query.data)
     q = update.callback_query
     data = q.data.strip()
+    
+      # Handle RDP service
+    if data == "tool_rdp":
+        await q.answer("🖥️ RDP Service is coming soon! 🚧", show_alert=True)      
+        return
+    
+    if data == "social_menu":
+        await q.answer("📣 Social Services is coming soon! 🚧", show_alert=True)
+        return
+    
+    await q.answer()  
 
     # Early exit if there is no query data
     if not q or not q.data:
@@ -155,16 +166,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         _clear_msn_state(context)
 
     
-    # Handle RDP service
-    if data == "tool_rdp":
-        await q.answer("🖥️ RDP Service is coming soon! 🚧", show_alert=True)      
-        return
-    
-    if data == "social_menu":
-        await q.answer("📣 Social Services is coming soon! 🚧", show_alert=True)
-        return
-    
-    await q.answer()  
+  
 
     # Pending-order gate (block if unpaid)
     pending = get_pending_order(user_id)
