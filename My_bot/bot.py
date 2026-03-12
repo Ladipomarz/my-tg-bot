@@ -1595,19 +1595,15 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pass
         return
 
+   
+        
     # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V7 - NO-AMNESIA FIX) 🚨
-    # This creates a temporary bubble at the bottom without destroying your menus above.
-    
-    warning_msg = await safe_send(
-        update,
-        context,
-        "⚠️<b>Invalid input. Please use the menu buttons above.</b>", 
-        reply_markup=get_main_menu(),
+    warning_msg = await update.message.reply_text(
+        "⚠️ <b>Invalid input. Please use the menu buttons above.</b>", 
+        reply_markup=get_main_menu(), # Keeps the 4-dots from vanishing
         parse_mode="HTML"
     )
     
-    if warning_msg:
-        context.user_data["otp_instruction_msg_id"] = warning_msg.message_id
     
     # Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():
@@ -1622,7 +1618,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             pass
             
     asyncio.create_task(cleanup_rubbish())
-    
     return
 
     
