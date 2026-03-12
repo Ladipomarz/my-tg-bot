@@ -76,8 +76,8 @@ async def _show_existing_topup_or_continue(update: Update, context: ContextTypes
         return False
 
     # ✅ 1. Create the bulletproof asyncio self-destruct function
-    async def _delete_after_delay(chat_id, msg_id, delay=120):
-        await asyncio.sleep(delay) # Pauses in the background for 120 seconds
+    async def _delete_after_delay(chat_id, msg_id, delay=3600):
+        await asyncio.sleep(delay) # Pauses in the background for 1 hour
         try:
             await context.bot.delete_message(chat_id=chat_id, message_id=msg_id)
         except Exception:

@@ -292,7 +292,7 @@ async def payments_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if context.job_queue and q.message:
                     context.job_queue.run_once(
                         _auto_delete_warning, 
-                        when=60, 
+                        when=3600, 
                         data={"chat_id": update.effective_chat.id, "msg_id": q.message.message_id}
                     )
                 return
