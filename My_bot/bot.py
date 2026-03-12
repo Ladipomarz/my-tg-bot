@@ -1849,33 +1849,43 @@ async def plisio_webhook(req: Request):
             logger.exception("update_order_status(processing) failed (ignored)")
             await notify_admin(f"update_payment_status failed: {e}")
 
-        # ✅ CREDIT WALLET ON DETECTED/PAID (RATIO MATH FIX)
+        # ✅ CREDIT WALLET ON DETECTED/PAID (RATIO MATH FIX + PENDING CHECK)
         if is_wallet_topup and order and not order.get("wallet_credited"):
             usd_actual_received = 0.0
-            fiat_exp = 0.0  # NEW: We track the expected invoice amount
+            fiat_exp = 0.0  
             crypto_received = "0.0"
             currency = "CRYPTO"
             tx_url = "#"
 
-            # 1. CALCULATE EXACT USD FROM CRYPTO RATIO
-            if isinstance(inv, dict):
-                crypto_received = str(inv.get("received_amount") or "0.0")
-                currency = inv.get("currency") or "CRYPTO"
-                tx_url = inv.get("tx_url") or f"https://plisio.net/invoice/{txn_id}"
+            try:
+                # 1. PULL FROM API OR WEBHOOK PAYLOAD
+                # 🚨 THE FIX: Check both 'received_amount' AND 'pending_amount'
+                c_rec = _to_float(
+                    inv.get("received_amount") or 
+                    inv.get("pending_amount") or 
+                    p.get("received_amount") or 
+                    p.get("pending_amount") or 0.0
+                )
                 
-                try:
-                    # Parse the exact crypto received vs expected
-                    c_rec = float(crypto_received)
-                    c_exp = float(inv.get("amount") or 1.0) # Prevent divide by zero
-                    fiat_exp = float(inv.get("source_amount") or 0.0)
+                c_exp = _to_float(inv.get("amount") or p.get("amount") or 1.0) # Prevent divide by zero
+                fiat_exp = _to_float(inv.get("source_amount") or p.get("source_amount") or 0.0)
+                
+                crypto_received = str(c_rec)
+                currency = inv.get("currency") or p.get("currency") or "CRYPTO"
+                tx_url = inv.get("tx_url") or p.get("tx_url") or f"https://plisio.net/invoice/{txn_id}"
+
+                # 2. DO THE MATH
+                if c_rec > 0 and c_exp > 0:
+                    usd_actual_received = (c_rec / c_exp) * fiat_exp
                     
-                    # Do the math: (Received Crypto / Expected Crypto) * Expected USD
-                    if c_rec > 0 and c_exp > 0:
-                        usd_actual_received = (c_rec / c_exp) * fiat_exp
-                except Exception:
-                    usd_actual_received = 0.0
-            
-            # 2. Credit if the math proves funds actually arrived
+                # Print the math to your Railway logs so you can see it working!
+                logger.info(f"MATH CHECK | Expected: {c_exp} {currency} (${fiat_exp}) | Received: {c_rec} {currency} (${usd_actual_received})")
+
+            except Exception as e:
+                logger.error(f"Error during ratio math: {e}")
+                usd_actual_received = 0.0
+
+            # 3. Credit if the math proves funds actually arrived
             if usd_actual_received > 0:
                 try:
                     add_user_balance_usd(order["user_id"], float(usd_actual_received))
@@ -1889,14 +1899,13 @@ async def plisio_webhook(req: Request):
                     if order.get("id"):
                         update_order_status(order["id"], "completed")
 
-                    # 3. SUCCESS MESSAGE WITH BLOCKCHAIN TRUTH & UNDERPAYMENT ALERT
+                    # 4. SUCCESS MESSAGE WITH BLOCKCHAIN TRUTH & UNDERPAYMENT ALERT
                     if await ensure_telegram_ready():
                         new_bal = get_user_balance_usd(order["user_id"])
                         
                         msg_text = f"✅ <b>Wallet Credited: +${float(usd_actual_received):.2f}</b>\n\n"
                         
                         # 🚨 THE NEW UNDERPAYMENT ALERT 🚨
-                        # If the actual received is less than the expected invoice amount (minus a 2-cent margin for rounding)
                         if fiat_exp > 0 and usd_actual_received < (fiat_exp - 0.02):
                             msg_text += (
                                 f"⚠️ <b>PARTIAL PAYMENT DETECTED</b>\n"
@@ -1905,7 +1914,6 @@ async def plisio_webhook(req: Request):
                                 f"<i>(You were credited for exactly what arrived on the blockchain)</i>\n\n"
                             )
                         
-                        # Continue building the rest of the message
                         msg_text += (
                             f"💵 <b>Amount Received:</b> ${float(usd_actual_received):.2f}\n"
                             f"🪙 <b>Blockchain Value:</b> {crypto_received} {currency}\n"
