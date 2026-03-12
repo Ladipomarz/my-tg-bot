@@ -49,7 +49,7 @@ from utils.validator import (
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Example log for debuggingg

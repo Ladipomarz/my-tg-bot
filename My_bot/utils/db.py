@@ -40,6 +40,37 @@ def get_connection():
     return db_pool.connection()
 
 
+def reset_database_data():
+    """
+    Safely clears all rows from tables without deleting the tables themselves.
+    """
+    # List all your table names here
+    tables = [
+        "users", 
+        "orders", 
+        "active_rentals", 
+        "referrals", 
+        "wallet_history",
+        "expired_rentals"
+    ]
+    
+    conn = get_connection() # Uses your existing connection logic
+    cur = conn.cursor()
+    try:
+        for table in tables:
+            # TRUNCATE is faster and cleaner than DELETE for a full reset
+            # 'RESTART IDENTITY' resets your ID counters back to 1
+            cur.execute(f"TRUNCATE TABLE {table} RESTART IDENTITY CASCADE;")
+        
+        conn.commit()
+        print("✅ Database reset successful. All tables are empty and counters reset.")
+    except Exception as e:
+        conn.rollback()
+        print(f"❌ Error resetting database: {e}")
+    finally:
+        cur.close()
+        conn.close()
+
 # ---------------- MIGRATIONS ----------------
 
 def migrate_users_schema():
@@ -1461,3 +1492,7 @@ def mark_rental_renewal_complete(rental_id: str, days_added: int):
         print(f"💥 Failed to complete renewal DB update for {rental_id}: {e}")
         notify_admin_sync(f"💥 Failed to complete renewal DB update for {rental_id}: {e}")
         raise e        
+    
+    
+    
+    

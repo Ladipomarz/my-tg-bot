@@ -95,7 +95,7 @@ test_expire_alarm
 
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 
