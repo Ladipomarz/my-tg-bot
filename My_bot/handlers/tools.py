@@ -49,7 +49,7 @@ from utils.validator import (
 import logging
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 # Example log for debuggingg
@@ -146,6 +146,7 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
 
     data = (q.data or "").strip()
+    
     print(f"Received callback data: {data}")  # Debug log to ensure data is being captured
     user_id = update.effective_user.id
 
@@ -162,7 +163,6 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "social_menu":
         await q.answer("📣 Social Services is coming soon! 🚧", show_alert=True)
         return
-    
     
     await q.answer()  
 
