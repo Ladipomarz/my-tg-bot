@@ -95,28 +95,31 @@ async def wallet_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # In My_bot/handlers/menu_commands.py
 
+# In My_bot/handlers/menu_commands.py
+
 async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. Standard Cleanup (Janitor logic)
-    asyncio.create_task(safe_delete_user_message(update))
-    from utils.auto_delete import delete_tracked_message
+    from utils.auto_delete import safe_send, delete_tracked_message, safe_delete_user_message
+    from menus.main_menu import get_main_menu
+    import asyncio
+
+    # 1. Clean up old bot messages so they don't stack
     await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
+    # 2. Delete the user's typed command/tap
+    asyncio.create_task(safe_delete_user_message(update))
 
-    # 2. This is the text both the command and keypad will use
-    # Change this text ONCE here, and it updates everywhere!
-    help_text = (
-        "💡 <b>Help & Support</b>\n\n"
-        "Need assistance with your orders or balance?\n"
-        f"Contact our team here: {SUPPORT_HANDLE}"
-    )
-
+    # 3. Send the official message
     msg = await safe_send(
         update,
         context,
-        text=help_text,
-        reply_markup=get_main_menu() # Re-pins the 4 dots
+        text=(
+            "💡 <b>Help & Support</b>\n\n"
+            "Need assistance with your orders or balance?\n"
+            f"Contact our team here: {SUPPORT_HANDLE}"
+        ),
+        reply_markup=get_main_menu() # Re-pins the keypad
     )
 
-    # 3. Save ID so it disappears when you click 'Tools'
+    # 4. Save ID so it vanishes when they click "Tools"
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
 
