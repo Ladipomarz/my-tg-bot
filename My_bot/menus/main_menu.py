@@ -12,6 +12,6 @@ def get_main_menu():
         buttons, 
         resize_keyboard=True, # ✅ Keeps buttons compact
         one_time_keyboard=False, # ✅ Keeps the menu visible after use
-        is_persistent=False # ✅ Forces the '4 dots' to stay visible in modern Telegram
+        is_persistent= True# ✅ Forces the '4 dots' to stay visible in modern Telegram
     )
 
