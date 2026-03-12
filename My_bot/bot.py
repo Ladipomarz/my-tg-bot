@@ -1600,10 +1600,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 🚨 THE SMART CONTEXT-AWARE SAFETY NET (V7 - NO-AMNESIA FIX) 🚨
     warning_msg = await update.message.reply_text(
         "⚠️ <b>Invalid input. Please use the menu buttons above.</b>", 
-        reply_markup=get_main_menu(), # Keeps the 4-dots from vanishing
         parse_mode="HTML"
     )
-    
     
     # Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():
