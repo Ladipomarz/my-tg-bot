@@ -642,6 +642,8 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             if acs:
                 kwargs["area_code_select_option"] = acs[:15]
                 
+        
+                
                 
         
         # ---------------------------------------------------------
@@ -657,7 +659,8 @@ async def fetch_rental_number_from_textverified(service_name: str, state: str, d
             # Your bot will think it successfully bought the number and continue the flow.
             return "+1200098655", "one_month_rent_111", None
         # ---------------------------------------------------------   
-
+        logger.info(f"DEBUG RENTAL REQUEST: {kwargs}")
+        
         # 1. Buy the number and get the "mini-receipt"
         reservation = await asyncio.to_thread(reservations.create, **kwargs)
         
