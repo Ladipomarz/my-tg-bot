@@ -32,7 +32,7 @@ async def setup_bot_profile(tg_app):
         ]
         await tg_app.bot.set_my_commands(commands)
         await tg_app.bot.set_my_name(name="The Underground ☠️ Box") 
-        await tg_app.bot.set_my_description(description="🤖 Welcome! to the underground box,🔨 We provide you with premium services.😎 \n\nClick Start below to begin. 🌍")
+        await tg_app.bot.set_my_description(description="🤖 Welcome! to the underground box,🔨 We provide you with premium services,💯 Anonimity .😎 \n\nClick Start below to begin. 🌍")
         await tg_app.bot.set_my_short_description(short_description="Premium Numbers & More.")
         logger.info("✅ Bot Profile and Menu Button have been updated successfully!")
     except Exception as e:

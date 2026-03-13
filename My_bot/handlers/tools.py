@@ -143,7 +143,7 @@ async def tools_callback(update: Update, context: CallbackContext):
     
       # Handle RDP service
     if data == "tool_rdp":
-        await q.answer("🖥️ RDP Service is coming soon! 🚧", show_alert=True)      
+        await q.answer("🖥️ RDP Service is Coming Back Soon! 🚧", show_alert=True)      
         return
     
     if data == "social_menu":
