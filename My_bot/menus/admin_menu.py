@@ -16,9 +16,15 @@ def get_admin_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton("📊 Check Stats", callback_data="admin_stats"), 
         ],
         [
+            InlineKeyboardButton("📢 Broadcast All", callback_data="admin_broadcast_all"),
+            InlineKeyboardButton("👤 Message A User", callback_data="admin_broadcast_single"),
+        ],
+        
+        [
+            InlineKeyboardButton("⬅ Back to User Menu", callback_data="main_menu"),
             InlineKeyboardButton("⬅ Back to Main", callback_data="back_main"),
-         
-         ],
+            
+            ]
     ])
 
 

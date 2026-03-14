@@ -53,7 +53,8 @@ from utils.db import (
     create_wallet_transactions_table,
     get_all_active_rentals,
     auto_expire_rentals,
-    update_order_actual_amount
+    update_order_actual_amount,
+    get_all_user_ids
 )
 
 from utils.auto_delete import safe_delete_user_message
@@ -1682,6 +1683,97 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "⚠️ <b>Invalid input. Please use the menu buttons above.</b>", 
         parse_mode="HTML"
     )
+    
+    
+    # In bot.py -> inside text_router function
+
+    # 📢 BROADCAST ALL LOGIC
+    if context.user_data.get("admin_step") == "awaiting_broadcast_all":
+        if update.effective_user.id not in ADMIN_IDS: return
+        
+        broadcast_text = f"📢 **Announcement from Support**\n\n{text}"
+        # We'll get all users from your DB
+        all_users = get_all_user_ids() 
+        
+        success_count = 0
+        for uid in all_users:
+            try:
+                await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode="Markdown")
+                success_count += 1
+                await asyncio.sleep(0.05) # Prevent Telegram flood limit
+            except: continue
+            
+        await update.message.reply_text(f"✅ Broadcast complete! Sent to {success_count} users.")
+        context.user_data.pop("admin_step", None)
+        return
+
+    # 📢 BROADCAST ALL LOGIC (with 24h Auto-Delete)
+    if context.user_data.get("admin_step") == "awaiting_broadcast_all":
+        if update.effective_user.id not in ADMIN_IDS: return
+        
+        broadcast_text = f"📢 <b>ANNOUNCEMENT FROM UNDERGROUND BOX</b>\n\n{text}"
+        all_users = get_all_user_ids() 
+        
+        success_count = 0
+        for uid in all_users:
+            try:
+                sent_msg = await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode="HTML")
+                success_count += 1
+                
+                # 🕒 Schedule deletion after 24 hours (86400 seconds)
+                context.job_queue.run_once(
+                    _delete_message_later,
+                    when=24 * 3600,
+                    data={"chat_id": uid, "message_id": sent_msg.message_id},
+                    name=f"mass_del_{uid}_{sent_msg.message_id}"
+                )
+                
+                await asyncio.sleep(0.05) # Prevent Telegram flood limits
+            except: continue
+            
+        await update.message.reply_text(f"✅ Broadcast complete! Delivered to {success_count} users and scheduled for 24h deletion.")
+        context.user_data.pop("admin_step", None)
+        return
+
+    # 👤 SINGLE USER DIRECT MESSAGE (with 24h Auto-Delete)
+    if context.user_data.get("admin_step") == "awaiting_broadcast_user_id":
+        if update.effective_user.id not in ADMIN_IDS: return
+        if not text.isdigit():
+            await update.message.reply_text("❌ Please enter a valid numeric User ID.")
+            return
+            
+        context.user_data["target_broadcast_id"] = int(text)
+        context.user_data["admin_step"] = "awaiting_broadcast_single_text"
+        await update.message.reply_text(f"🎯 Target ID: `{text}`\n\nNow send the message you want to deliver.")
+        return
+
+    if context.user_data.get("admin_step") == "awaiting_broadcast_single_text":
+        if update.effective_user.id not in ADMIN_IDS: return
+        target_id = context.user_data.get("target_broadcast_id")
+        
+        try:
+            sent_msg = await context.bot.send_message(
+                chat_id=target_id, 
+                text=f"✉️ <b>Message from Support</b>\n\n{text}", 
+                parse_mode="HTML"
+            )
+            
+            # 🕒 Schedule deletion after 24 hours
+            context.job_queue.run_once(
+                _delete_message_later,
+                when=24 * 3600,
+                data={"chat_id": target_id, "message_id": sent_msg.message_id},
+                name=f"single_del_{target_id}_{sent_msg.message_id}"
+            )
+            
+            await update.message.reply_text(f"✅ Message sent to {target_id} and scheduled for deletion in 24h.")
+        except Exception as e:
+            await update.message.reply_text(f"❌ Delivery failed: {e}")
+            
+        context.user_data.pop("admin_step", None)
+        context.user_data.pop("target_broadcast_id", None)
+        return
+    
     
     # Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():

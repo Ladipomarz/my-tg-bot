@@ -1394,6 +1394,15 @@ def get_user_balance_usd(user_id: int) -> float:
             return float(row[0] if row else 0)
 
 
+def get_all_user_ids():
+    """Fetches every Telegram user_id from the users table for mass broadcasting."""
+    with get_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT user_id FROM users;")
+            # fetchall returns [(id1,), (id2,)]; we turn it into a clean list [id1, id2]
+            return [row[0] for row in cur.fetchall()]
+        
+        
 def add_user_balance_usd(user_id: int, amount_usd: float) -> None:
     migrate_users_schema()  # ensure balance columns exist
 

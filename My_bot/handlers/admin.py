@@ -265,6 +265,20 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE, adm
         # 3. Update Admin Screen
         await q.edit_message_text(f"✅ Order <b>{code}</b> marked as Delivered. User notified.", parse_mode="HTML")
         return
+    
+    
+    #BROADCAST
+    if data == "admin_broadcast_all":
+        context.user_data["admin_step"] = "awaiting_broadcast_all"
+        await q.message.reply_text("📢 **Broadcast to ALL Users**\n\nSend the message you want to broadcast now. (Text only for now).")
+        await q.answer()
+        return
+
+    if data == "admin_broadcast_single":
+        context.user_data["admin_step"] = "awaiting_broadcast_user_id"
+        await q.message.reply_text("👤 **Message Single User**\n\nPlease send the **User ID** of the person you want to message.")
+        await q.answer()
+        return
 
     # -------------------------
     # PREMIUM RENTAL: CANCEL LOGIC
