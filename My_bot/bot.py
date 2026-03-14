@@ -1594,6 +1594,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "credit" in low_text:
                await open_wallet_menu(update, context)
                return
+           
+           
+        if "purchase non number" in low_text: 
+            context.user_data["current_menu"] = "other_number"
+            # ✅ CALL THE UNIFIED HANDLER
+            from handlers.global_flow import handle_global_start
+            await handle_global_start(update, context)
 
         # if Tools clicked and there is a pending order, redirect to pending page
         if "tools" in low_text:

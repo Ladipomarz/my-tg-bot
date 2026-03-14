@@ -16,22 +16,37 @@ from utils.db import get_display_services,build_global_services_txt_bytes,build_
 
 
 async def handle_global_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Triggered by callback_data='other_countries_start'"""
+    """Unified entry point for both Keypad and Inline buttons"""
     query = update.callback_query
-    await query.answer()
+    user_id = update.effective_user.id
     
-    keyboard = [
-        [
-            InlineKeyboardButton("💬 Text Verification", callback_data="g_type_text"),
-            InlineKeyboardButton("📞 Voice", callback_data="g_type_voice")
-        ],
-        [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")]
-    ]
+    # 1. THE GATEKEEPER logic stays the same
+    is_admin = (user_id == int(ADMIN_IDS))
     
-    text = "🌍 **Global Services**\n\nWhat type of service do you need?"
+    # 2. Define the content based on who is clicking
+    if not is_admin:
+        text = "🌍 **Global Services**\n\n🚧 Coming soon..."
+        keyboard = [[InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")]]
+    else:
+        text = "🌍 **Global Services (ADMIN MODE)**\n\nWhat type of service do you need?"
+        keyboard = [
+            [
+                InlineKeyboardButton("💬 Text Verification", callback_data="g_type_text"),
+                InlineKeyboardButton("📞 Voice", callback_data="g_type_voice")
+            ],
+            [InlineKeyboardButton("🔙 Back to Main", callback_data="main_menu")]
+        ]
     
-    # Using your standard edit/safe_send flow
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
+    reply_markup = InlineKeyboardMarkup(keyboard)
+
+    # 3. THE FIX: Handle 'query' vs 'message'
+    if query:
+        # If triggered by an Inline Button, answer and edit
+        await query.answer()
+        await query.edit_message_text(text, reply_markup=reply_markup, parse_mode="Markdown")
+    else:
+        # If triggered by the Keypad, we must send a NEW message
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode="Markdown")
 
 async def handle_global_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggered by callback_data='g_type_text' or 'g_type_voice'"""
