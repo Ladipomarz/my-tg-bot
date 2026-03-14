@@ -19,6 +19,7 @@ from handlers.otp_handler import(
     otp_usa_rental_type_menu,
     otp_usa_monthly_duration_menu,
     show_usa_verification_menu,
+    show_other_countries_menu
 )
 
 from handlers.otp_handler import send_services_txt
@@ -217,14 +218,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-    if data == "otp_other_country":
-        await otp_verification_handler(
-            update, 
-            context, 
-            message_text="🎙 Other Country \n\nComing soon…"
-        )
+    if data == "otp_other_country":        
+        # Drop the user right into our new Global Menu!
+        await show_other_countries_menu(update, context)
         return
-
 
     if data == "otp_usa_text_rental":
         await otp_usa_rental_type_menu(update, context, "text")

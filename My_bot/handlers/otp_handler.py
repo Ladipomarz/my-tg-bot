@@ -68,20 +68,29 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext, m
         parse_mode="HTML"
     )
     
-async def show_other_countries_menu(update: Update, context: CallbackContext, message_text="🌍 Other Countries\n\nComing soon..."):
-    # Customize this keyboard later when you add actual countries!
+async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text="🌍 <b>Global Services</b>\n\nWhat type of service do you need?"):
+    
+    # 1. Flag the user as entering the global flow!
+    context.user_data['is_global_flow'] = True
+    
+    # 2. Build the new Type Selection menu
     keyboard = [
-        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")]
+        [
+            InlineKeyboardButton("💬 Text Verification", callback_data="g_type_text"),
+            InlineKeyboardButton("📞 Voice", callback_data="g_type_voice")
+        ],
+        # Using your existing back button logic!
+        [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")] 
     ]
     
-    await safe_send(
+    # 3. Return the safe_send so start.py can save the message_id for the Janitor
+    return await safe_send(
         update_or_query=update.callback_query or update, 
         context=context,
         text=message_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
-    )    
-
+    )
 
 # Initialize TextVerified client
 provider = get_provider()
