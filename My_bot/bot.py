@@ -94,6 +94,15 @@ test_expire_alarm
 
 )
 
+# In bot.py
+from handlers.global_flow import (
+    handle_global_start, 
+    handle_global_type, 
+    handle_global_duration, 
+    handle_global_country_selection
+)
+
+
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
 logging.basicConfig(
     level=logging.DEBUG,
@@ -1662,6 +1671,12 @@ tg_app.add_handler(CommandHandler("test_warn", test_6h_warning))
 tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
 tg_app.add_handler(CommandHandler("force_expire_order", force_expire_order_test))
+# ... inside your handler registration ...
+tg_app.add_handler(CallbackQueryHandler(handle_global_start, pattern="^other_countries_start$"))
+tg_app.add_handler(CallbackQueryHandler(handle_global_type, pattern="^g_type_"))
+tg_app.add_handler(CallbackQueryHandler(handle_global_duration, pattern="^g_dur_"))
+# Matches g_country_3 and g_country_15, but ignores g_country_more for now
+tg_app.add_handler(CallbackQueryHandler(handle_global_country_selection, pattern="^g_country_\\d+$"))
 register_side_menu(tg_app)
 
 
