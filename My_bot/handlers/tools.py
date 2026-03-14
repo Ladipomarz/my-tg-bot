@@ -218,9 +218,10 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-    if data == "otp_other_country":        
+    if data == "otp_other_country": 
+        await q.answer("🚧 Global numbers are coming soon! Stay tuned.", show_alert=True)       
         # Drop the user right into our new Global Menu!
-        await show_other_countries_menu(update, context)
+        #await show_other_countries_menu(update, context)
         return
 
     if data == "otp_usa_text_rental":
