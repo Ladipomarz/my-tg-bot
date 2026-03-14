@@ -84,14 +84,12 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # ✅ Keypad: Purchase Non Number
+    # ✅ Keypad: Purchase Non Number (Unified)
     if key == "purchase non number":
-        msg = await show_other_countries_menu(
-            update, 
-            context, 
-            message_text="🌍 Other Countries \n\nComing soon…"
-        )
-        if msg:
-            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        from handlers.global_flow import handle_global_start
+        # We call the handler directly so it runs the ADMIN_IDS check 
+        # and decides whether to show 'Coming Soon' or the 'Admin Menu'
+        await handle_global_start(update, context)
         return
     
     if key == "tools":
