@@ -9,6 +9,7 @@ import json
 import traceback
 import html
 from config import SUPPORT_HANDLE
+from supportbot import run_support_bot
 import html
 
 from fastapi import FastAPI, Request, Response
@@ -2157,3 +2158,6 @@ async def on_startup():
 
     # 3. Start telegram bootstrap
     asyncio.create_task(_background_telegram_bootstrap())
+    
+    # ✅ START TELEGRAM BOOTSTRAP FOR SUPPORT BOT
+    asyncio.create_task(run_support_bot())
