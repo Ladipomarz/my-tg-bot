@@ -8,6 +8,10 @@ from telegram import InputFile
 import httpx
 from config import SMSA_API_KEY
 import httpx
+from telegram import Update
+from utils.auto_delete import safe_delete_user_message
+from providers.sms_activate import get_or_fetch_country_services
+from utils.db import get_display_services,build_global_services_txt_bytes
 
 async def handle_global_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggered by callback_data='other_countries_start'"""
@@ -70,23 +74,31 @@ async def handle_global_duration(update: Update, context: ContextTypes.DEFAULT_T
 
 
 # Inside handlers/global_flow.py
+# In handlers/global_flow.py
+from providers.sms_activate import get_or_fetch_country_services
+
 async def handle_global_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    country_id = int(query.data.split('_')[2])
+    country_id = int(query.data.split('_')[2]) # e.g., 'g_country_3' -> 3
     
-    # 1. Display loading state
-    msg = await query.edit_message_text("🔄 <b>Fetching live global prices...</b>", parse_mode="HTML")
-
-    # 2. Execute the fetch
-    success = await fetch_and_save_global_services(country_id)
+    # Save selection to user memory
+    context.user_data['is_global_flow'] = True
+    context.user_data['global_country_id'] = country_id
+    
+    # 1. Start the 'Check-then-Fetch' process
+    # If the DB is fresh, this finishes in milliseconds.
+    # If the DB is old, it shows the user it's working.
+    success = await get_or_fetch_country_services(country_id)
     
     if success:
-        await msg.edit_text(f"✅ Updated prices for Country {country_id}. Opening service list...")
-        # NEXT: Call your existing service list UI here
+        # 2. Open your existing Service List!
+        # Your service list UI just needs to be told: "Pull from global_services table"
+        from handlers.servicelist import show_service_list
+        await show_service_list(update, context)
     else:
-        await msg.edit_text("❌ Failed to fetch services. Please try again.")
+        await query.message.reply_text("❌ Failed to synchronize global services. Please try again.")
 
 
 async def handle_more_countries_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -131,3 +143,51 @@ async def handle_more_countries_pdf(update: Update, context: ContextTypes.DEFAUL
         
     except FileNotFoundError:
         await loading_msg.edit_text("❌ PDF file not found. Please contact admin.")
+        
+
+async def process_global_country_input(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
+    """Handles the user's country ID input and sends the in-memory .txt file."""
+    asyncio.create_task(safe_delete_user_message(update))
+    
+    if not text.isdigit():
+        return 
+
+    try:
+        country_id = int(text)
+        context.user_data['global_country_id'] = country_id
+        
+        loading_msg = await update.message.reply_text("🔄 **Accessing Global Catalog...**", parse_mode="Markdown")
+        
+        # 1. Sync the data (Check-then-Fetch)
+        success = await get_or_fetch_country_services(country_id)
+        if not success:
+            await loading_msg.edit_text("❌ Service currently unavailable for this country. Try another ID.")
+            return
+
+        # 2. Pull data from DB
+        services = get_display_services(is_global=True, country_id=country_id)
+        
+        # 3. Map IDs for the next step (ID -> Service Code)
+        id_map = {str(i+100): s[3] for i, s in enumerate(services)}
+        context.user_data['global_id_map'] = id_map
+        
+        # 4. Generate the In-Memory .txt File
+        data_bytes, filename = build_global_services_txt_bytes(country_id, services)
+        bio = BytesIO(data_bytes)
+        bio.name = filename
+        
+        # 5. Send the File
+        await context.bot.send_document(
+            chat_id=update.effective_chat.id,
+            document=InputFile(bio, filename=filename),
+            caption="✅ **Catalog Generated!**\n\nReply to this message with the **ID number** of the service you want.",
+            parse_mode="Markdown"
+        )
+        
+        context.user_data['otp_step'] = "awaiting_global_service_id"
+        await loading_msg.delete()
+
+    except Exception as e:
+        print(f"CRITICAL ERROR in Global Flow: {e}") 
+        if 'loading_msg' in locals():
+            await loading_msg.edit_text("⚠️ An error occurred while generating the catalog. Please try again.")

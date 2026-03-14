@@ -64,6 +64,7 @@ from menus.orders_menu import get_pending_order_menu
 
 from handlers.servicelist import fetch_and_save_services
 from handlers.service_list_flow import resend_otp_menu
+from handlers.global_flow import process_global_country_input
 
 from handlers.start import start, handle_main_menu
 from handlers.orders import orders_callback, debug_last_order
@@ -1508,6 +1509,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await asyncio.sleep(1.5)
         await loading_msg.edit_text(f"✅ Data fetched for Typed Country ID {text}!\n\n(Service list integration coming next...)")
         return   
+    
+    
+    # 🌍 THE GLOBAL COUNTRY ID INTERCEPTOR
+    if context.user_data.get("otp_step") == "awaiting_global_country_id":
+        await process_global_country_input(update, context, text)
+        return
         
     # --- RENTAL FLOW ---
     # Rental Product ID Step

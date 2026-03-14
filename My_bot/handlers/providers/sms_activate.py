@@ -1,9 +1,47 @@
 import httpx
 import logging
+from datetime import datetime, timedelta
 from config import SMSA_API_KEY
-from utils.db import save_global_services_to_db
-
+from utils.db import save_global_services_to_db, get_connection
 logger = logging.getLogger(__name__)
+
+async def get_or_fetch_country_services(country_id: int):
+    """
+    The Check-then-Fetch Logic:
+    1. Checks if data exists for this country.
+    2. Checks if data is older than 24 hours.
+    3. Fetches from API only if necessary.
+    """
+    conn = get_connection()
+    needs_fetch = False
+    
+    try:
+        with conn.cursor() as cur:
+            # Check the timestamp of the last update for this country
+            cur.execute("""
+                SELECT MAX(last_updated) FROM global_services 
+                WHERE country_id = %s
+            """, (country_id,))
+            last_update = cur.fetchone()[0]
+            
+            # LOGIC: If no data OR data is older than 24 hours
+            if last_update is None:
+                needs_fetch = True
+            else:
+                # Compare last update time with current time (24 hour window)
+                if datetime.now() - last_update > timedelta(hours=24):
+                    needs_fetch = True
+                    
+    finally:
+        conn.close()
+
+    if needs_fetch:
+        logger.info(f"🔄 Data for Country {country_id} is missing or stale. Fetching fresh data...")
+        # Call the fetcher we built earlier
+        return await fetch_and_save_global_services(country_id)
+    else:
+        logger.info(f"✅ Data for Country {country_id} is fresh (within 24h). Skipping API call.")
+        return True
 
 async def fetch_and_save_global_services(country_id: int):
     """

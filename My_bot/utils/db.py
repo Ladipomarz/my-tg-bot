@@ -255,7 +255,62 @@ def save_global_services_to_db(country_id: int, services_data: list):
     finally:
         conn.close()        
                 
+def get_services_from_db(is_global=False, country_id=None):
+    """Pulls services from either the USA table or the Global table."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            if is_global:
+                # Pull from Global Table
+                cur.execute("""
+                    SELECT service_name, price_usd, stock, service_code 
+                    FROM global_services 
+                    WHERE country_id = %s 
+                    ORDER BY service_name ASC
+                """, (country_id,))
+            else:
+                # Pull from USA Table (textverified)
+                cur.execute("SELECT name, price, stock, code FROM services ORDER BY name ASC")
+            
+            return cur.fetchall()
+    finally:
+        conn.close()
+        
+def get_display_services(is_global=False, country_id=None, search_query=None):
+    """
+    The Switcher: 
+    If is_global is False -> Pulls from your 'services' table (TextVerified USA).
+    If is_global is True  -> Pulls from 'global_services' (SMS-Activate China/UK/etc).
+    """
+    conn = get_connection()
+    services = []
+    try:
+        with conn.cursor() as cur:
+            if is_global:
+                # 🌍 Global Flow
+                sql = "SELECT service_name, price_usd, stock, service_code FROM global_services WHERE country_id = %s"
+                params = [country_id]
+                if search_query:
+                    sql += " AND service_name ILIKE %s"
+                    params.append(f"%{search_query}%")
+                sql += " ORDER BY service_name ASC"
+                cur.execute(sql, params)
+            else:
+                # 🇺🇸 USA Flow (Your existing logic)
+                sql = "SELECT name, price, stock, code FROM services"
+                params = []
+                if search_query:
+                    sql += " WHERE name ILIKE %s"
+                    params.append(f"%{search_query}%")
+                sql += " ORDER BY name ASC"
+                cur.execute(sql, params)
+            
+            services = cur.fetchall()
+    finally:
+        conn.close()
+    return services
 
+        
 def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
     """Locks the purchased rental number to the Telegram user in the database."""
     
@@ -1132,6 +1187,26 @@ def build_services_txt_bytes(*, capability: str = "sms") -> tuple[bytes, str]:
     return content.encode("utf-8"), filename
 
 
+def build_global_services_txt_bytes(country_id: int, services: list) -> tuple[bytes, str]:
+    """
+    Builds the Global Service catalog in memory.
+    Returns (file_bytes, filename).
+    """
+    lines = []
+    lines.append(f"UNDERGROUND BOX - COUNTRY ID {country_id} CATALOG")
+    lines.append("=" * 45)
+    lines.append(f"{'ID':<6} | {'SERVICE NAME':<25} | {'PRICE':<8}")
+    lines.append("-" * 45)
+    
+    # Start IDs at 100 to avoid conflicts with other commands
+    for idx, (name, price, stock, code) in enumerate(services, start=100):
+        lines.append(f"{idx:<6} | {name[:25]:<25} | ${price:<8}")
+        
+    file_content = "\n".join(lines)
+    data_bytes = file_content.encode('utf-8')
+    filename = f"Global_Services_{country_id}.txt"
+    
+    return data_bytes, filename
 
 
 def get_services_for_export(*, capability: str = "sms") -> list[tuple[str, str]]:
