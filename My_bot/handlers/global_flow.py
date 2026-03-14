@@ -5,6 +5,9 @@ import os
 from telegram import InputFile
 # Import your safe_send and whatever cleanup tools you use
 #from utils.helper import safe_send, delete_message
+import httpx
+from config import SMSA_API_KEY
+import httpx
 
 async def handle_global_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggered by callback_data='other_countries_start'"""
@@ -66,25 +69,24 @@ async def handle_global_duration(update: Update, context: ContextTypes.DEFAULT_T
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
 
+# Inside handlers/global_flow.py
 async def handle_global_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Triggered by callback_data='g_country_3' or 'g_country_15'"""
     query = update.callback_query
     await query.answer()
     
-    # Extract the numeric ID (3 for China, 15 for UK)
-    country_id = query.data.split('_')[2] 
+    country_id = int(query.data.split('_')[2])
     
-    # 1. Save the state so the Service List knows we are global
-    context.user_data['is_global_flow'] = True
-    context.user_data['global_country_id'] = country_id
+    # 1. Display loading state
+    msg = await query.edit_message_text("🔄 <b>Fetching live global prices...</b>", parse_mode="HTML")
+
+    # 2. Execute the fetch
+    success = await fetch_and_save_global_services(country_id)
     
-    # 2. Show the "Illusion of Speed" loading screen
-    await query.edit_message_text("🔄 **Connecting to global servers and fetching live prices... Please wait.**", parse_mode="Markdown")
-    
-    # 3. ---> STAGE 2, PHASE B (The Fetch) WILL GO HERE <---
-    # For right now, we just simulate the 1-second delay so you can see the UX
-    await asyncio.sleep(1.5)
-    await query.edit_message_text(f"✅ Data fetched for Country ID {country_id}!\n\n(Service list integration coming next...)")
+    if success:
+        await msg.edit_text(f"✅ Updated prices for Country {country_id}. Opening service list...")
+        # NEXT: Call your existing service list UI here
+    else:
+        await msg.edit_text("❌ Failed to fetch services. Please try again.")
 
 
 async def handle_more_countries_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):

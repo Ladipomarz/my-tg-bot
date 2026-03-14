@@ -189,10 +189,71 @@ def create_tables():
                 );
             """)
             cur.execute("CREATE INDEX IF NOT EXISTS idx_expired_user_id ON expired_rentals(user_id);")
+            
+            # 5. THE GLOBAL SERVICES TABLE (SMS-Activate)
+            # This table stores thousands of services per country dynamically.
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS global_services (
+                    id SERIAL PRIMARY KEY,
+                    country_id INTEGER NOT NULL,
+                    service_code TEXT NOT NULL,
+                    service_name TEXT NOT NULL,
+                    price_usd NUMERIC(10, 2) NOT NULL,
+                    stock INTEGER NOT NULL,
+                    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (country_id, service_code)
+                );
+            """)
+            cur.execute("CREATE INDEX IF NOT EXISTS idx_global_country_id ON global_services(country_id);")
 
         # Lock all the changes into PostgreSQL
         conn.commit()
         print("✅ Database tables verified and created successfully.")
+        
+        
+        
+def save_global_services_to_db(country_id: int, services_data: list):
+    """
+    Upserts fetched SMS-Activate services into the dedicated global_services table.
+    Ensures prices and stock are always the most recent.
+    """
+    conn = get_connection() # Using your existing connection helper
+    if not conn:
+        return
+    try:
+        with conn.cursor() as cur:
+            # We use ON CONFLICT to update the price and stock if the service already exists
+            insert_query = """
+                INSERT INTO global_services (
+                    country_id, 
+                    service_code, 
+                    service_name, 
+                    price_usd, 
+                    stock, 
+                    last_updated
+                )
+                VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                ON CONFLICT (country_id, service_code) 
+                DO UPDATE SET 
+                    price_usd = EXCLUDED.price_usd,
+                    stock = EXCLUDED.stock,
+                    last_updated = CURRENT_TIMESTAMP;
+            """
+            
+            # Prepare the data for batch execution for high performance
+            data_to_insert = [
+                (country_id, s['code'], s['name'], s['price'], s['stock'])
+                for s in services_data
+            ]
+            
+            from psycopg2.extras import execute_values
+            execute_values(cur, insert_query, data_to_insert)
+            
+            conn.commit()
+    except Exception as e:
+        print(f"❌ Failed to save global services for country {country_id}: {e}")
+    finally:
+        conn.close()        
                 
 
 def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
