@@ -101,7 +101,7 @@ from handlers.global_flow import (
     handle_global_type, 
     handle_global_duration, 
     handle_global_country_selection,
-    handle_more_countries_pdf
+    handle_other_countries_click
 )
 
 
@@ -949,8 +949,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         elif data.startswith("g_dur_"):
             await handle_global_duration(update, context)
             return
-        elif data == "g_country_more": # <--- ADD THIS RULE FOR THE PDF
-            await handle_more_countries_pdf(update, context)
+        elif data == "g_country_more": # <--- ADD THIS RULE FOR THE TXT FILE
+            await handle_other_countries_click(update, context)
             return
         
         elif data.startswith("g_country_"):
