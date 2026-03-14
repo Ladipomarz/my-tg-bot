@@ -2,6 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 import asyncio
 import os
+from io import BytesIO
 from telegram import InputFile
 # Import your safe_send and whatever cleanup tools you use
 #from utils.helper import safe_send, delete_message
@@ -11,7 +12,8 @@ import httpx
 from telegram import Update
 from utils.auto_delete import safe_delete_user_message
 from providers.sms_activate import get_or_fetch_country_services
-from utils.db import get_display_services,build_global_services_txt_bytes
+from utils.db import get_display_services,build_global_services_txt_bytes,build_live_country_list_txt_bytes
+
 
 async def handle_global_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggered by callback_data='other_countries_start'"""
@@ -101,49 +103,32 @@ async def handle_global_country_selection(update: Update, context: ContextTypes.
         await query.message.reply_text("❌ Failed to synchronize global services. Please try again.")
 
 
-async def handle_more_countries_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Triggered by callback_data='g_country_more'"""
+async def handle_other_countries_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    
-    # 1. Delete the inline menu to keep the chat clean
-    try:
-        await query.message.delete()
-    except Exception:
-        pass
-        
-    # 2. Send the temporary loading text
-    loading_msg = await context.bot.send_message(
-        chat_id=query.message.chat_id,
-        text="📥 Generating Global Country List..."
+
+    # 1. Show loading status
+    loading = await query.message.reply_text("🔄 **Syncing Global Country List...**", parse_mode="Markdown")
+
+    # 2. Fetch and build the .txt in memory
+    data_bytes, filename = await build_live_country_list_txt_bytes()
+    bio = BytesIO(data_bytes)
+    bio.name = filename
+
+    # 3. Send it to the user
+    await context.bot.send_document(
+        chat_id=update.effective_chat.id,
+        document=InputFile(bio, filename=filename),
+        caption=(
+            "✅ **Master List Synced!**\n\n"
+            "Open the file above, find your country, and **reply with its ID number** (e.g., 73)."
+        ),
+        parse_mode="Markdown"
     )
-    
-    # 3. Upload the PDF (You will need a dummy PDF named 'Country_Codes.pdf' in your bot folder for now)
-    pdf_path = "Country_Codes.pdf" 
-    
-    try:
-        with open(pdf_path, "rb") as pdf_file:
-            await context.bot.send_document(
-                chat_id=query.message.chat_id,
-                document=InputFile(pdf_file, filename="Underground_Box_Country_IDs.pdf"),
-                caption=(
-                    "🌍 **Full Country Catalog**\n\n"
-                    "Please open the document to find your desired country.\n\n"
-                    "👇 **Reply to this message with the numeric ID of the country.**\n"
-                    "*(Example: For Brazil, type 73)*"
-                ),
-                parse_mode="Markdown"
-            )
-        
-        # Delete the "Generating..." message
-        await loading_msg.delete()
-        
-        # 4. Set the trapdoor in the text router!
-        context.user_data['otp_step'] = "awaiting_global_country_id"
-        
-    except FileNotFoundError:
-        await loading_msg.edit_text("❌ PDF file not found. Please contact admin.")
-        
+
+    # 4. Set the state to catch the ID they type next
+    context.user_data['otp_step'] = "awaiting_global_country_id"
+    await loading.delete()        
 
 async def process_global_country_input(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     """Handles the user's country ID input and sends the in-memory .txt file."""

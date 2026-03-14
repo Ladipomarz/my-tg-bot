@@ -1209,6 +1209,37 @@ def build_global_services_txt_bytes(country_id: int, services: list) -> tuple[by
     return data_bytes, filename
 
 
+import httpx
+from config import SMSA_API_KEY
+
+async def build_live_country_list_txt_bytes() -> tuple[bytes, str]:
+    """Fetches the current country list from SMSA and builds a .txt file in memory."""
+    url = f"https://api.sms-activate.org/stubs/handler_api.php?api_key={SMSA_API_KEY}&action=getCountries"
+    
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            resp = await client.get(url)
+            data = resp.json() # SMSA returns { "0": {"id": 0, "name": "Russia", ...}, "1": {...} }
+
+        lines = ["🌍 UNDERGROUND BOX - MASTER COUNTRY LIST", "="*40]
+        lines.append(f"{'ID':<5} | {'COUNTRY NAME'}")
+        lines.append("-" * 40)
+
+        # Sort countries by name alphabetically
+        sorted_countries = sorted(data.values(), key=lambda x: x['eng'])
+
+        for c in sorted_countries:
+            lines.append(f"{c['id']:<5} | {c['eng']}")
+
+        content = "\n".join(lines)
+        return content.encode('utf-8'), "Master_Country_List.txt"
+
+    except Exception as e:
+        print(f"Error fetching live country list: {e}")
+        # Fallback message if API fails
+        return b"Error: Could not fetch country list from SMSA. Please try again.", "Error.txt"
+    
+
 def get_services_for_export(*, capability: str = "sms") -> list[tuple[str, str]]:
     """
     Returns list of (code, service_name) from DB.
