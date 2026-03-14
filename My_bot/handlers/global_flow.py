@@ -1,7 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 # Import your safe_send and whatever cleanup tools you use
-from utils.helper import safe_send, delete_message
+#from utils.helper import safe_send, delete_message
 
 async def handle_global_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggered by callback_data='other_countries_start'"""
