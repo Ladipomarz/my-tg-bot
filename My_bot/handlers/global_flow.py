@@ -79,29 +79,34 @@ async def handle_global_duration(update: Update, context: ContextTypes.DEFAULT_T
 # In handlers/global_flow.py
 from providers.sms_activate import get_or_fetch_country_services
 
-async def handle_global_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
+#async def handle_global_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    #query = update.callback_query
+    #await query.answer()
     
-    country_id = int(query.data.split('_')[2]) # e.g., 'g_country_3' -> 3
+    #country_id = int(query.data.split('_')[2]) # e.g., 'g_country_3' -> 3
     
     # Save selection to user memory
-    context.user_data['is_global_flow'] = True
-    context.user_data['global_country_id'] = country_id
+    #context.user_data['is_global_flow'] = True
+    #context.user_data['global_country_id'] = country_id
     
     # 1. Start the 'Check-then-Fetch' process
     # If the DB is fresh, this finishes in milliseconds.
     # If the DB is old, it shows the user it's working.
-    success = await get_or_fetch_country_services(country_id)
+    #success = await get_or_fetch_country_services(country_id)
     
-    if success:
+    #if success:
         # 2. Open your existing Service List!
         # Your service list UI just needs to be told: "Pull from global_services table"
-        from handlers.servicelist import show_service_list
-        await show_service_list(update, context)
-    else:
-        await query.message.reply_text("❌ Failed to synchronize global services. Please try again.")
-
+        #from handlers.servicelist import show_service_list
+       # await show_service_list(update, context)
+    #else:
+        #await query.message.reply_text("❌ Failed to synchronize global services. Please try again.")
+async def handle_global_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    
+    # show_alert=True makes the pop-up happen on their screen
+    await query.answer("🚧 Global numbers are coming soon! Stay tuned.", show_alert=True)
+    return
 
 async def handle_other_countries_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
