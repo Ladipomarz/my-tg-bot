@@ -17,6 +17,7 @@ raw_admin_ids = os.getenv("ADMIN_IDS", "")
 # This safely converts a string like "1234567,9876543" into a proper Python list of numbers
 ADMIN_IDS = [int(admin_id.strip()) for admin_id in raw_admin_ids.split(",") if admin_id.strip().isdigit()]
 
+
 if not BOT_TOKEN:
     raise RuntimeError("BOT_TOKEN is missing or not set!")
 

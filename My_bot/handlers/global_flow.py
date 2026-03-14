@@ -21,7 +21,7 @@ async def handle_global_start(update: Update, context: ContextTypes.DEFAULT_TYPE
     user_id = update.effective_user.id
     
     # 1. THE GATEKEEPER logic stays the same
-    is_admin = (user_id == int(ADMIN_IDS))
+    is_admin = user_id in ADMIN_IDS
     
     # 2. Define the content based on who is clicking
     if not is_admin:
