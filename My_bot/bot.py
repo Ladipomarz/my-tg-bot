@@ -101,7 +101,8 @@ from handlers.global_flow import (
     handle_global_type, 
     handle_global_duration, 
     handle_global_country_selection,
-    handle_other_countries_click
+    handle_other_countries_click,
+    process_global_country_input
 )
 
 
