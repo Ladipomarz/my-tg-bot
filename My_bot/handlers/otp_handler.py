@@ -30,11 +30,7 @@ logger = logging.getLogger(__name__)
 
 
 
-
-API_KEY = os.getenv("TEXTVERIFIED_API_KEY")
-API_USERNAME = os.getenv("TEXTVERIFIED_API_USERNAME")
-
-
+from utils.textverified_client import get_provider
 
 async def otp_verification_handler(update: Update, context: CallbackContext, message_text="Please choose your region:"):
     
@@ -88,7 +84,7 @@ async def show_other_countries_menu(update: Update, context: CallbackContext, me
 
 
 # Initialize TextVerified client
-provider = TextVerified(api_key=API_KEY, api_username=API_USERNAME)
+provider = get_provider()
 OTP_POLL_INTERVAL_SEC = 5
 OTP_REFUND_AFTER_SEC = 5 * 60   # 5 minutes
 OTP_INCOMING_TIMEOUT_SEC = 4    # keep < interval to avoid overlap
