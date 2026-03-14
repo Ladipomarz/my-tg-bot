@@ -1,5 +1,8 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
+import asyncio
+import os
+from telegram import InputFile
 # Import your safe_send and whatever cleanup tools you use
 #from utils.helper import safe_send, delete_message
 
@@ -62,17 +65,67 @@ async def handle_global_duration(update: Update, context: ContextTypes.DEFAULT_T
     text = "🌍 **Select a Country**\n\nChoose from the quick list below, or tap 'More Countries' for the full catalog."
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="Markdown")
 
+
 async def handle_global_country_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Triggered by callback_data='g_country_3' or 'g_country_15'"""
     query = update.callback_query
     await query.answer()
     
-    country_id = query.data.split('_')[2] # Extracts '3' or '15'
+    # Extract the numeric ID (3 for China, 15 for UK)
+    country_id = query.data.split('_')[2] 
     
-    # --- THE MAGIC HANDOFF ---
-    # 1. We tell the bot this is a global flow
+    # 1. Save the state so the Service List knows we are global
     context.user_data['is_global_flow'] = True
     context.user_data['global_country_id'] = country_id
     
-    # 2. We trigger your existing Service List logic right here.
-    # e.g., await show_service_list(update, context)
+    # 2. Show the "Illusion of Speed" loading screen
+    await query.edit_message_text("🔄 **Connecting to global servers and fetching live prices... Please wait.**", parse_mode="Markdown")
+    
+    # 3. ---> STAGE 2, PHASE B (The Fetch) WILL GO HERE <---
+    # For right now, we just simulate the 1-second delay so you can see the UX
+    await asyncio.sleep(1.5)
+    await query.edit_message_text(f"✅ Data fetched for Country ID {country_id}!\n\n(Service list integration coming next...)")
+
+
+async def handle_more_countries_pdf(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Triggered by callback_data='g_country_more'"""
+    query = update.callback_query
+    await query.answer()
+    
+    # 1. Delete the inline menu to keep the chat clean
+    try:
+        await query.message.delete()
+    except Exception:
+        pass
+        
+    # 2. Send the temporary loading text
+    loading_msg = await context.bot.send_message(
+        chat_id=query.message.chat_id,
+        text="📥 Generating Global Country List..."
+    )
+    
+    # 3. Upload the PDF (You will need a dummy PDF named 'Country_Codes.pdf' in your bot folder for now)
+    pdf_path = "Country_Codes.pdf" 
+    
+    try:
+        with open(pdf_path, "rb") as pdf_file:
+            await context.bot.send_document(
+                chat_id=query.message.chat_id,
+                document=InputFile(pdf_file, filename="Underground_Box_Country_IDs.pdf"),
+                caption=(
+                    "🌍 **Full Country Catalog**\n\n"
+                    "Please open the document to find your desired country.\n\n"
+                    "👇 **Reply to this message with the numeric ID of the country.**\n"
+                    "*(Example: For Brazil, type 73)*"
+                ),
+                parse_mode="Markdown"
+            )
+        
+        # Delete the "Generating..." message
+        await loading_msg.delete()
+        
+        # 4. Set the trapdoor in the text router!
+        context.user_data['otp_step'] = "awaiting_global_country_id"
+        
+    except FileNotFoundError:
+        await loading_msg.edit_text("❌ PDF file not found. Please contact admin.")

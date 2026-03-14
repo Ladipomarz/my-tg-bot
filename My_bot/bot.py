@@ -28,7 +28,7 @@ from utils.auto_delete import safe_send
 from handlers.admin import fix_db_sequence,rescue_my_number,admin_get_stats
 from utils.helper import notify_admin
 from handlers.menu_commands import help_cmd
-
+from handlers.global_flow import handle_global_type, handle_global_duration, handle_global_country_selection
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
@@ -99,7 +99,8 @@ from handlers.global_flow import (
     handle_global_start, 
     handle_global_type, 
     handle_global_duration, 
-    handle_global_country_selection
+    handle_global_country_selection,
+    handle_more_countries_pdf
 )
 
 
@@ -299,7 +300,7 @@ async def ensure_telegram_ready():
             await tg_app.start()
             TG_READY = True
             logger.info("Telegram app is ready")
-            #await setup_bot_profile(tg_app)
+            await setup_bot_profile(tg_app)
              
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
@@ -937,6 +938,24 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data.startswith(("tool_", "otp_", "service_", "esim_" )):
         await tools_callback(update, context)
         return
+    
+    # ✅ Route the Global Flow callbacks
+    if data.startswith("g_"):
+                
+        if data.startswith("g_type_"):
+            await handle_global_type(update, context)
+            return
+        elif data.startswith("g_dur_"):
+            await handle_global_duration(update, context)
+            return
+        elif data == "g_country_more": # <--- ADD THIS RULE FOR THE PDF
+            await handle_more_countries_pdf(update, context)
+            return
+        
+        elif data.startswith("g_country_"):
+            await handle_global_country_selection(update, context)
+            return
+    
 
     if data.startswith("manage_rental:"):
         await manage_rental_menu(update, context)
@@ -1456,6 +1475,41 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if await handle_wallet_text_input(update, context):
             asyncio.create_task(safe_delete_user_message(update))
             return
+        
+        #Other Country Flow
+        
+     # Inside text_router in bot.py:
+    
+    # 🌍 THE GLOBAL COUNTRY ID INTERCEPTOR 
+    if context.user_data.get("otp_step") == "awaiting_global_country_id":
+        from utils.auto_delete import safe_delete_user_message
+        
+        # 1. Start the vaporize timer so their typed number disappears
+        asyncio.create_task(safe_delete_user_message(update))
+        
+        # 2. Check if they actually typed a number
+        if not text.isdigit():
+            msg = await update.message.reply_text("❌ Please enter a valid numeric ID (e.g., 73).")
+            # Cleanup the warning after 4 seconds
+            async def cleanup_warning():
+                await asyncio.sleep(4)
+                try: await msg.delete()
+                except: pass
+            asyncio.create_task(cleanup_warning())
+            return
+            
+        # 3. Save the ID and clear the trap
+        context.user_data['is_global_flow'] = True
+        context.user_data['global_country_id'] = text
+        context.user_data.pop("otp_step", None) # Clear the text trap
+        
+        # 4. Trigger the exact same loading screen that China/UK get
+        loading_msg = await update.message.reply_text("🔄 **Connecting to global servers and fetching live prices... Please wait.**", parse_mode="Markdown")
+        
+        # 5. ---> STAGE 2, PHASE B (The Fetch) WILL GO HERE <---
+        await asyncio.sleep(1.5)
+        await loading_msg.edit_text(f"✅ Data fetched for Typed Country ID {text}!\n\n(Service list integration coming next...)")
+        return   
         
     # --- RENTAL FLOW ---
     # Rental Product ID Step
