@@ -1481,9 +1481,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
      # Inside text_router in bot.py:
     
     # 🌍 THE GLOBAL COUNTRY ID INTERCEPTOR 
-    if context.user_data.get("otp_step") == "awaiting_global_country_id":
-        from utils.auto_delete import safe_delete_user_message
-        
+    if context.user_data.get("otp_step") == "awaiting_global_country_id":        
         # 1. Start the vaporize timer so their typed number disappears
         asyncio.create_task(safe_delete_user_message(update))
         
