@@ -38,7 +38,7 @@ async def otp_verification_handler(update: Update, context: CallbackContext, mes
     keyboard = [
         [
             InlineKeyboardButton("🇺🇸 USA", callback_data="otp_usa"),
-            InlineKeyboardButton("🌍 Other Countries", callback_data="otp_other_country")
+            InlineKeyboardButton("🌍 Other Countries", callback_data="other_countries_start")
         ],
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")]
     ]

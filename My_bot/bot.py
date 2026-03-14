@@ -932,6 +932,12 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     
+    # Ensure BOTH of these triggers lead to the same function
+    if data == "other_countries_start" or data == "other_countries_keypad":
+        from handlers.global_flow import handle_global_start
+        await handle_global_start(update, context)
+        return
+    
     if data == "otp_rental_universal":
         await handle_rental_universal(update, context)
         return
