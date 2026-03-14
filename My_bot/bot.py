@@ -1046,6 +1046,31 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             await q.message.reply_text(summary, reply_markup=kb)
         return
+    
+    # 📢 BROADCAST ALL TRIGGER
+    if data == "admin_broadcast_all":
+        if not _is_admin(user_id): return
+        context.user_data["admin_step"] = "awaiting_broadcast_all"
+        await q.message.reply_text(
+            "📢 <b>Mass Broadcast Mode</b>\n\n"
+            "Send the message you want to deliver to ALL users.\n"
+            "Type <code>cancel</code> to exit.",
+            parse_mode="HTML"
+        )
+        await q.answer()
+        return
+
+    # 👤 SINGLE USER MESSAGE TRIGGER
+    if data == "admin_broadcast_single":
+        if not _is_admin(user_id): return
+        context.user_data["admin_step"] = "awaiting_broadcast_user_id"
+        await q.message.reply_text(
+            "👤 <b>Direct Message Mode</b>\n\n"
+            "Please send the <b>User ID</b> of the person you want to message.",
+            parse_mode="HTML"
+        )
+        await q.answer()
+        return
 
     # ✅ ADMIN confirm & deliver
     if data.startswith("admin_confirm:"):
@@ -1138,6 +1163,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
         return
+    
 
     # ✅ ADMIN edit/resend delivered (edit ALL fields)
     if data.startswith("admin_edit:"):
@@ -1315,6 +1341,8 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             except Exception:
                 pass
         return
+    
+    
 
     # ✅ BLOCK admin from user UI callbacks
     if _is_admin(user_id):

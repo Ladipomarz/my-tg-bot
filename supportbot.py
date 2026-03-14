@@ -100,3 +100,5 @@ async def run_support_bot():
     await support_app.start()
     await support_app.updater.start_polling(drop_pending_updates=True)
     logger.info("✅ Support Bot is now running via polling in the background!")
+    
+    
