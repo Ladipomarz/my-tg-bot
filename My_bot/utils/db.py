@@ -310,6 +310,24 @@ def get_display_services(is_global=False, country_id=None, search_query=None):
         conn.close()
     return services
 
+
+def get_last_updated_time(country_id: int):
+    """Fetches the last updated timestamp for a specific country's global services."""
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT MAX(last_updated) FROM global_services 
+                WHERE country_id = %s
+            """, (country_id,))
+            result = cur.fetchone()
+            return result[0] if result else None
+    except Exception as e:
+        print(f"Error fetching last update time for country {country_id}: {e}")
+        return None
+    finally:
+        conn.close()
+
         
 def save_active_rental(user_id: int, rental_id: str, phone_number: str, service_name: str, always_on: bool, is_renewable: bool, days_to_expire: int):
     """Locks the purchased rental number to the Telegram user in the database."""
