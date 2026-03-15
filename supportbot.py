@@ -1,6 +1,7 @@
 import os
 import logging
 from telegram import Update
+import asyncio
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Pull variables directly from your Railway environment / config
@@ -97,6 +98,9 @@ async def run_support_bot():
     
     await support_app.initialize()
     await support_app.start()
+    
+    logger.info("⏳ Waiting 20 seconds for old bot instance to shut down...")
+    await asyncio.sleep(20)
     
     # ✅ THE CORRECT LINE: drop_pending_updates clears the old "Conflict" session
     await support_app.updater.start_polling(drop_pending_updates=True)

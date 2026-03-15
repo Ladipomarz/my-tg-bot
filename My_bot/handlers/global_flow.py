@@ -99,7 +99,7 @@ async def handle_global_country_selection(update: Update, context: ContextTypes.
     user_id = update.effective_user.id
     
     # 🛡️ THE GATEKEEPER
-    if user_id != int(ADMIN_IDS):
+    if user_id not in (ADMIN_IDS):
         # This is what everyone ELSE sees
         await query.answer("🚧 Global numbers are coming soon!", show_alert=True)
         return
