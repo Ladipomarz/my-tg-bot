@@ -1457,6 +1457,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip()
     low_text = text.lower()
     
+    # 🏁 THE ULTIMATE TRACKER
+    logger.info(f"📥 [ROUTER] Incoming from {user_id}: {text[:30]}")
+    logger.info(f"🧠 [ROUTER] Current Step: {context.user_data.get('admin_step')}")
+    
     # 🛑 1. THE GLOBAL INTERCEPTOR 🛑
     # Put your exact button names here in all lowercase
     global_menu_buttons = [
@@ -1756,6 +1760,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["admin_step"] = "awaiting_broadcast_single_text"
         await update.message.reply_text(f"🎯 Target ID: `{text}`\n\nNow send the message you want to deliver.")
         return
+    
 
     if context.user_data.get("admin_step") == "awaiting_broadcast_single_text":
         if update.effective_user.id not in ADMIN_IDS: return
