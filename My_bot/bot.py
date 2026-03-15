@@ -116,11 +116,11 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger("server")
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
-logging.getLogger("telegram").setLevel(logging.WARNING)
+logging.getLogger("telegram").setLevel(logging.INFO)
 logging.getLogger("apscheduler").setLevel(logging.WARNING)
 
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
@@ -1786,6 +1786,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(f"✅ Message sent to {target_id} and scheduled for deletion in 24h.")
         except Exception as e:
+            # and the EXACT line where it died.
+            logger.error("🛑 CRITICAL FAILURE DETAILS:")
+            logger.error(traceback.format_exc())
             logger.error(f"❌ DEBUG ERROR: Failed to send to {target_id}. Error: {e}")
             await update.message.reply_text(f"❌ Delivery failed: {e}")
             
