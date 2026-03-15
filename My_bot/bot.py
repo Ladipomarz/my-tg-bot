@@ -1453,7 +1453,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Safety Check: Ensure there is actually a message and text
     if not update.message or not update.message.text:
         return    
-    
+    user_id = update.effective_user.id
     text = update.message.text.strip()
     low_text = text.lower()
     
