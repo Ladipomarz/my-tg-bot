@@ -1731,7 +1731,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         success_count = 0
         for uid in all_users:
             try:
-                sent_msg = await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode="HTML")
+                sent_msg = await context.bot.send_message(
+                    chat_id=uid,
+                    text=broadcast_text, 
+                    parse_mode="HTML",
+                    disable_web_page_preview=True
+                    )
                 success_count += 1
                 
                 # 🕒 Schedule deletion after 24 hours (86400 seconds)
@@ -1776,7 +1781,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             sent_msg = await context.bot.send_message(
                 chat_id=target_id, 
                 text=f"✉️ <b>Message from Support</b>\n\n{safe_text}", 
-                parse_mode="HTML"
+                parse_mode="HTML",
+                disable_web_page_preview=True
             )
             
             logger.info(f"✅ DEBUG: Message successfully sent to {target_id}")
