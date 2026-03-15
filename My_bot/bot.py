@@ -1772,21 +1772,26 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("admin_step") == "awaiting_broadcast_single_text":
         if update.effective_user.id not in ADMIN_IDS: return
         target_id = context.user_data.get("target_broadcast_id")
+        
+        # 1. Clean the text you type so HTML doesn't crash
         safe_text = escape(text)
         
-        # 🟢 DEBUG LOGS: See what the bot is trying to do
-        logger.info(f"🔍 DEBUG: Attempting single-user message.")
-        logger.info(f"🎯 Target ID: {target_id} | Message: {text[:20]}...")
+        logger.info(f"🔍 DEBUG: Attempting single-user message to {target_id}.")
         
+        # 🟢 2. CREATE THE INLINE BUTTON (Bypasses the spam filter link check)
+        keyboard = [
+            [InlineKeyboardButton("💬 Connect to Primary Desk", url="https://t.me/themagicboxplaza_bot")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
         
         try:
+            # 🟢 3. SEND WITH THE BUTTON ATTACHED
             sent_msg = await context.bot.send_message(
                 chat_id=target_id, 
-                text=f"✉️ <b>Message from Support</b>\n\n{safe_text}", 
+                text=f"✉️ <b>Message from Underground Box Desk</b>\n\n{safe_text}", 
                 parse_mode="HTML",
                 disable_web_page_preview=True,
-                connect_timeout=10, # Give it more time to breathe
-                read_timeout=10
+                reply_markup=reply_markup  # 👈 This attaches the button to the bottom
             )
             
             logger.info(f"✅ DEBUG: Message successfully sent to {target_id}")
@@ -1799,14 +1804,14 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 name=f"single_del_{target_id}_{sent_msg.message_id}"
             )
             
-            await update.message.reply_text(f"✅ Message sent to {target_id} and scheduled for deletion in 24h.")
+            await update.message.reply_text(f"✅ Success! Message and Support Button delivered to {target_id}.")
+            
         except Exception as e:
-            # and the EXACT line where it died.
             logger.error("🛑 CRITICAL FAILURE DETAILS:")
             logger.error(traceback.format_exc())
-            logger.error(f"❌ DEBUG ERROR: Failed to send to {target_id}. Error: {e}")
             await update.message.reply_text(f"❌ Delivery failed: {e}")
             
+        # Clean up the admin state
         context.user_data.pop("admin_step", None)
         context.user_data.pop("target_broadcast_id", None)
         return
