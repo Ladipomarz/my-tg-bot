@@ -1712,28 +1712,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
     
-    
-    # In bot.py -> inside text_router function
-
-    # 📢 BROADCAST ALL LOGIC
-    if context.user_data.get("admin_step") == "awaiting_broadcast_all":
-        if update.effective_user.id not in ADMIN_IDS: return
-        
-        broadcast_text = f"📢 **Announcement from Support**\n\n{text}"
-        # We'll get all users from your DB
-        all_users = get_all_user_ids() 
-        
-        success_count = 0
-        for uid in all_users:
-            try:
-                await context.bot.send_message(chat_id=uid, text=broadcast_text, parse_mode="Markdown")
-                success_count += 1
-                await asyncio.sleep(0.05) # Prevent Telegram flood limit
-            except: continue
-            
-        await update.message.reply_text(f"✅ Broadcast complete! Sent to {success_count} users.")
-        context.user_data.pop("admin_step", None)
-        return
 
     # 📢 BROADCAST ALL LOGIC (with 24h Auto-Delete)
     if context.user_data.get("admin_step") == "awaiting_broadcast_all":
