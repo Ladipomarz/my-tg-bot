@@ -84,14 +84,12 @@ async def handle_messages(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
         await update.message.reply_text("✅ Message sent! We will reply here soon.")
 
-# 🚀 THE BOOTSTRAPPER (Called by bot.py)
+# 🚀 THE BOOTSTRAPPER (in supportbot.py)
 async def run_support_bot():
-    """Starts the support bot in the background without blocking FastAPI"""
     if not SUPPORT_BOT_TOKEN:
-        logger.warning("No SUPPORT_BOT_TOKEN found in Railway. Support Bot is disabled.")
+        logger.warning("No SUPPORT_BOT_TOKEN found. Support Bot is disabled.")
         return
 
-    # We build the app
     support_app = ApplicationBuilder().token(SUPPORT_BOT_TOKEN).build()
     
     support_app.add_handler(CommandHandler("start", start))
@@ -100,10 +98,7 @@ async def run_support_bot():
     await support_app.initialize()
     await support_app.start()
     
-    # ✅ THE FIX: Seize the connection and kill any ghost instances
-    await support_app.updater.start_polling(
-        drop_pending_updates=True, 
-        stop_signals=None # This prevents signal conflicts on Railway
-    )
+    # ✅ THE CORRECT LINE: drop_pending_updates clears the old "Conflict" session
+    await support_app.updater.start_polling(drop_pending_updates=True)
     
     logger.info("✅ Support Bot session seized and running.")
