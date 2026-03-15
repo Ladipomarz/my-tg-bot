@@ -1719,6 +1719,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         broadcast_text = f"📢 <b>ANNOUNCEMENT FROM UNDERGROUND BOX</b>\n\n{text}"
         all_users = get_all_user_ids() 
+        logger.info(f"🚀 Starting Broadcast to {len(all_users)} users.")
         
         success_count = 0
         for uid in all_users:
@@ -1757,12 +1758,19 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if update.effective_user.id not in ADMIN_IDS: return
         target_id = context.user_data.get("target_broadcast_id")
         
+        # 🟢 DEBUG LOGS: See what the bot is trying to do
+        logger.info(f"🔍 DEBUG: Attempting single-user message.")
+        logger.info(f"🎯 Target ID: {target_id} | Message: {text[:20]}...")
+        
+        
         try:
             sent_msg = await context.bot.send_message(
                 chat_id=target_id, 
                 text=f"✉️ <b>Message from Support</b>\n\n{text}", 
                 parse_mode="HTML"
             )
+            
+            logger.info(f"✅ DEBUG: Message successfully sent to {target_id}")
             
             # 🕒 Schedule deletion after 24 hours
             context.job_queue.run_once(
@@ -1774,6 +1782,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             await update.message.reply_text(f"✅ Message sent to {target_id} and scheduled for deletion in 24h.")
         except Exception as e:
+            logger.error(f"❌ DEBUG ERROR: Failed to send to {target_id}. Error: {e}")
             await update.message.reply_text(f"❌ Delivery failed: {e}")
             
         context.user_data.pop("admin_step", None)
