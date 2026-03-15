@@ -34,7 +34,7 @@ from handlers.global_flow import handle_global_type, handle_global_duration, han
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
-from handlers.otp_handler import handle_otp_text_input
+from handlers.otp_handler import handle_otp_text_input,show_global_coming_soon
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 from handlers.menu_commands import register_side_menu, setup_bot_profile
 
@@ -99,6 +99,7 @@ test_expire_alarm
 )
 
 # In bot.py
+'''
 from handlers.global_flow import (
     handle_global_start, 
     handle_global_type, 
@@ -107,7 +108,7 @@ from handlers.global_flow import (
     handle_other_countries_click,
     process_global_country_input
 )
-
+'''
 
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
 logging.basicConfig(
@@ -937,8 +938,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Ensure BOTH of these triggers lead to the same function
     if data == "other_countries_start" or data == "other_countries_keypad":
-        from handlers.global_flow import handle_global_start
-        await handle_global_start(update, context)
+        await show_global_coming_soon(update, context)
         return
     
     if data == "otp_rental_universal":
@@ -1633,9 +1633,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
         if "purchase non number" in low_text: 
             context.user_data["current_menu"] = "other_number"
-            # ✅ CALL THE UNIFIED HANDLER
-            from handlers.global_flow import handle_global_start
-            await handle_global_start(update, context)
+            await show_global_coming_soon(update, context)
 
         # if Tools clicked and there is a pending order, redirect to pending page
         if "tools" in low_text:
@@ -1880,7 +1878,7 @@ tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
 tg_app.add_handler(CommandHandler("force_expire_order", force_expire_order_test))
 # ... inside your handler registration ...
-tg_app.add_handler(CallbackQueryHandler(handle_global_start, pattern="^other_countries_start$"))
+#tg_app.add_handler(CallbackQueryHandler(handle_global_start, pattern="^other_countries_start$"))
 tg_app.add_handler(CallbackQueryHandler(handle_global_type, pattern="^g_type_"))
 tg_app.add_handler(CallbackQueryHandler(handle_global_duration, pattern="^g_dur_"))
 # Matches g_country_3 and g_country_15, but ignores g_country_more for now

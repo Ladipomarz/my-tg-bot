@@ -91,6 +91,17 @@ async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAUL
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
+    
+    
+async def show_global_coming_soon(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = "🌍 <b>Global Services</b>\n\n🚧 Coming soon..."
+    
+    # Check if it was an inline button click
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, parse_mode="HTML")
+    # Otherwise, it was the keypad or a text command
+    else:
+        await update.message.reply_text(text, parse_mode="HTML")
 
 # Initialize TextVerified client
 provider = get_provider()
