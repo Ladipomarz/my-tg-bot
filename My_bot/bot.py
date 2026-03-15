@@ -10,6 +10,7 @@ import traceback
 import html
 from config import SUPPORT_HANDLE
 from supportbot import run_support_bot
+from telegram.helpers import escape
 import html
 
 from fastapi import FastAPI, Request, Response
@@ -1716,8 +1717,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 📢 BROADCAST ALL LOGIC (with 24h Auto-Delete)
     if context.user_data.get("admin_step") == "awaiting_broadcast_all":
         if update.effective_user.id not in ADMIN_IDS: return
+        # 1. ESCAPE THE INPUT FIRST
+        safe_text = escape(text)
         
-        broadcast_text = f"📢 <b>ANNOUNCEMENT FROM UNDERGROUND BOX</b>\n\n{text}"
+        broadcast_text = f"📢 <b>ANNOUNCEMENT FROM UNDERGROUND BOX</b>\n\n{safe_text}"
         all_users = get_all_user_ids() 
         logger.info(f"🚀 Starting Broadcast to {len(all_users)} users.")
         
@@ -1757,6 +1760,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("admin_step") == "awaiting_broadcast_single_text":
         if update.effective_user.id not in ADMIN_IDS: return
         target_id = context.user_data.get("target_broadcast_id")
+        safe_text = escape(text)
         
         # 🟢 DEBUG LOGS: See what the bot is trying to do
         logger.info(f"🔍 DEBUG: Attempting single-user message.")
@@ -1766,7 +1770,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         try:
             sent_msg = await context.bot.send_message(
                 chat_id=target_id, 
-                text=f"✉️ <b>Message from Support</b>\n\n{text}", 
+                text=f"✉️ <b>Message from Support</b>\n\n{safe_text}", 
                 parse_mode="HTML"
             )
             
