@@ -99,7 +99,7 @@ test_expire_alarm
 )
 
 # In bot.py
-'''
+
 from handlers.global_flow import (
     handle_global_start, 
     handle_global_type, 
@@ -108,7 +108,13 @@ from handlers.global_flow import (
     handle_other_countries_click,
     process_global_country_input
 )
-'''
+
+from handlers.concierge_global import (
+    start_concierge_flow, 
+    handle_manual_country, 
+    handle_manual_service, 
+    process_manual_payment
+)
 
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
 logging.basicConfig(
@@ -950,6 +956,17 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await tools_callback(update, context)
         return
     
+    
+    # ✅ Route the Global Flow to the Concierge Desk
+    if data == "other_countries_start" or data == "other_countries_keypad":
+        await start_concierge_flow(update, context)
+        return
+        
+    # ✅ Catch the Pay button from the Concierge flow
+    if data == "concierge_pay":
+        await process_manual_payment(update, context)
+        return
+    
     # ✅ Route the Global Flow callbacks
     if data.startswith("g_"):
                 
@@ -1499,6 +1516,8 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if await handle_otp_text_input(update, context):
         asyncio.create_task(safe_delete_user_message(update))
         return
+    
+    
         
     # 🛑 3. THE EXTENSION INTERCEPTOR 🛑
     if context.user_data.get("awaiting_extension_choice"):
@@ -1521,7 +1540,16 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         #Other Country Flow
         
-     # Inside text_router in bot.py:
+        
+    # 🌍 CONCIERGE DESK INTERCEPTORS
+    if context.user_data.get("otp_step") == "awaiting_manual_country":
+        await handle_manual_country(update, context)
+        return
+        
+    if context.user_data.get("otp_step") == "awaiting_manual_service":
+        await handle_manual_service(update, context)
+        return
+        
     
     # 🌍 THE GLOBAL COUNTRY ID INTERCEPTOR 
     if context.user_data.get("otp_step") == "awaiting_global_country_id":        
@@ -1633,7 +1661,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
         if "purchase non number" in low_text: 
             context.user_data["current_menu"] = "other_number"
-            await show_global_coming_soon(update, context)
+            await start_concierge_flow(update, context)
 
         # if Tools clicked and there is a pending order, redirect to pending page
         if "tools" in low_text:
@@ -1878,7 +1906,7 @@ tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
 tg_app.add_handler(CommandHandler("force_expire_order", force_expire_order_test))
 # ... inside your handler registration ...
-#tg_app.add_handler(CallbackQueryHandler(handle_global_start, pattern="^other_countries_start$"))
+tg_app.add_handler(CallbackQueryHandler(handle_global_start, pattern="^other_countries_start$"))
 tg_app.add_handler(CallbackQueryHandler(handle_global_type, pattern="^g_type_"))
 tg_app.add_handler(CallbackQueryHandler(handle_global_duration, pattern="^g_dur_"))
 # Matches g_country_3 and g_country_15, but ignores g_country_more for now
