@@ -5,43 +5,6 @@ from config import SMSA_API_KEY
 from utils.db import save_global_services_to_db, get_connection
 logger = logging.getLogger(__name__)
 
-async def get_or_fetch_country_services(country_id: int):
-    """
-    The Check-then-Fetch Logic:
-    1. Checks if data exists for this country.
-    2. Checks if data is older than 24 hours.
-    3. Fetches from API only if necessary.
-    """
-    conn = get_connection()
-    needs_fetch = False
-    
-    try:
-        with conn.cursor() as cur:
-            # Check the timestamp of the last update for this country
-            cur.execute("""
-                SELECT MAX(last_updated) FROM global_services 
-                WHERE country_id = %s
-            """, (country_id,))
-            last_update = cur.fetchone()[0]
-            
-            # LOGIC: If no data OR data is older than 24 hours
-            if last_update is None:
-                needs_fetch = True
-            else:
-                # Compare last update time with current time (24 hour window)
-                if datetime.now() - last_update > timedelta(hours=24):
-                    needs_fetch = True
-                    
-    finally:
-        conn.close()
-
-    if needs_fetch:
-        logger.info(f"🔄 Data for Country {country_id} is missing or stale. Fetching fresh data...")
-        # Call the fetcher we built earlier
-        return await fetch_and_save_global_services(country_id)
-    else:
-        logger.info(f"✅ Data for Country {country_id} is fresh (within 24h). Skipping API call.")
-        return True
 
 async def fetch_and_save_global_services(country_id: int):
     """
@@ -53,9 +16,9 @@ async def fetch_and_save_global_services(country_id: int):
         logger.error("❌ SMSA_API_KEY is missing! Check your Railway Variables.")
         return False
 
-    # SMS-Activate Endpoints
-    names_url = "https://sms-activate.org/api/api.php?act=getServicesList"
-    prices_url = f"https://api.sms-activate.org/stubs/handler_api.php?api_key={SMSA_API_KEY}&action=getPrices&country={country_id}"
+    # 🟢 THE FIX: Replaced .org with smsactivate.com AND added &json=1
+    names_url = "https://smsactivate.com/api/api.php?act=getServicesList"
+    prices_url = f"https://smsactivate.com/stubs/handler_api.php?api_key={SMSA_API_KEY}&action=getPrices&country={country_id}&json=1"
 
     try:
         async with httpx.AsyncClient(timeout=20) as client:
@@ -63,12 +26,16 @@ async def fetch_and_save_global_services(country_id: int):
             names_resp = await client.get(names_url)
             prices_resp = await client.get(prices_url)
             
-        service_names = names_resp.json().get("services", {})
-        # SMSA returns data indexed by country ID string
-        prices_data = prices_resp.json().get(str(country_id), {})
+        # 🛡️ SAFETY CHECK: Ensure we actually got JSON back
+        try:
+            service_names = names_resp.json().get("services", {})
+            prices_data = prices_resp.json().get(str(country_id), {})
+        except Exception as json_err:
+            logger.error(f"❌ SMSA did not return valid JSON. Text: {prices_resp.text}")
+            return False
 
         if not prices_data:
-            logger.warning(f"No services found for Country {country_id}")
+            logger.warning(f"⚠️ No services found for Country {country_id}")
             return False
 
         ready_to_save = []
@@ -94,8 +61,9 @@ async def fetch_and_save_global_services(country_id: int):
 
         # Save to the database using the function in utils/db.py
         save_global_services_to_db(country_id, ready_to_save)
+        logger.info(f"✅ Successfully saved {len(ready_to_save)} services for Country {country_id} to DB.")
         return True
 
     except Exception as e:
-        logger.error(f"SMSA Fetch Error: {e}")
+        logger.error(f"💥 SMSA Fetch Error: {e}")
         return False
