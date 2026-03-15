@@ -91,6 +91,7 @@ async def run_support_bot():
         logger.warning("No SUPPORT_BOT_TOKEN found in Railway. Support Bot is disabled.")
         return
 
+    # We build the app
     support_app = ApplicationBuilder().token(SUPPORT_BOT_TOKEN).build()
     
     support_app.add_handler(CommandHandler("start", start))
@@ -98,7 +99,11 @@ async def run_support_bot():
     
     await support_app.initialize()
     await support_app.start()
-    await support_app.updater.start_polling(drop_pending_updates=True)
-    logger.info("✅ Support Bot is now running via polling in the background!")
     
+    # ✅ THE FIX: Seize the connection and kill any ghost instances
+    await support_app.updater.start_polling(
+        drop_pending_updates=True, 
+        stop_signals=None # This prevents signal conflicts on Railway
+    )
     
+    logger.info("✅ Support Bot session seized and running.")

@@ -1735,7 +1735,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     chat_id=uid,
                     text=broadcast_text, 
                     parse_mode="HTML",
-                    disable_web_page_preview=True
+                    disable_web_page_preview=True,
+                    connect_timeout=10, # Give it more time to breathe
+                    read_timeout=10
                     )
                 success_count += 1
                 
@@ -1782,7 +1784,9 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 chat_id=target_id, 
                 text=f"✉️ <b>Message from Support</b>\n\n{safe_text}", 
                 parse_mode="HTML",
-                disable_web_page_preview=True
+                disable_web_page_preview=True,
+                connect_timeout=10, # Give it more time to breathe
+                read_timeout=10
             )
             
             logger.info(f"✅ DEBUG: Message successfully sent to {target_id}")
