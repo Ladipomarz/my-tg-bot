@@ -34,7 +34,7 @@ from handlers.global_flow import handle_global_type, handle_global_duration, han
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
-from handlers.otp_handler import handle_otp_text_input
+from handlers.otp_handler import handle_otp_text_input,show_other_countries_menu
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 from handlers.menu_commands import register_side_menu, setup_bot_profile
 
@@ -950,7 +950,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 1. Main Entry (Keypad or Inline)
     if data in ["other_countries_start", "other_countries_keypad"]:
-        await start_concierge_flow(update, context)
+        await show_other_countries_menu(update, context)
         return
 
     # 2. Quick Selects (China / UK) - NO KEYBOARDS HERE
@@ -1684,7 +1684,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
         if "purchase non number" in low_text: 
             context.user_data["current_menu"] = "other_number"
-            await start_concierge_flow(update, context)
+            await show_other_countries_menu(update, context)
             return
 
         # if Tools clicked and there is a pending order, redirect to pending page

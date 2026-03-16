@@ -3,37 +3,13 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from utils.db import get_user_balance_usd,try_debit_user_balance_usd
-from utils.validator import normalize_global_country_name
+from utils.validator import normalize_global_country_name,_GLOBAL_NORM_TO_CANON
 from utils.auto_delete import safe_send, safe_delete_user_message, delete_tracked_message
-from config import SUPPORT_HANDLE,ADMIN_IDS
+from config import SUPPORT_HANDLE
 
 logger = logging.getLogger(__name__)
 
 # -----------------------------------------
-# 🧠 THE SMART DICTIONARY
-# Maps common abbreviations/slang to official names
-# Add to this whenever users invent new ways to spell things
-# -----------------------------------------
-COUNTRY_ALIAS_MAP = {
-    "uk": "United Kingdom",
-    "england": "United Kingdom",
-    "gb": "United Kingdom",
-    "us": "United States",
-    "usa": "United States",
-    "uae": "United Arab Emirates",
-    "dubai": "United Arab Emirates",
-    "sa": "South Africa",
-    "rsa": "South Africa",
-    "nz": "New Zealand",
-    "aus": "Australia",
-}
-
-# -----------------------------------------
-# 🚪 1. THE ENTRY POINT
-# Triggered when they click "Other Countries" -> "One Time"
-# -----------------------------------------
-# My_bot/handlers/concierge_global.py
-
 async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Clean up previous menu
     chat_id = update.effective_chat.id
@@ -93,21 +69,52 @@ async def handle_manual_country(update: Update, context: ContextTypes.DEFAULT_TY
             context.user_data["otp_instruction_msg_id"] = msg.message_id
         return True
 
-    # 2. THEN VALIDATE AGAINST THE 180+ LIST
+    # 2. VALIDATE AGAINST YOUR 180+ COUNTRY LIST
     is_valid, official_country = normalize_global_country_name(user_text)
     
+    if is_valid:
+        # Check if they typed an exact match/alias, or if the bot had to auto-correct a typo
+        if user_text.lower() not in _GLOBAL_NORM_TO_CANON:
+            # 🚨 THE BOT CAUGHT A TYPO (e.g., "bazil") -> Ask for confirmation
+            await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+            
+            keyboard = [
+                # Notice how we reuse the g_quick_ logic so clicking "Yes" instantly asks for the Service!
+                [InlineKeyboardButton(f"✅ Yes, {official_country}", callback_data=f"g_quick_{official_country}")],
+                [InlineKeyboardButton("❌ No, Try Again", callback_data="other_countries_manual")]
+            ]
+            
+            msg = await safe_send(
+                update_or_query=update, 
+                context=context,
+                text=f"🤔 <b>Did you mean {official_country}?</b>\n\nWe couldn't find an exact match for '{user_text}'.",
+                reply_markup=InlineKeyboardMarkup(keyboard), 
+                parse_mode="HTML"
+            )
+            if msg:
+                context.user_data["otp_instruction_msg_id"] = msg.message_id
+            return True
+            
+        else:
+            # ✅ EXACT MATCH (e.g., "brazil" or "uk") -> Proceed normally
+            context.user_data["concierge_country"] = official_country
+            context.user_data["otp_step"] = "awaiting_manual_service"
+            await ask_for_service(update, context, official_country)
+            return True
+
+    # 3. IF COMPLETELY INVALID (e.g., "narnia")
     if not is_valid:
         await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
         
-        # ... (Send the "Country Not Found" error message here) ...
+        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="back_main")]]
+        msg = await safe_send(
+            update_or_query=update, context=context,
+            text=f"❌ <b>Country Not Found.</b>\nWe couldn't recognize <b>'{user_text}'</b>. Please type a valid country name.",
+            reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+        )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
         return True
-
-    # 3. SUCCESS -> Ask for Service
-    context.user_data["concierge_country"] = official_country
-    context.user_data["otp_step"] = "awaiting_manual_service"    
-    await ask_for_service(update, context, official_country)
-        
-    return True
 
 # -----------------------------------------
 # 💬 3. CATCHING THE SERVICE & SHOWING PRICE
