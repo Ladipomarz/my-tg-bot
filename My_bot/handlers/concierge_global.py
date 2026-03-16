@@ -9,6 +9,45 @@ from config import SUPPORT_HANDLE
 
 logger = logging.getLogger(__name__)
 
+
+async def show_global_type_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows only: Text Verification"""
+    chat_id = update.effective_chat.id
+    await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+
+    keyboard = [
+        [InlineKeyboardButton("💬 Text Verification", callback_data="g_type_text")],
+        [InlineKeyboardButton("⬅ Back", callback_data="main_menu")]
+    ]
+    msg = await safe_send(
+        update_or_query=update.callback_query or update,
+        context=context,
+        text="🌍 <b>Global Services</b>\n\nWhat type of service do you need?",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
+
+async def show_global_duration_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Shows only: One Time"""
+    chat_id = update.effective_chat.id
+    await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+
+    keyboard = [
+        [InlineKeyboardButton("🕐 One Time", callback_data="g_dur_onetime")],
+        [InlineKeyboardButton("⬅ Back", callback_data="other_countries_start")]
+    ]
+    msg = await safe_send(
+        update_or_query=update.callback_query or update,
+        context=context,
+        text="🌍 <b>Global Services</b>\n\nSelect duration:",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+        parse_mode="HTML"
+    )
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
+
 # -----------------------------------------
 async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # 1. Clean up previous menu
@@ -25,7 +64,7 @@ async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYP
     ]
     
     msg_text = (
-        "🌍 <b>Global Routing Network</b>\n"
+        "🌍 <b>Global Service Network</b>\n"
         "Initializing connection to international operators...\n\n"
         "📍 <b>Enter Target Country:</b>\n"
         "<i>(Type the country name below, e.g., Brazil, India)</i>"
@@ -109,7 +148,7 @@ async def handle_manual_country(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="back_main")]]
         msg = await safe_send(
             update_or_query=update, context=context,
-            text=f"❌ <b>Country Not Found.</b>\nWe couldn't recognize <b>'{user_text}'</b>. Please type a valid country name.",
+            text=f"❌ <b>Country Not Found.</b>\n\nWe couldn't recognize <b>'{user_text}'</b>. Please type a valid country name.",
             reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
         )
         if msg:

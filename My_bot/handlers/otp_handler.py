@@ -70,7 +70,7 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext, m
     
 # My_bot/handlers/otp_handler.py
 
-async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text="🌍 <b>Global Services</b>\n\nWhat type of service do you need?"):
+async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text="🌍 <b>Global Services</b>\n\nWhat Do You Want Today?"):
     # 1. Flag the user as entering the global flow
     context.user_data['is_global_flow'] = True
     

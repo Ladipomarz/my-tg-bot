@@ -114,7 +114,9 @@ from handlers.concierge_global import (
     handle_manual_country, 
     handle_manual_service, 
     process_manual_payment,
-    ask_for_service
+    ask_for_service,
+    show_global_duration_menu,
+    show_global_type_menu
 )
 
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
@@ -950,6 +952,14 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # 1. Main Entry (Keypad or Inline)
     if data in ["other_countries_start", "other_countries_keypad"]:
+        await show_global_type_menu(update, context)
+        return
+    
+    if data == "g_type_text":
+        await show_global_duration_menu(update, context)
+        return
+    
+    if data == "g_dur_onetime":
         await show_other_countries_menu(update, context)
         return
 
