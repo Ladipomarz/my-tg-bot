@@ -22,7 +22,7 @@ async def show_global_type_menu(update: Update, context: ContextTypes.DEFAULT_TY
     msg = await safe_send(
         update_or_query=update.callback_query or update,
         context=context,
-        text="🌍 <b>Global Services</b>\n\nWhat type of service do you need?",
+        text="🌍 <b>Global Services</b>\n\n Receive a One Time Text to verify any service",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
@@ -41,7 +41,7 @@ async def show_global_duration_menu(update: Update, context: ContextTypes.DEFAUL
     msg = await safe_send(
         update_or_query=update.callback_query or update,
         context=context,
-        text="🌍 <b>Global Services</b>\n\nSelect duration:",
+        text="🌍 <b>Global Services</b>\n\n You can use the one time if you are looking to purchase\n a number to verify any platform for a one time usage.",
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
@@ -188,7 +188,7 @@ async def handle_manual_service(update: Update, context: ContextTypes.DEFAULT_TY
         shortfall = static_price - current_balance
         
         keyboard = [
-            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
+            [InlineKeyboardButton("➕ Top up wallet", callback_data="top_up_wallet")],
             [InlineKeyboardButton("❌ Cancel", callback_data="back_main")]
         ]
         

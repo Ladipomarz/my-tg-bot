@@ -1694,7 +1694,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
            
         if "purchase non number" in low_text: 
             context.user_data["current_menu"] = "other_number"
-            await show_other_countries_menu(update, context)
+            await show_global_type_menu(update, context)
             return
 
         # if Tools clicked and there is a pending order, redirect to pending page
