@@ -68,26 +68,33 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext, m
         parse_mode="HTML"
     )
     
+# My_bot/handlers/otp_handler.py
+
 async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text="🌍 <b>Global Services</b>\n\nWhat type of service do you need?"):
+    # 1. Flag the user as entering the global flow
     context.user_data['is_global_flow'] = True
     
-    # We now offer China and UK as quick picks, plus a 'More' button
+    # 2. Build the menu with China, UK, and More Countries
     keyboard = [
         [
-            InlineKeyboardButton("🇨🇳 China", callback_data="g_quick_china"),
-            InlineKeyboardButton("🇬🇧 UK", callback_data="g_quick_uk")
+            InlineKeyboardButton("🇨🇳 China", callback_data="g_quick_China"),
+            InlineKeyboardButton("🇬🇧 UK", callback_data="g_quick_United Kingdom")
         ],
-        [InlineKeyboardButton("🌍 More Countries", callback_data="other_countries_keypad")],
+        [InlineKeyboardButton("🌍 More Countries", callback_data="other_countries_manual")],
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")] 
     ]
     
-    return await safe_send(
+    # 3. Use safe_send and track the ID for the Janitor
+    msg = await safe_send(
         update_or_query=update.callback_query or update, 
         context=context,
         text=message_text,
         reply_markup=InlineKeyboardMarkup(keyboard),
         parse_mode="HTML"
     )
+    
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
     
     
 async def show_global_coming_soon(update: Update, context: ContextTypes.DEFAULT_TYPE):

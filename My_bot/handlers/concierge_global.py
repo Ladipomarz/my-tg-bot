@@ -2,10 +2,10 @@ import asyncio
 import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from utils.db import get_user_balance_usd
+from utils.db import get_user_balance_usd,try_debit_user_balance_usd
 from utils.validator import normalize_global_country_name
 from utils.auto_delete import safe_send, safe_delete_user_message, delete_tracked_message
-from config import SUPPORT_HANDLE
+from config import SUPPORT_HANDLE,ADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -32,15 +32,19 @@ COUNTRY_ALIAS_MAP = {
 # 🚪 1. THE ENTRY POINT
 # Triggered when they click "Other Countries" -> "One Time"
 # -----------------------------------------
+# My_bot/handlers/concierge_global.py
+
 async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # 1. Clean up any previous menus
+    # 1. Clean up previous menu
     chat_id = update.effective_chat.id
     await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
     
     # 2. Set the trap for the text router
     context.user_data["otp_step"] = "awaiting_manual_country"
     
+    # 3. Keyboard with Back and Cancel
     keyboard = [
+        [InlineKeyboardButton("⬅ Back", callback_data="other_countries_start")],
         [InlineKeyboardButton("❌ Cancel", callback_data="back_main")]
     ]
     
@@ -48,10 +52,10 @@ async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYP
         "🌍 <b>Global Routing Network</b>\n"
         "Initializing connection to international operators...\n\n"
         "📍 <b>Enter Target Country:</b>\n"
-        "<i>(Type the country name below, e.g., Brazil, UK, India)</i>"
+        "<i>(Type the country name below, e.g., Brazil, India)</i>"
     )
     
-    # 3. Send and track the message for the Janitor
+    # 4. Send and track for the Janitor
     msg = await safe_send(
         update_or_query=update.callback_query or update,
         context=context,
@@ -69,17 +73,40 @@ async def handle_manual_country(update: Update, context: ContextTypes.DEFAULT_TY
     asyncio.create_task(safe_delete_user_message(update))
     
     user_text = (update.message.text or "").strip()
-    # (Validator and USA check logic stays here...)
+    if not user_text:
+        return True
     
+    chat_id = update.effective_chat.id
+
+    # 🚨 1. THE USA TRAP MUST BE ABSOLUTELY FIRST 🚨
+    usa_variants = ["us", "usa", "america", "united states", "united state", "u.s.a", "u.s"]
+    if user_text.lower() in usa_variants:
+        await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+        
+        keyboard = [[InlineKeyboardButton("🇺🇸 Go to USA Menu", callback_data="otp_usa")]]
+        msg = await safe_send(
+            update_or_query=update, context=context,
+            text="🇺🇸 <b>Dedicated USA Service Detected</b>\n\nFor United States numbers, please use our dedicated USA menu for lower rates.",
+            reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+        )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return True
+
+    # 2. THEN VALIDATE AGAINST THE 180+ LIST
     is_valid, official_country = normalize_global_country_name(user_text)
     
-    if is_valid:
-        context.user_data["concierge_country"] = official_country
-        context.user_data["otp_step"] = "awaiting_manual_service"
+    if not is_valid:
+        await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
         
-        # Just call the UI helper!
-        await ask_for_service(update, context, official_country)
-    
+        # ... (Send the "Country Not Found" error message here) ...
+        return True
+
+    # 3. SUCCESS -> Ask for Service
+    context.user_data["concierge_country"] = official_country
+    context.user_data["otp_step"] = "awaiting_manual_service"    
+    await ask_for_service(update, context, official_country)
+        
     return True
 
 # -----------------------------------------
@@ -144,8 +171,7 @@ async def handle_manual_service(update: Update, context: ContextTypes.DEFAULT_TY
             f"💬 <b>Service:</b> {user_text}\n"
             f"💎 <b>Price:</b> ${static_price:.2f}\n"
             f"💳 <b>Your Balance:</b> ${current_balance:.2f}\n\n"
-            "⚡️ <i>Lines are allocated manually by our desk for maximum success rate.</i>\n"
-            "Click confirm to securely process payment."
+            f"Click confirm to securely process payment."
         )
         
         # We clear the text step so the bot waits for the button click
@@ -166,17 +192,16 @@ async def handle_manual_service(update: Update, context: ContextTypes.DEFAULT_TY
     return True
 
 
-
-from utils.db import try_debit_user_balance_usd
-from config import ADMIN_IDS
-
 # -----------------------------------------
 # 💳 4. PROCESS PAYMENT & ALERT ADMIN
 # Triggered by 'concierge_pay' inline button
 # -----------------------------------------
+# Inside handlers/concierge_global.py
+
 async def process_manual_payment(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     user_id = q.from_user.id
+    chat_id = q.message.chat_id
     
     country = context.user_data.get("concierge_country", "Unknown")
     service = context.user_data.get("concierge_service", "Unknown")
@@ -187,40 +212,29 @@ async def process_manual_payment(update: Update, context: ContextTypes.DEFAULT_T
         await q.answer("❌ Insufficient balance.", show_alert=True)
         return
         
-    # 2. Update User UI (The Illusion of Automation)
+    # 2. THE ILLUSION: Use safe_send and track the ID
     msg_text = (
         f"⚡️ <b>Payment Confirmed. (${static_price:.2f} Deducted)</b>\n\n"
         "🔄 <b>Executing routing protocol...</b>\n"
         f"Allocating a clean, high-trust line for <b>{country} ({service})</b>.\n\n"
-        "<i>Please keep this menu open. Your encrypted number and OTP will be delivered to this chat shortly.</i>\n\n"
-        "⏳ Status: <code>Agent assigned & Routing...</code>"
+        "<i>Your encrypted number and OTP will be delivered to this chat shortly.</i>\n\n"
+        "⏳ Status: <code>Number assigned & Routing...</code>"
     )
     
-    await q.edit_message_text(msg_text, parse_mode="HTML")
-    
-    # 3. Fire the loud alert to the Admin (You)
-    admin_alert = (
-        "🚨 <b>NEW GLOBAL CONCIERGE ORDER (PAID $8.00)</b> 🚨\n\n"
-        f"👤 <b>User ID:</b> <code>{user_id}</code>\n"
-        f"📍 <b>Country:</b> {country}\n"
-        f"💬 <b>Service:</b> {service}\n\n"
-        "🛠 <b>Action Required:</b>\n"
-        "1. Buy the number on your provider.\n"
-        "2. Click 'Direct Message Mode' in your Admin Menu to send the number to the User ID above.\n"
-        "3. Send them the OTP when it arrives."
+    # Clean up the previous "Order Summary" message
+    await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+
+    # Send the success message
+    msg = await safe_send(
+        update_or_query=q,
+        context=context,
+        text=msg_text,
+        parse_mode="HTML"
     )
     
-    if ADMIN_IDS:
-        for admin_id in ADMIN_IDS:
-            try:
-                await context.bot.send_message(chat_id=admin_id, text=admin_alert, parse_mode="HTML")
-            except Exception:
-                pass
-            
-    # 4. Clear the session memory so they don't accidentally buy it twice
-    context.user_data.pop("concierge_country", None)
-    context.user_data.pop("concierge_service", None)
-    
+    # Save ID for the Janitor to clean up later
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
     
     
 # handlers/concierge_global.py

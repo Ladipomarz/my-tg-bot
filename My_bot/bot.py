@@ -943,6 +943,11 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
 
+    # Triggered by "🌍 More Countries" button
+    if data == "other_countries_manual":
+        await start_concierge_flow(update, context)
+        return
+    
     # 1. Main Entry (Keypad or Inline)
     if data in ["other_countries_start", "other_countries_keypad"]:
         await start_concierge_flow(update, context)
@@ -1680,6 +1685,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "purchase non number" in low_text: 
             context.user_data["current_menu"] = "other_number"
             await start_concierge_flow(update, context)
+            return
 
         # if Tools clicked and there is a pending order, redirect to pending page
         if "tools" in low_text:
