@@ -8,7 +8,6 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 # Import your existing menu functions and config
 from handlers.wallet_continue import open_wallet_menu
 from handlers.concierge_global import start_concierge_flow
-from handlers.start import handle_main_menu
 from menus.main_menu import get_main_menu
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu

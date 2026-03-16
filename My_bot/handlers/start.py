@@ -6,7 +6,6 @@ from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
 from handlers.tools import open_tools_menu
 from handlers.orders import open_orders_menu
-from handlers.menu_commands import help_cmd
 from config import ADMIN_IDS
 from config import SUPPORT_HANDLE
 from handlers.wallet_continue import open_wallet_menu
@@ -143,4 +142,5 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # ✅ Support Keypad (Redirecting to your existing help_cmd)
     if key == "support":
+        from handlers.menu_commands import help_cmd
         return await help_cmd(update, context)
