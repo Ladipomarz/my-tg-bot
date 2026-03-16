@@ -113,7 +113,8 @@ from handlers.concierge_global import (
     start_concierge_flow, 
     handle_manual_country, 
     handle_manual_service, 
-    process_manual_payment
+    process_manual_payment,
+    ask_for_service
 )
 
 # 1. SET THE GLOBAL RULE (Change this from DEBUG to INFO)
@@ -941,10 +942,27 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await open_wallet_menu(update, context)
         return
     
-    
-    # Ensure BOTH of these triggers lead to the same function
-    if data == "other_countries_start" or data == "other_countries_keypad":
+
+    # 1. Main Entry (Keypad or Inline)
+    if data in ["other_countries_start", "other_countries_keypad"]:
         await start_concierge_flow(update, context)
+        return
+
+    # 2. Quick Selects (China / UK) - NO KEYBOARDS HERE
+    if data.startswith("g_quick_"):
+        selected_country = data.replace("g_quick_", "")
+        
+        # Set the logic
+        context.user_data["concierge_country"] = selected_country
+        context.user_data["otp_step"] = "awaiting_manual_service"
+        
+        # Route to the UI helper
+        await ask_for_service(update, context, selected_country)
+        return
+
+    # 3. The Payment Route
+    if data == "concierge_pay":
+        await process_manual_payment(update, context)
         return
     
     if data == "otp_rental_universal":
@@ -1906,7 +1924,7 @@ tg_app.add_handler(CommandHandler("test_expire", test_expire_alarm))
 tg_app.add_handler(CallbackQueryHandler(admin_check_balance, pattern="^admin_check_balance$"))
 tg_app.add_handler(CommandHandler("force_expire_order", force_expire_order_test))
 # ... inside your handler registration ...
-tg_app.add_handler(CallbackQueryHandler(handle_global_start, pattern="^other_countries_start$"))
+tg_app.add_handler(CallbackQueryHandler(start_concierge_flow, pattern="^other_countries_start$"))
 tg_app.add_handler(CallbackQueryHandler(handle_global_type, pattern="^g_type_"))
 tg_app.add_handler(CallbackQueryHandler(handle_global_duration, pattern="^g_dur_"))
 # Matches g_country_3 and g_country_15, but ignores g_country_more for now

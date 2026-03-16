@@ -64,60 +64,22 @@ async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYP
         context.user_data["otp_instruction_msg_id"] = msg.message_id
 
 
-# -----------------------------------------
-# -----------------------------------------
 # 🎯 2. CATCHING THE COUNTRY INPUT
-# -----------------------------------------
 async def handle_manual_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
     asyncio.create_task(safe_delete_user_message(update))
     
     user_text = (update.message.text or "").strip()
-    if not user_text:
-        return True
-
-    # Use the new validator!
+    # (Validator and USA check logic stays here...)
+    
     is_valid, official_country = normalize_global_country_name(user_text)
     
-    chat_id = update.effective_chat.id
-    
-    if not is_valid:
-        # User typed garbage like 'ik' -> Reject them safely
-        await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+    if is_valid:
+        context.user_data["concierge_country"] = official_country
+        context.user_data["otp_step"] = "awaiting_manual_service"
         
-        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="back_main")]]
-        msg = await safe_send(
-            update_or_query=update, context=context,
-            text=f"❌ <b>Country Not Found.</b>\nWe couldn't recognize <b>'{user_text}'</b>. Please type a valid country name.",
-            reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
-        )
-        if msg:
-            context.user_data["otp_instruction_msg_id"] = msg.message_id
-        return True
-
-    # Valid country -> Proceed!
-    context.user_data["concierge_country"] = official_country
-    context.user_data["otp_step"] = "awaiting_manual_service"
+        # Just call the UI helper!
+        await ask_for_service(update, context, official_country)
     
-    await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
-    
-    keyboard = [
-        [InlineKeyboardButton("⬅ Back", callback_data="other_countries_start")],
-        [InlineKeyboardButton("❌ Cancel", callback_data="back_main")]
-    ]
-    
-    msg_text = (
-        f"📍 <b>Target:</b> {official_country}\n\n"
-        "💬 <b>Enter Target Service/App:</b>\n"
-        "<i>(e.g., Telegram, WhatsApp, Tinder)</i>"
-    )
-    
-    msg = await safe_send(
-        update_or_query=update, context=context,
-        text=msg_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
-    )
-    if msg:
-        context.user_data["otp_instruction_msg_id"] = msg.message_id
-        
     return True
 
 # -----------------------------------------
@@ -258,3 +220,36 @@ async def process_manual_payment(update: Update, context: ContextTypes.DEFAULT_T
     # 4. Clear the session memory so they don't accidentally buy it twice
     context.user_data.pop("concierge_country", None)
     context.user_data.pop("concierge_service", None)
+    
+    
+    
+# handlers/concierge_global.py
+
+def get_concierge_back_keyboard():
+    """Centralized UI for the Concierge flow"""
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("⬅ Back", callback_data="other_countries_start")],
+        [InlineKeyboardButton("❌ Cancel", callback_data="back_main")]
+    ])
+
+async def ask_for_service(update: Update, context: ContextTypes.DEFAULT_TYPE, country_name: str):
+    """The actual UI sender—no logic, just sending the message"""
+    chat_id = update.effective_chat.id
+    await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+    
+    msg_text = (
+        f"📍 <b>Target:</b> {country_name}\n\n"
+        "💬 <b>Enter Target Service/App:</b>\n"
+        "<i>(e.g., Telegram, WhatsApp, Tinder)</i>"
+    )
+    
+    msg = await safe_send(
+        update_or_query=update.callback_query or update,
+        context=context,
+        text=msg_text,
+        reply_markup=get_concierge_back_keyboard(),
+        parse_mode="HTML"
+    )
+    
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id    

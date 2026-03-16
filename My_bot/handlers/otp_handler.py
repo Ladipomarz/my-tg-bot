@@ -69,21 +69,18 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext, m
     )
     
 async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text="🌍 <b>Global Services</b>\n\nWhat type of service do you need?"):
-    
-    # 1. Flag the user as entering the global flow!
     context.user_data['is_global_flow'] = True
     
-    # 2. Build the new Type Selection menu
+    # We now offer China and UK as quick picks, plus a 'More' button
     keyboard = [
         [
-            InlineKeyboardButton("💬 Text Verification", callback_data="g_type_text"),
-            InlineKeyboardButton("📞 Voice", callback_data="g_type_voice")
+            InlineKeyboardButton("🇨🇳 China", callback_data="g_quick_china"),
+            InlineKeyboardButton("🇬🇧 UK", callback_data="g_quick_uk")
         ],
-        # Using your existing back button logic!
+        [InlineKeyboardButton("🌍 More Countries", callback_data="other_countries_keypad")],
         [InlineKeyboardButton("⬅ Back", callback_data="otp_back_verification")] 
     ]
     
-    # 3. Return the safe_send so start.py can save the message_id for the Janitor
     return await safe_send(
         update_or_query=update.callback_query or update, 
         context=context,
@@ -1008,13 +1005,23 @@ async def otp_refund_now_cb(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         # don't fail the flow if wallet refund fails
         pass
 
-    await q.message.reply_text(
-        "✅ Refund requested: cancelled + reported as 'no SMS'.\n"
-        + refunded_msg
+    # ✅ Use safe_send and track the ID for the Janitor
+    msg = await safe_send(
+        update_or_query=q,
+        context=context,
+        text=(
+            "✅ <b>Refund requested</b>\n"
+            "Cancelled + reported as 'no SMS'."
+            + refunded_msg
+        ),
+        parse_mode="HTML"
     )
 
+    # Save the ID so it gets deleted on the next menu click
+    if msg:
+        context.user_data["otp_instruction_msg_id"] = msg.message_id
+
     await _cleanup_otp_state(context.application, user_id)
-   
    
    
    

@@ -61,7 +61,7 @@ async def start_service_list_flow(update, context, *, plan: str, capability: str
         text=(
             "If you've got the 4-digit Service ID, click ✅ Yes to continue.\n"
             "If you couldn't find the service you need, after searching \n the Service List, click ⏭ Skip to get a universal phone number.\n\n"
-            "⚠️ Please make sure the service is not in the List sent above before using the universal phone number, "
+            "Please make sure the service is not in the List sent above before using the universal phone number, "
             "or you will not receive your code"
         ),
         reply_markup=kb,
