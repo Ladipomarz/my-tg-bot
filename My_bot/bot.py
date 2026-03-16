@@ -34,7 +34,7 @@ from handlers.global_flow import handle_global_type, handle_global_duration, han
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
-from handlers.otp_handler import handle_otp_text_input,show_global_coming_soon
+from handlers.otp_handler import handle_otp_text_input
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 from handlers.menu_commands import register_side_menu, setup_bot_profile
 
@@ -944,7 +944,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     # Ensure BOTH of these triggers lead to the same function
     if data == "other_countries_start" or data == "other_countries_keypad":
-        await show_global_coming_soon(update, context)
+        await start_concierge_flow(update, context)
         return
     
     if data == "otp_rental_universal":

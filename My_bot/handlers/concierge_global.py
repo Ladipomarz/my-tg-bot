@@ -3,6 +3,7 @@ import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
 from utils.db import get_user_balance_usd
+from utils.validator import normalize_global_country_name
 from utils.auto_delete import safe_send, safe_delete_user_message, delete_tracked_message
 from config import SUPPORT_HANDLE
 
@@ -64,30 +65,39 @@ async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYP
 
 
 # -----------------------------------------
+# -----------------------------------------
 # 🎯 2. CATCHING THE COUNTRY INPUT
-# Triggered by text_router in bot.py
 # -----------------------------------------
 async def handle_manual_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
-    # 1. Delete what the user just typed (Zero Lag)
     asyncio.create_task(safe_delete_user_message(update))
     
-    user_text = (update.message.text or "").strip().lower()
-    
+    user_text = (update.message.text or "").strip()
     if not user_text:
-        return True # Ignore empty garbage
+        return True
 
-    # 2. Run it through the Smart Dictionary
-    # If it's an alias (like 'uk'), get the real name. Otherwise, just title-case what they typed.
-    official_country = COUNTRY_ALIAS_MAP.get(user_text, user_text.title())
+    # Use the new validator!
+    is_valid, official_country = normalize_global_country_name(user_text)
     
-    # 3. Save it to memory
+    chat_id = update.effective_chat.id
+    
+    if not is_valid:
+        # User typed garbage like 'ik' -> Reject them safely
+        await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
+        
+        keyboard = [[InlineKeyboardButton("❌ Cancel", callback_data="back_main")]]
+        msg = await safe_send(
+            update_or_query=update, context=context,
+            text=f"❌ <b>Country Not Found.</b>\nWe couldn't recognize <b>'{user_text}'</b>. Please type a valid country name.",
+            reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
+        )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return True
+
+    # Valid country -> Proceed!
     context.user_data["concierge_country"] = official_country
-    
-    # 4. Move to the next step
     context.user_data["otp_step"] = "awaiting_manual_service"
     
-    # 5. Clean up the old prompt and send the new one
-    chat_id = update.effective_chat.id
     await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
     
     keyboard = [
@@ -102,20 +112,13 @@ async def handle_manual_country(update: Update, context: ContextTypes.DEFAULT_TY
     )
     
     msg = await safe_send(
-        update_or_query=update, 
-        context=context,
-        text=msg_text,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-        parse_mode="HTML"
+        update_or_query=update, context=context,
+        text=msg_text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode="HTML"
     )
-    
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
         
     return True
-
-
-
 
 # -----------------------------------------
 # 💬 3. CATCHING THE SERVICE & SHOWING PRICE

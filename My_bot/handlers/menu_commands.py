@@ -7,6 +7,7 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 
 # Import your existing menu functions and config
 from handlers.wallet_continue import open_wallet_menu
+from handlers.concierge_global import start_concierge_flow
 from handlers.start import handle_main_menu
 from menus.main_menu import get_main_menu
 from handlers.tools import open_tools_menu
@@ -59,8 +60,7 @@ async def other_number_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await delete_tracked_message(context, update.effective_chat.id, "otp_instruction_msg_id")
     context.user_data["current_menu"] = "other_number"
     
-    # Opens the "Other Country" placeholder directly
-    await otp_verification_handler(update, context, message_text="🎙 Other Country \n\nComing soon…")  
+    await start_concierge_flow(update, context) 
 
 async def tools_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(safe_delete_user_message(update)) 
