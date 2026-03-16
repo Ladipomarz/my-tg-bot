@@ -5,7 +5,8 @@ import asyncio
 from telegram import Update
 from telegram.ext import CallbackContext
 from utils.textverified_client import get_textverified_client
-from config import ADMIN_IDS
+from telegram.helpers import escape
+from config import ADMIN_IDS,SUPPORT_HANDLE
 import logging
 
 logger = logging.getLogger(__name__)
@@ -22,7 +23,8 @@ from utils.db import (
     set_delivery_status,
     set_order_status,
     add_user_balance_usd,
-    get_connection
+    get_connection,
+    get_all_user_ids
 )
 
 logger = logging.getLogger(__name__)
@@ -448,3 +450,70 @@ async def admin_get_stats(update: Update, context: CallbackContext):
         await query.edit_message_text(text=msg, parse_mode="HTML")
     except Exception as e:
         await query.edit_message_text(text=f"❌ Error: {e}")     
+        
+        
+async def delayed_vaporize(context, chat_id, message_id, delay):
+    """Wait for 'delay' seconds and then delete the message"""
+    await asyncio.sleep(delay)
+    try:
+        await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
+    except Exception:
+        pass
+
+async def handle_broadcast_all_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    safe_text = escape(text)
+    broadcast_text = f"📢 <b>ANNOUNCEMENT FROM UNDERGROUND BOX</b>\n\n{safe_text}"
+    
+    all_users = get_all_user_ids() 
+    logger.info(f"🚀 Starting Broadcast to {len(all_users)} users.")
+    
+    success_count = 0
+    for uid in all_users:
+        try:
+            sent_msg = await context.bot.send_message(
+                chat_id=uid,
+                text=broadcast_text, 
+                parse_mode="HTML",
+                disable_web_page_preview=True
+            )
+            success_count += 1
+            
+            # 🧨 60-Second Self-Destruct Timer (Change to 600 for 10 mins later)
+            asyncio.create_task(delayed_vaporize(context, uid, sent_msg.message_id, 60))
+            
+            await asyncio.sleep(0.05) # Prevent Telegram flood limits
+        except Exception: 
+            continue
+        
+    await update.message.reply_text(f"✅ Broadcast complete! Delivered to {success_count} users. It will self-destruct in 60 seconds.")
+    context.user_data.pop("admin_step", None)
+
+
+async def handle_broadcast_single_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    target_id = context.user_data.get("target_broadcast_id")
+    safe_text = escape(text)
+    
+    keyboard = [[InlineKeyboardButton("💬 Connect to Primary Desk", url=SUPPORT_HANDLE)]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        sent_msg = await context.bot.send_message(
+            chat_id=target_id, 
+            text=f"✉️ <b>Message from Underground Box Desk</b>\n\n{safe_text}", 
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+            reply_markup=reply_markup
+        )
+        
+        # 🧨 60-Second Self-Destruct Timer (Change to 600 for 10 mins later)
+        asyncio.create_task(delayed_vaporize(context, target_id, sent_msg.message_id, 60))
+        
+        await update.message.reply_text(f"✅ Success! Message delivered to {target_id}. It will self-destruct in 60 seconds.")
+        
+    except Exception as e:
+        await update.message.reply_text(f"❌ Delivery failed: {e}")
+        
+    context.user_data.pop("admin_step", None)
+    context.user_data.pop("target_broadcast_id", None)        

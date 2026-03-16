@@ -27,7 +27,7 @@ from telegram.ext import (
 )
 from telegram.request import HTTPXRequest
 from utils.auto_delete import safe_send
-from handlers.admin import fix_db_sequence,rescue_my_number,admin_get_stats
+from handlers.admin import fix_db_sequence,rescue_my_number,admin_get_stats,handle_broadcast_single_text,handle_broadcast_all_text
 from utils.helper import notify_admin
 from handlers.menu_commands import help_cmd
 from handlers.global_flow import handle_global_type, handle_global_duration, handle_global_country_selection
@@ -58,10 +58,7 @@ from utils.db import (
     get_all_user_ids
 )
 
-from utils.auto_delete import safe_delete_user_message
-from utils.auto_delete import delete_tracked_message
-
-
+from utils.auto_delete import safe_delete_user_message,delete_tracked_message
 from menus.main_menu import get_main_menu
 from menus.orders_menu import get_pending_order_menu
 
@@ -1782,45 +1779,13 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     
 
-    # 📢 BROADCAST ALL LOGIC (with 24h Auto-Delete)
+    # 📢 BROADCAST ALL LOGIC
     if context.user_data.get("admin_step") == "awaiting_broadcast_all":
         if update.effective_user.id not in ADMIN_IDS: return
-        # 1. ESCAPE THE INPUT FIRST
-        safe_text = escape(text)
-        
-        broadcast_text = f"📢 <b>ANNOUNCEMENT FROM UNDERGROUND BOX</b>\n\n{safe_text}"
-        all_users = get_all_user_ids() 
-        logger.info(f"🚀 Starting Broadcast to {len(all_users)} users.")
-        
-        success_count = 0
-        for uid in all_users:
-            try:
-                sent_msg = await context.bot.send_message(
-                    chat_id=uid,
-                    text=broadcast_text, 
-                    parse_mode="HTML",
-                    disable_web_page_preview=True,
-                    connect_timeout=10, # Give it more time to breathe
-                    read_timeout=10
-                    )
-                success_count += 1
-                
-                # 🕒 Schedule deletion after 24 hours (86400 seconds)
-                context.job_queue.run_once(
-                    _delete_message_later,
-                    when=24 * 3600,
-                    data={"chat_id": uid, "message_id": sent_msg.message_id},
-                    name=f"mass_del_{uid}_{sent_msg.message_id}"
-                )
-                
-                await asyncio.sleep(0.05) # Prevent Telegram flood limits
-            except: continue
-            
-        await update.message.reply_text(f"✅ Broadcast complete! Delivered to {success_count} users and scheduled for 24h deletion.")
-        context.user_data.pop("admin_step", None)
+        await handle_broadcast_all_text(update, context)
         return
 
-    # 👤 SINGLE USER DIRECT MESSAGE (with 24h Auto-Delete)
+    # 👤 SINGLE USER DIRECT MESSAGE (Capture ID)
     if context.user_data.get("admin_step") == "awaiting_broadcast_user_id":
         if update.effective_user.id not in ADMIN_IDS: return
         if not text.isdigit():
@@ -1831,55 +1796,12 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["admin_step"] = "awaiting_broadcast_single_text"
         await update.message.reply_text(f"🎯 Target ID: `{text}`\n\nNow send the message you want to deliver.")
         return
-    
 
+    # 👤 SINGLE USER DIRECT MESSAGE (Capture Text & Send)
     if context.user_data.get("admin_step") == "awaiting_broadcast_single_text":
         if update.effective_user.id not in ADMIN_IDS: return
-        target_id = context.user_data.get("target_broadcast_id")
-        
-        # 1. Clean the text you type so HTML doesn't crash
-        safe_text = escape(text)
-        
-        logger.info(f"🔍 DEBUG: Attempting single-user message to {target_id}.")
-        
-        # 🟢 2. CREATE THE INLINE BUTTON (Bypasses the spam filter link check)
-        keyboard = [
-            [InlineKeyboardButton("💬 Connect to Primary Desk", url="https://t.me/themagicboxplaza_bot")]
-        ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        try:
-            # 🟢 3. SEND WITH THE BUTTON ATTACHED
-            sent_msg = await context.bot.send_message(
-                chat_id=target_id, 
-                text=f"✉️ <b>Message from Underground Box Desk</b>\n\n{safe_text}", 
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-                reply_markup=reply_markup  # 👈 This attaches the button to the bottom
-            )
-            
-            logger.info(f"✅ DEBUG: Message successfully sent to {target_id}")
-            
-            # 🕒 Schedule deletion after 24 hours
-            context.job_queue.run_once(
-                _delete_message_later,
-                when=24 * 3600,
-                data={"chat_id": target_id, "message_id": sent_msg.message_id},
-                name=f"single_del_{target_id}_{sent_msg.message_id}"
-            )
-            
-            await update.message.reply_text(f"✅ Success! Message and Support Button delivered to {target_id}.")
-            
-        except Exception as e:
-            logger.error("🛑 CRITICAL FAILURE DETAILS:")
-            logger.error(traceback.format_exc())
-            await update.message.reply_text(f"❌ Delivery failed: {e}")
-            
-        # Clean up the admin state
-        context.user_data.pop("admin_step", None)
-        context.user_data.pop("target_broadcast_id", None)
+        await handle_broadcast_single_text(update, context)
         return
-    
     
     # Vaporize their rubbish and the warning after 4 seconds
     async def cleanup_rubbish():
@@ -1896,7 +1818,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     asyncio.create_task(cleanup_rubbish())
     return
 
-    
 # ------------------------------
 # /admin wrapper
 # ------------------------------
