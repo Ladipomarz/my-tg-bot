@@ -3,7 +3,7 @@ from telegram import ReplyKeyboardMarkup
 def get_main_menu():
     # ✅ Matches your requested layout: 2 rows of 2 buttons
     buttons = [
-        ["🇺🇸 Purchase USA Number", "🌍 Purchase Non Number"],
+        ["🇺🇸 Purchase USA Number", "🌍 Purchase Non Usa Number"],
         ["🧰 Tools", "🛒 Orders"],
         ["💰 Credit", "🛠 Support"]
     ]
