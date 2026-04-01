@@ -196,7 +196,7 @@ async def tools_callback(update: Update, context: CallbackContext):
             f"🎯 <b>Unfinished Request Detected</b>\n\n"
             f"I saved your request for <b>{service}</b>.\n"
             "Would you like to finish it now?",
-            reply_markup=get_pending_order_menu()
+            reply_markup=kb
         )
         return
         
