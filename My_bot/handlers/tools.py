@@ -137,37 +137,39 @@ def _normalize_dob_input(dob_str: str) -> str:
 # ---------- TOOLS MENU + CALLBACKS ----------
 
 
+# Starting at your Line 140 (Function Entry)
 async def tools_callback(update: Update, context: CallbackContext):
-    print("Callback received for:", update.callback_query.data)
     q = update.callback_query
-    data = q.data.strip()
-    
-      # Handle RDP service
-    if data == "tool_rdp":
-        await q.answer("🖥️ RDP Service is Coming Back Soon! 🚧", show_alert=True)      
-        return
-    
-    if data == "social_menu":
-        await q.answer("📣 Social Services is coming soon! 🚧", show_alert=True)
-        return
-    
-    await q.answer()  
-
-    # Early exit if there is no query data
     if not q or not q.data:
         return
 
-    data = (q.data or "").strip()
-    
-    print(f"Received callback data: {data}")  # Debug log to ensure data is being captured
+    data = q.data.strip()
     user_id = update.effective_user.id
+
+    # ---------------------------------------------------------
+    # 1. "COMING SOON" ALERTS (Must be handled FIRST)
+    # ---------------------------------------------------------
+    # We group all placeholder buttons here so they work instantly
+    placeholder_alerts = {
+        "tool_rdp": "🖥️ RDP Service is Coming Back Soon! 🚧",
+        "social_menu": "📣 Social Services is coming soon! 🚧",
+        "tool_otp_usa_voice": "🚧 Voice Verification is coming soon",
+        "otp_usa_voice_rental": "🚧 Voice Verification is coming soon",
+        "otp_usa_voice_rental_monthly": "🚧 Voice Verification is coming soon",
+    }
+
+    if data in placeholder_alerts:
+        # This MUST be the first and only q.answer call for these buttons
+        await q.answer(text=placeholder_alerts[data], show_alert=True)
+        return
+
+    await q.answer()
 
     # Any tools navigation cancels MSN text flow
     if data.startswith("tool_") and data != "tool_msn_lookup":
         _clear_msn_state(context)
 
-    
-  
+    # ... (Rest of your normal logic: pending orders, otp_usa, etc. continues here) ...
 
     # Pending-order gate (block if unpaid)
     pending = get_pending_order(user_id)
@@ -207,15 +209,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
 
-    if data == "tool_otp_usa_voice":
-        # Pass the custom text! It reuses the same menu perfectly.
-        await q.answer(
-            text="🚧 Voice Verification is coming soon", 
-            show_alert=True
-        )
-        return
-    
-
     if data == "other_countries_start":        
         # Drop the user right into our new Global Menu!
         await show_other_countries_menu(update, context)
@@ -225,22 +218,11 @@ async def tools_callback(update: Update, context: CallbackContext):
         await otp_usa_rental_type_menu(update, context, "text")
         return
     
-
-    if data == "otp_usa_voice_rental":
-        await q.answer(
-            text="🚧 Voice Verification is coming soon", 
-            show_alert=True
-        )
-        
-        return
           
     if data == "otp_usa_text_rental_monthly":
         await otp_usa_monthly_duration_menu(update, context, "text")
         return
 
-    if data == "otp_usa_voice_rental_monthly":
-        await otp_usa_monthly_duration_menu(update, context, "voice")
-        return
     
     if data == "otp_have_id":
     # Next step: ask user to reply with the 4-digit Product ID
