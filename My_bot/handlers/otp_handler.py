@@ -515,7 +515,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 await safe_send(
                     update,
                     context,
-                    f"❌ Insufficient wallet balance.\n"
+                    f" Insufficient wallet balance.\n"
                     f"Price: ${float(price_val):.2f}\n"
                     f"Your balance: ${bal:.2f}\n\n"
                     f"Please top up your wallet with <b>${remainder:.2f}</b> and try again.",

@@ -988,10 +988,9 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Route OTP/tools/service callbacks into tools_callback
-    if data.startswith(("tool_", "otp_", "service_", "esim_", "lock_service_")):
+    if data.startswith(("tool_", "otp_", "service_", "esim_", "lock_service_")) or data in ["orders_continue", "orders_cancel_pending"]:
         await tools_callback(update, context)
         return
-    
     
     # ✅ Route the Global Flow to the Concierge Desk
     if data == "other_countries_start" or data == "other_countries_keypad":
@@ -1742,60 +1741,60 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # clear OTP step so it doesn't hijack menu navigation
         context.user_data.pop("otp_step", None)
         context.user_data.pop("wallet_step", None)
-        pending = None  # prevent UnboundLocalError no matter what
                     
+        # --- 1. EXEMPTIONS (Bypass the Interceptor) ---
         if "credit" in low_text:
-               await open_wallet_menu(update, context)
-               return
-           
-           
-        if "purchase non number" in low_text: 
-            context.user_data["current_menu"] = "other_number"
-            await show_global_type_menu(update, context)
-            return
-
-        # if Tools clicked and there is a pending order, redirect to pending page
-        if "tools" in low_text:
+            return await open_wallet_menu(update, context)
+            
+        # --- 2. THE MAIN KEYPAD INTERCEPTOR ---
+        # Applies to: Tools, Orders, USA Number, and Non Number
+        if not ("support" in low_text):
+            
+            # A. Check for Database Pending Orders (Unpaid Crypto Invoices)
             pending = expire_pending_order_if_needed(user_id)
+            if pending and pending.get("status") == "pending":
+                pay_status = (pending.get("pay_status") or "").lower().strip()
+                if pay_status in {"pending", "", "new"}:
+                    await delete_tracked_message(context, update.effective_chat.id, "pending_prompt_msg_id")
+                    msg = await safe_send(
+                        update, context,
+                        f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
+                        reply_markup=get_pending_order_menu(),
+                    )
+                    if msg: context.user_data["pending_prompt_msg_id"] = msg.message_id
+                    return
 
-        if pending and pending.get("status") == "pending":
-            pay_status = (pending.get("pay_status") or "").lower().strip()
-            if pay_status in {"pending", "", "new"}:
-                await delete_tracked_message(
-                    context,
-                    update.effective_chat.id,
-                    "pending_prompt_msg_id",
-                )
-
+            # B. Check for Memory Suspended Orders (Low Balance Fix)
+            if context.user_data.get("otp_is_suspended"):
+                service = context.user_data.get("otp_service_name", "Service")
+                await delete_tracked_message(context, update.effective_chat.id, "pending_prompt_msg_id")
+                
+                kb = InlineKeyboardMarkup([
+                    [InlineKeyboardButton("✅ Resume Order", callback_data="orders_continue")],
+                    [InlineKeyboardButton("❌ Cancel", callback_data="orders_cancel_pending")]
+                ])
                 msg = await safe_send(
-                    update,
-                    context,
-                    f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                    reply_markup=get_pending_order_menu(),
+                    update, context,
+                    f"🎯 <b>Unfinished Request Detected</b>\n\n"
+                    f"I saved your request for <b>{service}</b>.\n"
+                    "Would you like to finish it now?",
+                    reply_markup=kb
                 )
-
-                if msg:
-                    context.user_data["pending_prompt_msg_id"] = msg.message_id
+                if msg: context.user_data["pending_prompt_msg_id"] = msg.message_id
                 return
 
+        # --- 3. NORMAL ROUTING (If no pending orders found) ---
         for key in [
-            "msn_step",
-            "first_name",
-            "last_name",
-            "type",
-            "dob",
-            "info",
-            "from_msn",
-            "esim_step",
-            "esim_email",
-            "esim_duration",
-            "esim_country",
-            "custom_price_usd",
-            "order_pending_description",
+            "msn_step", "first_name", "last_name", "type", "dob", "info", "from_msn", 
+            "esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd", "order_pending_description"
         ]:
             context.user_data.pop(key, None)
 
+        if "purchase non number" in low_text: 
+            return await show_global_type_menu(update, context)
+
         return await handle_main_menu(update, context)
+
 
     # --- FALLBACK FLOWS ---
     # MSN flow
@@ -2232,7 +2231,7 @@ async def plisio_webhook(req: Request):
                             
                             resume_kb = InlineKeyboardMarkup([
                                 [InlineKeyboardButton("✅ Resume Order", callback_data="orders_continue")],
-                                [InlineKeyboardButton("❌ Cancel", callback_data="orders_cancel_pending")]
+                                [InlineKeyboardButton(" Cancel", callback_data="orders_cancel_pending")]
                             ])
                             
                             await tg_app.bot.send_message(

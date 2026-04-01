@@ -301,7 +301,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
         await safe_send(
             update,
             context,
-            f"❌ Insufficient wallet balance.\n"
+            f"Insufficient wallet balance.\n"
             f"Price: ${price:.2f}\n"
             f"Your balance: ${bal:.2f}\n\n"
             f"Please top up your wallet with <b>${remainder:.2f}</b> and try again.",
