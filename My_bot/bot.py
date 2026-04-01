@@ -1509,6 +1509,62 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = text = update.message.text if update.message and update.message.text else ""
     low_text = text.lower()
     
+    is_keypad_click = any(k in low_text for k in ["tools", "orders", "credit", "support", "usa", "non"])
+    
+    if is_keypad_click:
+        # Clear specific steps so navigation is clean
+        for trap in ["otp_step", "wallet_step", "msn_step", "esim_step"]:
+            context.user_data.pop(trap, None)
+        
+        # A. EXEMPTION: Credit and Support bypass the safety net
+        if "credit" in low_text:
+            return await open_wallet_menu(update, context)
+        if "support" in low_text:
+            return await help_cmd(update, context)
+
+        # B. THE SAFETY NET: Check for Suspended Memory Orders
+        if context.user_data.get("otp_is_suspended"):
+            service = context.user_data.get("otp_service_name", "Service")
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("✅ Resume Order", callback_data="orders_continue")],
+                [InlineKeyboardButton("❌ Cancel", callback_data="orders_cancel_pending")]
+            ])
+            return await safe_send(
+                update, context,
+                f"🎯 <b>Unfinished Request Detected</b>\n\n"
+                f"I saved your request for <b>{service}</b>.\n"
+                "Would you like to finish it now?",
+                reply_markup=kb
+            )
+
+        # C. THE SAFETY NET: Check for Pending DB Orders (Crypto)
+        pending = expire_pending_order_if_needed(user_id)
+        if pending and pending.get("status") == "pending":
+            return await safe_send(
+                update, context,
+                f"🕒 You have a pending order <b>{pending['order_code']}</b>.\nWhat do you want to do?",
+                reply_markup=get_pending_order_menu()
+            )
+
+        # D. NORMAL MENU NAVIGATION
+        if "non" in low_text: # Flexible match for "Purchase Non USA Number"
+            context.user_data["current_menu"] = "other_number"
+            return await show_global_type_menu(update, context)
+            
+        if "usa" in low_text:
+            context.user_data["current_menu"] = "usa_number"
+            # Route to your USA handler directly
+            from handlers.tools import otp_verification_handler
+            return await otp_verification_handler(update, context)
+
+        # Fallback for Tools/Orders
+        return await handle_main_menu(update, context)
+
+    # 🛑 2. OTP SEARCH HANDLER (Now sits safely below the keypad)
+    if await handle_otp_text_input(update, context):
+        asyncio.create_task(safe_delete_user_message(update))
+        return
+    
     # 🏁 THE ULTIMATE TRACKER
     logger.info(f"📥 [ROUTER] Incoming from {user_id}: {text[:30]}")
     logger.info(f"🧠 [ROUTER] Current Step: {context.user_data.get('admin_step')}")
@@ -1742,60 +1798,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data.pop("otp_step", None)
         context.user_data.pop("wallet_step", None)
                     
-        # --- 1. EXEMPTIONS (Bypass the Interceptor) ---
-        if "credit" in low_text:
-            return await open_wallet_menu(update, context)
-            
-        # --- 2. THE MAIN KEYPAD INTERCEPTOR ---
-        # Applies to: Tools, Orders, USA Number, and Non Number
-        if not ("support" in low_text):
-            
-            # A. Check for Database Pending Orders (Unpaid Crypto Invoices)
-            pending = expire_pending_order_if_needed(user_id)
-            if pending and pending.get("status") == "pending":
-                pay_status = (pending.get("pay_status") or "").lower().strip()
-                if pay_status in {"pending", "", "new"}:
-                    await delete_tracked_message(context, update.effective_chat.id, "pending_prompt_msg_id")
-                    msg = await safe_send(
-                        update, context,
-                        f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                        reply_markup=get_pending_order_menu(),
-                    )
-                    if msg: context.user_data["pending_prompt_msg_id"] = msg.message_id
-                    return
-
-            # B. Check for Memory Suspended Orders (Low Balance Fix)
-            if context.user_data.get("otp_is_suspended"):
-                service = context.user_data.get("otp_service_name", "Service")
-                await delete_tracked_message(context, update.effective_chat.id, "pending_prompt_msg_id")
-                
-                kb = InlineKeyboardMarkup([
-                    [InlineKeyboardButton("✅ Resume Order", callback_data="orders_continue")],
-                    [InlineKeyboardButton("❌ Cancel", callback_data="orders_cancel_pending")]
-                ])
-                msg = await safe_send(
-                    update, context,
-                    f"🎯 <b>Unfinished Request Detected</b>\n\n"
-                    f"I saved your request for <b>{service}</b>.\n"
-                    "Would you like to finish it now?",
-                    reply_markup=kb
-                )
-                if msg: context.user_data["pending_prompt_msg_id"] = msg.message_id
-                return
-
-        # --- 3. NORMAL ROUTING (If no pending orders found) ---
-        for key in [
-            "msn_step", "first_name", "last_name", "type", "dob", "info", "from_msn", 
-            "esim_step", "esim_email", "esim_duration", "esim_country", "custom_price_usd", "order_pending_description"
-        ]:
-            context.user_data.pop(key, None)
-
-        if "purchase non number" in low_text: 
-            return await show_global_type_menu(update, context)
-
-        return await handle_main_menu(update, context)
-
-
     # --- FALLBACK FLOWS ---
     # MSN flow
     if context.user_data.get("msn_step"):
