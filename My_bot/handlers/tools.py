@@ -369,19 +369,25 @@ async def tools_callback(update: Update, context: CallbackContext):
         
 
     if data.startswith("lock_service_"):
-        # data format: lock_service_WhatsApp
-        selected_name = data.replace("lock_service_", "")
+        # If your callback_data was: lock_service_2500_facebook
+        parts = data.split("_")
+        
+        # parts[0] = lock, parts[1] = service, parts[2] = 2500, parts[3] = facebook
+        service_id = parts[2]
+        service_name = parts[3]
 
-        # ✅ Lock the Name string for the API and UI
-        context.user_data["otp_api_service_name"] = selected_name
-        context.user_data["otp_service_name"] = selected_name
-        context.user_data["otp_custom_service"] = selected_name
+        # ✅ THE FIX: Only save the NAME to the display variable
+        context.user_data["otp_api_service_name"] = service_name
+        context.user_data["otp_service_name"] = service_name 
+        context.user_data["otp_custom_service"] = service_name
+        
         context.user_data["otp_step"] = "ask_specific_state"
+        # ...
 
-        await q.answer(f"✅ Selected: {selected_name}")
+        await q.answer(f"✅ Selected: {service_name}")
         await safe_send(
             update, context,
-            f"🎯 <b>Target: {selected_name}</b>\n\n"
+            f"🎯 <b>Target: {service_name}</b>\n\n"
             "<b>Do you want the number to be generated from a specific US state?</b>\n\n"
             "<b>✅ Reply with: yes / no</b>"
         )
