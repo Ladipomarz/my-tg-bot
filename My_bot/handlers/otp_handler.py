@@ -505,6 +505,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
 
             # ✅ Debit wallet (atomic)
             if not try_debit_user_balance_usd(user_id, float(price_val)):
+                context.user_data["otp_is_suspended"] = True
                 bal = get_user_balance_usd(user_id)
                 remainder = price_val - bal  # Calculate exactly how much they are missing
                 kb = InlineKeyboardMarkup([

@@ -9,10 +9,11 @@ from menus.tools_menu import (
     get_msn_services_menu,
     get_esim_duration_menu,
 )
+
 from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send,delete_tracked_message
 from handlers.orders import ask_order_confirmation
-from utils.db import get_pending_order
+from utils.db import get_pending_order,set_order_status
 from handlers.otp_handler import(
     otp_verification_handler,
     otp_usa_one_time_or_rental_menu,
@@ -22,12 +23,11 @@ from handlers.otp_handler import(
     show_other_countries_menu
 )
 
-from handlers.otp_handler import send_services_txt
+from handlers.otp_handler import _send_final_confirmation
 from handlers.service_list_flow import start_service_list_flow
-from handlers.otp_handler import otp_refund_now_cb
+from handlers.otp_handler import otp_refund_now_cb,_cleanup_otp_state
 from handlers.payments import safe_edit_message
 from handlers.rental import  (
-    send_service_list_with_buttons,
     handle_rental_product_id,
     handle_rental_state,
     final_confirmation,
@@ -169,22 +169,37 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data.startswith("tool_") and data != "tool_msn_lookup":
         _clear_msn_state(context)
 
-    # ... (Rest of your normal logic: pending orders, otp_usa, etc. continues here) ...
 
-    # Pending-order gate (block if unpaid)
+    # 1. THE GATEKEEPER: Check for Pending DB Orders (Unpaid Invoices)
     pending = get_pending_order(user_id)
     if pending and pending.get("status") == "pending":
-        pay_status = (pending.get("pay_status") or "").lower().strip()
-        if pay_status in {"pending", "", "new"}:
-            await safe_send(
-                q,
-                context,
-                f"🕒 You have a pending order {pending['order_code']}.\nWhat do you want to do?",
-                reply_markup=get_pending_order_menu(),
-            )
-            return
-        
+        # If they haven't paid yet, show your existing menu
+        await safe_send(
+            q, context,
+            f"🕒 <b>Pending Order: {pending['order_code']}</b>\n\n"
+            f"Details: {pending.get('description', 'N/A')}\n"
+            "You have an unpaid order. Would you like to continue or cancel?",
+            reply_markup=get_pending_order_menu() # Uses your existing menu
+        )
+        return
 
+    # 2. THE MEMORY GATE: Check for Suspended OTP sessions (Low Balance)
+    # This triggers if they were in the middle of a search but ran out of funds
+    if data == "tool_otp_usa" and context.user_data.get("otp_is_suspended"):
+        service = context.user_data.get("otp_service_name", "Service")
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("✅ Resume Order", callback_data="orders_continue")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="orders_cancel_pending")]
+        ])
+        await safe_send(
+            q, context,
+            f"🎯 <b>Unfinished Request Detected</b>\n\n"
+            f"I saved your request for <b>{service}</b>.\n"
+            "Would you like to finish it now?",
+            reply_markup=get_pending_order_menu()
+        )
+        return
+        
     # Handling OTP menu
     # ---------- OTP ROUTER ----------
 
@@ -392,10 +407,40 @@ async def tools_callback(update: Update, context: CallbackContext):
             "<b>✅ Reply with: yes / no</b>"
         )
         return
+    
+    # Handler for 'orders_continue'
+    if data == "orders_continue":
+        # Case A: They have a suspended OTP session in memory
+        if context.user_data.get("otp_is_suspended"):
+            context.user_data["otp_step"] = "final_confirm"
+            context.user_data.pop("otp_is_suspended", None)
+            update.message = type('obj', (object,), {'text': 'yes'})
+            return await _send_final_confirmation(update, context)
+        
+        # Case B: They have an unpaid invoice in the DB
+        pending = get_pending_order(user_id)
+        if pending and pending.get("invoice_url"):
+            await q.answer("Redirecting to payment...")
+            # You can re-send the invoice details here
+            return await ask_order_confirmation(update, context, pending['description'], "Continue Order")
+
+    # Handler for 'orders_cancel_pending'
+    if data == "orders_cancel_pending":
+        # 1. Clear memory
+        await _cleanup_otp_state(context, user_id)
+        context.user_data.pop("otp_is_suspended", None)
+
+        # 2. Clear Database order if it exists
+        pending = get_pending_order(user_id)
+        if pending:
+            set_order_status(pending['id'], "cancelled")
+        
+        await q.answer(" All pending requests cleared.")
+        return await open_tools_menu(update, context)
 
 
     
-#BACK NAVIGATION
+    #BACK NAVIGATION
     if data == "otp_back_verification":
         context.user_data.pop("otp_step", None)
         await open_tools_menu(update, context)
