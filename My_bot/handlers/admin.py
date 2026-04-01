@@ -480,7 +480,7 @@ async def handle_broadcast_all_text(update: Update, context: ContextTypes.DEFAUL
             success_count += 1
             
             # 🧨 60-Second Self-Destruct Timer (Change to 600 for 10 mins later)
-            asyncio.create_task(delayed_vaporize(context, uid, sent_msg.message_id, 60))
+            asyncio.create_task(delayed_vaporize(context, uid, sent_msg.message_id, 86400))
             
             await asyncio.sleep(0.05) # Prevent Telegram flood limits
         except Exception: 
@@ -508,7 +508,7 @@ async def handle_broadcast_single_text(update: Update, context: ContextTypes.DEF
         )
         
         # 🧨 60-Second Self-Destruct Timer (Change to 600 for 10 mins later)
-        asyncio.create_task(delayed_vaporize(context, target_id, sent_msg.message_id, 60))
+        asyncio.create_task(delayed_vaporize(context, target_id, sent_msg.message_id, 86400))
         
         await update.message.reply_text(f"✅ Success! Message delivered to {target_id}. It will self-destruct in 60 seconds.")
         

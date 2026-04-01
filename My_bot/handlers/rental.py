@@ -462,6 +462,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
                     scheduled_6h_reminder,
                     when=reminder_seconds,
                     data={"rental_id": rental_id, "user_id": user_id},
+                    user_id=user_id,
                     name=f"warn_{rental_id}"
                 )
                 
@@ -470,6 +471,7 @@ async def confirm_rental(update: Update, context: CallbackContext):
                 scheduled_expire_rental,
                 when=delay_seconds,
                 data={"rental_id": rental_id, "user_id": user_id},
+                user_id=user_id,
                 name=f"expire_{rental_id}"
             )
                 

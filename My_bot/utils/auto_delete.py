@@ -22,9 +22,6 @@ async def _delete_after_delay(context, chat_id: int, message_id: int, delay: int
         pass
 
 
-from telegram import Update, ReplyKeyboardMarkup
-import asyncio
-
 async def safe_send(
     update_or_query,
     context,
@@ -43,30 +40,31 @@ async def safe_send(
     # 🛑 THE MAGIC AUTO-APPENDER 🛑
     if any(word in text.lower() for word in ["❌", "⚠️", "failed", "error", "invalid"]):
         from config import SUPPORT_HANDLE
-        # Prevent doubling it up if you already included it in the text
         if f"Contact {SUPPORT_HANDLE}" not in text: 
             text = f"{text}\n\n🛠 <b>Need help? Contact {SUPPORT_HANDLE}</b>"
 
-    # ✅ 1. Detect source safely (Handles Background Jobs now!)
+    # ✅ 1. Detect source safely
     base_msg = None
     if isinstance(update_or_query, Update):
         chat_id = chat_id or update_or_query.effective_chat.id
         base_msg = update_or_query.effective_message
     elif update_or_query is not None:
-        # It's a CallbackQuery
         chat_id = chat_id or update_or_query.message.chat_id
         base_msg = update_or_query.message
 
     if not chat_id:
-        return None # Failsafe if we have absolutely no way to know where to send
+        return None
 
-    # ✅ 2. Delete previous bot message
-    last_id = context.user_data.get("last_bot_message_id")
-    last_had_reply_kb = context.user_data.get("last_bot_message_had_reply_kb", False)
+    # ✅ 2. THE JOB-SAFE FIX: Check if context.user_data exists
+    last_id = None
+    last_had_reply_kb = False
+    
+    if context.user_data is not None:
+        last_id = context.user_data.get("last_bot_message_id")
+        last_had_reply_kb = context.user_data.get("last_bot_message_had_reply_kb", False)
 
     if last_id and not last_had_reply_kb:
         from config import PREVIOUS_MESSAGE_DELAY_SECONDS
-        # Make sure _delete_after_delay is defined in this file!
         asyncio.create_task(
             _delete_after_delay(
                 context,
@@ -82,7 +80,6 @@ async def safe_send(
     # ✅ 3. Send the message safely
     try:
         if base_msg:
-            # Triggered by a user typing or clicking a button
             msg = await base_msg.reply_text(
                 text=text, 
                 reply_markup=reply_markup, 
@@ -90,7 +87,7 @@ async def safe_send(
                 **clean_kwargs 
             )
         else:
-            # Triggered by a background job (like connection error or 6h warning)
+            # Triggered by background job (e.g., scheduled_expire_rental)
             msg = await context.bot.send_message(
                 chat_id=chat_id,
                 text=text,
@@ -99,9 +96,10 @@ async def safe_send(
                 **clean_kwargs
             )
 
-        # Remember this as the new "last" bot message
-        context.user_data["last_bot_message_id"] = msg.message_id
-        context.user_data["last_bot_message_had_reply_kb"] = isinstance(reply_markup, ReplyKeyboardMarkup)
+        # ✅ Remember this only if we have a user context to save it to
+        if msg and context.user_data is not None:
+            context.user_data["last_bot_message_id"] = msg.message_id
+            context.user_data["last_bot_message_had_reply_kb"] = isinstance(reply_markup, ReplyKeyboardMarkup)
         return msg
 
     except Exception as e:

@@ -351,6 +351,7 @@ async def ensure_telegram_ready():
                         scheduled_expire_rental,
                         when=delay_seconds,
                         data={"rental_id": rental_id, "user_id": user_id},
+                        user_id=user_id,
                         name=f"expire_{rental_id}"
                     )
                     
