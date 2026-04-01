@@ -389,7 +389,7 @@ async def tools_callback(update: Update, context: CallbackContext):
 
 
     
-# BACK NAVIGATION
+#BACK NAVIGATION
     if data == "otp_back_verification":
         context.user_data.pop("otp_step", None)
         await open_tools_menu(update, context)
