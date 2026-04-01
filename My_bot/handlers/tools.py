@@ -209,11 +209,9 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     if data == "tool_otp_usa_voice":
         # Pass the custom text! It reuses the same menu perfectly.
-        await show_usa_verification_menu(
-            update, 
-            context, 
-            method="voice",
-            message_text="🎙 Voice verification\n\nComing soon…"
+        await q.answer(
+            text="🚧 Voice Verification is coming soon", 
+            show_alert=True
         )
         return
     
@@ -226,10 +224,16 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_usa_text_rental":
         await otp_usa_rental_type_menu(update, context, "text")
         return
+    
 
     if data == "otp_usa_voice_rental":
-        await otp_usa_rental_type_menu(update, context, "voice")
+        await q.answer(
+            text="🚧 Voice Verification is coming soon", 
+            show_alert=True
+        )
+        
         return
+          
     if data == "otp_usa_text_rental_monthly":
         await otp_usa_monthly_duration_menu(update, context, "text")
         return
@@ -237,8 +241,6 @@ async def tools_callback(update: Update, context: CallbackContext):
     if data == "otp_usa_voice_rental_monthly":
         await otp_usa_monthly_duration_menu(update, context, "voice")
         return
-    
-    
     
     if data == "otp_have_id":
     # Next step: ask user to reply with the 4-digit Product ID
