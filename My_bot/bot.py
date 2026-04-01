@@ -1666,7 +1666,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         if action == "exact":
             # AUTO-JUMP
-            context.user_data["otp_api_service_name"] = data["code"]
+            context.user_data["otp_api_service_name"] = data["name"]
             context.user_data["otp_custom_service"] = data["name"]
             context.user_data["otp_service_name"] = data["name"]
             context.user_data["otp_step"] = "ask_specific_state"
