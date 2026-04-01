@@ -1705,7 +1705,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # HARD STOP (Gibberish)
             await safe_send(
                 update, context,
-                f"❌ <b>Service Not Found</b>\n\nI couldn't find any service matching '<b>{user_input}</b>'. Please check your spelling or use a more common name."
+                f"<b>Service Not Found</b>\n\nI couldn't find any service matching '<b>{user_input}</b>'\n\n. Please check your spelling and Re-Enter a Valid Service Name."
             )
             return True
         
