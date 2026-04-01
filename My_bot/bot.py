@@ -1554,7 +1554,6 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if "usa" in low_text:
             context.user_data["current_menu"] = "usa_number"
             # Route to your USA handler directly
-            from handlers.tools import otp_verification_handler
             return await otp_verification_handler(update, context)
 
         # Fallback for Tools/Orders
