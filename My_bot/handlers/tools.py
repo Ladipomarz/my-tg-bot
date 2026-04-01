@@ -369,17 +369,25 @@ async def tools_callback(update: Update, context: CallbackContext):
         
 
     if data.startswith("lock_service_"):
-        # Format: lock_service_CODE_NAME
-        _, _, code, name = data.split("_", 3)
+        # Split the data: lock_service_CODE_NAME
+        parts = data.split("_")
+        code = parts[2]
+        name = parts[3]
+
+        # Lock it into memory
         context.user_data["otp_api_service_name"] = code
         context.user_data["otp_custom_service"] = name
+        context.user_data["otp_service_name"] = name # 👈 Add this line to fix Issue #2!
         context.user_data["otp_step"] = "ask_specific_state"
-        
+
         await q.answer(f"✅ Selected: {name}")
-        await safe_send(update, context, f"🎯 <b>Target: {name}</b>\n\n"
-                                         "<b>Do you want a specific US state?</b>\n\n"
-                                         "<b>✅ Reply with: yes / no</b>")
-        return    
+        await safe_send(
+            update, context,
+            f"🎯 <b>Target: {name}</b>\n\n"
+            "<b>Do you want the number to be generated from a specific US state?</b>\n\n"
+            "<b>✅ Reply with: yes / no</b>"
+        )
+        return 
 
 
     

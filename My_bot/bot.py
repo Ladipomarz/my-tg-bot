@@ -988,7 +988,7 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     # Route OTP/tools/service callbacks into tools_callback
-    if data.startswith(("tool_", "otp_", "service_", "esim_" )):
+    if data.startswith(("tool_", "otp_", "service_", "esim_", "lock_service_")):
         await tools_callback(update, context)
         return
     
@@ -1668,11 +1668,10 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # AUTO-JUMP
             context.user_data["otp_api_service_name"] = data["code"]
             context.user_data["otp_custom_service"] = data["name"]
-            
-          
-            # Jump straight into the State Selection state
+            context.user_data["otp_service_name"] = data["name"]
             context.user_data["otp_step"] = "ask_specific_state"
-                # 3. TELL THE USER WHAT TO DO (Mandatory for UX)
+                     
+            # 3. TELL THE USER WHAT TO DO (Mandatory for UX)
             await safe_send(
                 update,
                 context,
@@ -1708,7 +1707,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 update, context,
                 f"❌ <b>Service Not Found</b>\n\nI couldn't find any service matching '<b>{user_input}</b>'. Please check your spelling or use a more common name."
             )
-            return
+            return True
         
 
     # --- MAIN KEYPAD ROUTING ---
