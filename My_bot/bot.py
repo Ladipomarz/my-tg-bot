@@ -35,7 +35,7 @@ from handlers.global_flow import handle_global_type, handle_global_duration, han
 from config import BOT_TOKEN
 from utils.esim_pdf import build_esim_pdf_bytes
 from utils.db import create_service_fetch_status_table
-from handlers.otp_handler import handle_otp_text_input,show_other_countries_menu
+from handlers.otp_handler import handle_otp_text_input,show_other_countries_menu,otp_verification_handler
 from handlers.wallet import handle_wallet_text_input, wallet_callback
 from handlers.menu_commands import register_side_menu, setup_bot_profile
 
