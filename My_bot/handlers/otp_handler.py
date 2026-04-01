@@ -509,7 +509,7 @@ async def handle_otp_text_input(update: Update, context: CallbackContext) -> boo
                 bal = get_user_balance_usd(user_id)
                 remainder = price_val - bal  # Calculate exactly how much they are missing
                 kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_menu")],
+            [InlineKeyboardButton("➕ Top up wallet", callback_data="wallet_topup")],
             
             ])
                 await safe_send(
