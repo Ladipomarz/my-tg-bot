@@ -113,7 +113,7 @@ async def safe_delete_user_message(update):
     """
     try:
         if update and update.message:
-            await asyncio.sleep(3600)
+            await asyncio.sleep(7200)
             await update.message.delete()
     except Exception:
         pass

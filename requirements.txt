@@ -9,3 +9,4 @@ reportlab
 requests
 textverified
 psycopg-pool==3.2.1
+rapidfuzz

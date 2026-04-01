@@ -12,6 +12,7 @@ from config import SUPPORT_HANDLE
 from supportbot import run_support_bot
 from telegram.helpers import escape
 import html
+from utils.otp_utils import get_service_search_results
 
 from fastapi import FastAPI, Request, Response
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton,BotCommand
@@ -1654,6 +1655,61 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_state_or_random(update, context)
         asyncio.create_task(safe_delete_user_message(update))
         return
+    
+        # Inside your text_router...
+    if context.user_data.get("otp_step") == "awaiting_usa_service_name":
+        # 1. Vaporize user message after 10s
+        asyncio.create_task(safe_delete_user_message(update))
+        
+        user_input = text.strip()
+        action, data = get_service_search_results(user_input)
+
+        if action == "exact":
+            # AUTO-JUMP
+            context.user_data["otp_api_service_name"] = data["code"]
+            context.user_data["otp_custom_service"] = data["name"]
+            
+          
+            # Jump straight into the State Selection state
+            context.user_data["otp_step"] = "ask_specific_state"
+                # 3. TELL THE USER WHAT TO DO (Mandatory for UX)
+            await safe_send(
+                update,
+                context,
+                f"🎯 <b>Target: {data['name']}</b>\n\n"
+                "<b>Do you want the number to be generated from a specific US state?</b>\n\n"
+                "<b>✅ Reply with: yes / no</b>"
+            )
+            
+            return True
+         
+
+
+        elif action == "suggest":
+            # DID YOU MEAN?
+            keyboard = []
+            for s in data:
+                # We store the code in callback_data to 'lock it in' on click
+                keyboard.append([InlineKeyboardButton(f"📱 {s['name']}", callback_data=f"lock_service_{s['code']}_{s['name']}")])
+            
+            keyboard.append([InlineKeyboardButton("🌐 Use Universal Line", callback_data="lock_service_servicenotlisted_Universal")])
+            keyboard.append([InlineKeyboardButton("⬅️ Back", callback_data="tool_otp_usa")])
+
+            await safe_send(
+                update, context,
+                f"🔍 I couldn't find an exact match for '<b>{user_input}</b>'.\n\n<b>Did you mean one of these?</b>",
+                reply_markup=InlineKeyboardMarkup(keyboard)
+            )
+            return
+
+        else:
+            # HARD STOP (Gibberish)
+            await safe_send(
+                update, context,
+                f"❌ <b>Service Not Found</b>\n\nI couldn't find any service matching '<b>{user_input}</b>'. Please check your spelling or use a more common name."
+            )
+            return
+        
 
     # --- MAIN KEYPAD ROUTING ---
     user_id = update.effective_user.id
