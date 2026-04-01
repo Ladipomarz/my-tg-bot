@@ -2220,6 +2220,32 @@ async def plisio_webhook(req: Request):
                             when=3600,
                             data={"chat_id": order["user_id"], "message_id": sent_wallet_msg.message_id}
                         )
+                        
+                        # ==========================================
+                        # 🚀 THE AUTO-PUSH LOGIC (RESUME ORDER) 🚀
+                        # ==========================================
+                        # Peek directly into the user's session memory
+                        user_mem = tg_app.user_data.get(order["user_id"], {})
+                        
+                        if user_mem.get("otp_is_suspended"):
+                            service = user_mem.get("otp_service_name", "Service")
+                            
+                            resume_kb = InlineKeyboardMarkup([
+                                [InlineKeyboardButton("✅ Resume Order", callback_data="orders_continue")],
+                                [InlineKeyboardButton("❌ Cancel", callback_data="orders_cancel_pending")]
+                            ])
+                            
+                            await tg_app.bot.send_message(
+                                chat_id=order["user_id"],
+                                text=(
+                                    f"🎯 <b>Funds Ready!</b>\n\n"
+                                    f"I saved your unfinished request for <b>{service}</b>.\n"
+                                    f"Would you like to use your new balance to complete it now?"
+                                ),
+                                reply_markup=resume_kb,
+                                parse_mode="HTML"
+                            )
+                        # ==========================================
                 except Exception as e:
                     logger.exception(f"Wallet credit failed: {e}")
                     await notify_admin(f"Wallet credit failed for {order_number}: {e}")

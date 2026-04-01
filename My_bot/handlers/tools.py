@@ -409,20 +409,28 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
     
     # Handler for 'orders_continue'
+    # My_bot/handlers/tools.py -> inside tools_callback
+
     if data == "orders_continue":
-        # Case A: They have a suspended OTP session in memory
-        if context.user_data.get("otp_is_suspended"):
+        # ✅ 1. CHECK MEMORY FIRST (For the "telegram" request)
+        if context.user_data.get("otp_is_suspended"):            
+            # Reset state and clear the suspension flag
             context.user_data["otp_step"] = "final_confirm"
             context.user_data.pop("otp_is_suspended", None)
-            update.message = type('obj', (object,), {'text': 'yes'})
+            
+            # This will re-show the "Service: Telegram | Price: $3.00" screen
+            # When you click "yes" NOW, it will see your new balance!
             return await _send_final_confirmation(update, context)
-        
-        # Case B: They have an unpaid invoice in the DB
+
+        # 2. CHECK DATABASE SECOND (For unpaid crypto invoices)
         pending = get_pending_order(user_id)
         if pending and pending.get("invoice_url"):
-            await q.answer("Redirecting to payment...")
-            # You can re-send the invoice details here
+            await q.answer("Resuming payment...")
             return await ask_order_confirmation(update, context, pending['description'], "Continue Order")
+
+        # 3. FALLBACK (If nothing is found)
+        await q.answer("❌ No active pending order found.", show_alert=True)
+        return
 
     # Handler for 'orders_cancel_pending'
     if data == "orders_cancel_pending":

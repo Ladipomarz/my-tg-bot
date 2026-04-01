@@ -1438,7 +1438,6 @@ def add_user_balance_usd(user_id: int, amount_usd: float) -> None:
             )
         conn.commit()
 
-
 def try_debit_user_balance_usd(user_id: int, amount_usd: float) -> bool:
     """
     Atomically subtracts from balance if enough funds exist.
