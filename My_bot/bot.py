@@ -1656,7 +1656,7 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         asyncio.create_task(safe_delete_user_message(update))
         return
     
-        # Inside your text_router...
+    # Inside your text_router...
     if context.user_data.get("otp_step") == "awaiting_usa_service_name":
         # 1. Vaporize user message after 10s
         asyncio.create_task(safe_delete_user_message(update))
