@@ -204,9 +204,24 @@ async def tools_callback(update: Update, context: CallbackContext):
     # (You can call the OTP provider's functions here to reserve a number and send OTP)
         return
     
+    
+    # My_bot/handlers/tools.py (Around Line 191)
+
     if data == "otp_usa_text_one_time":
-        await start_service_list_flow(update, context, plan="one_time", capability="sms")
+        # ✅ THE FIX: Set the state and ask for text instead of sending a file
+        context.user_data["otp_plan"] = "one_time"
+        context.user_data["otp_capability"] = "sms"
+        context.user_data["otp_is_rental"] = False
+        context.user_data["otp_step"] = "awaiting_usa_service_name"
+        
+        await safe_send(
+            update, context,
+            "🇺🇸 <b>USA One-Time Service</b>\n\n💬 <b>Enter Target Service/App:</b>\n"
+            "(e.g., Telegram, WhatsApp, Tinder)",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="tool_otp_usa_text")]])
+        )
         return
+    
     
 
     if data == "other_countries_start":        
@@ -267,7 +282,16 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data["otp_always_on"] = True
         context.user_data["otp_is_renewable"] = False
         
-        await send_service_list_with_buttons(update, context)
+        # ✅ NEW SEARCH LOGIC
+        context.user_data["otp_is_rental"] = True
+        context.user_data["otp_step"] = "awaiting_usa_service_name"
+        
+        await safe_send(
+            update, context,
+            "🇺🇸 <b>USA Rental Service</b>\n\n💬 <b>Enter Target Service/App:</b>\n"
+            "(e.g., Telegram, WhatsApp, Tinder)",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="otp_usa_text_rental")]])
+        )
         return
 
     # 2. Handle Long-Term Rentals (1 Month up to 1 Year)
@@ -291,7 +315,16 @@ async def tools_callback(update: Update, context: CallbackContext):
         context.user_data["otp_always_on"] = False 
         context.user_data["otp_is_renewable"] = False 
         
-        await send_service_list_with_buttons(update, context)
+        # ✅ NEW SEARCH LOGIC
+        context.user_data["otp_is_rental"] = True
+        context.user_data["otp_step"] = "awaiting_usa_service_name"
+        
+        await safe_send(
+            update, context,
+            "🇺🇸 <b>USA Rental Service</b>\n\n💬 <b>Enter Target Service/App:</b>\n"
+            "(e.g., Telegram, WhatsApp, Tinder)",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅️ Back", callback_data="otp_usa_text_rental_monthly")]])
+        )
         return
 
     if data == "otp_refund_now":
