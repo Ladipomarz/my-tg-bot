@@ -1638,13 +1638,13 @@ def extend_rental_timer(rental_id: str, days_to_add: int):
     
     
 def get_rentals_due_for_extension():
-    """Fetches active 2-Month rentals that expire within the next 48 hours."""
+    """Fetches active 2-Month rentals that hit their first 30-day API limit."""
     query = """
         SELECT rental_id, user_id, phone_number, service_name
         FROM active_rentals
         WHERE status = 'active' 
           AND is_renewable = TRUE 
-          AND expiration_time <= NOW() + INTERVAL '48 hours'
+          AND (expiration_time - INTERVAL '30 days') <= NOW() + INTERVAL '48 hours'
     """
     try:
         with get_connection() as conn:
@@ -1656,23 +1656,22 @@ def get_rentals_due_for_extension():
         notify_admin_sync(f"💥 Error fetching due extensions: {e}")
         return []
 
-def mark_rental_renewal_complete(rental_id: str, days_added: int):
-    """Adds days to the expiration and turns OFF auto-renew so it ends after Month 2."""
+def mark_rental_renewal_complete(rental_id: str):
+    """Turns OFF auto-renew so it ends exactly after Month 2 as planned."""
     query = """
         UPDATE active_rentals 
-        SET expiration_time = expiration_time + CAST(%s AS INTERVAL),
-            is_renewable = FALSE 
+        SET is_renewable = FALSE 
+        WHERE rental_id = %s
     """
-    # 👆 We flip it to FALSE so the cron job ignores it next month!
     try:
         with get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(query, (f"{days_added} days", rental_id))
+                cur.execute(query, (rental_id,))
             conn.commit()
     except Exception as e:
         print(f"💥 Failed to complete renewal DB update for {rental_id}: {e}")
         notify_admin_sync(f"💥 Failed to complete renewal DB update for {rental_id}: {e}")
-        raise e        
+        raise e   
     
     
     

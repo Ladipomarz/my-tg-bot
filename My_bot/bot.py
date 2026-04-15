@@ -92,7 +92,8 @@ scheduled_6h_reminder,
 force_test_auto_extend,
 scheduled_auto_extend_plus_daily_check,
 test_6h_warning,
-test_expire_alarm
+test_expire_alarm,
+ask_state_or_random
 
 )
 
@@ -1723,9 +1724,18 @@ async def text_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.user_data["otp_api_service_name"] = data["name"]
             context.user_data["otp_custom_service"] = data["name"]
             context.user_data["otp_service_name"] = data["name"]
+            
+            # ==========================================
+            # 🛑 THE RENTAL INTERCEPTOR 🛑
+            # ==========================================
+            if context.user_data.get("otp_is_rental") or context.user_data.get("rental_duration"):
+                context.user_data["otp_step"] = "awaiting_state_or_random"
+                await ask_state_or_random(update, context)
+                return True
+            # ==========================================
+
+            # Normal One-Time Flow
             context.user_data["otp_step"] = "ask_specific_state"
-                     
-            # 3. TELL THE USER WHAT TO DO (Mandatory for UX)
             await safe_send(
                 update,
                 context,

@@ -280,6 +280,8 @@ async def confirm_rental(update: Update, context: CallbackContext):
     duration_api = context.user_data.get("otp_duration_api")
     always_on = context.user_data.get("otp_always_on", True)
     is_renewable = context.user_data.get("otp_is_renewable", False)
+    if duration_api == "TWO_MONTHS":
+        is_renewable = True
 
     # UI Loading message
     processing_msg = await target.reply_text("⏳ Securing funds and fetching your premium number...")
@@ -1359,14 +1361,18 @@ async def perform_actual_extension(context: CallbackContext, rental_id: str):
         # 1. Connect to Client
         client, reservations, _, _, _, _, RentalDuration = get_textverified_client()
         
-        # 2. API Call (Using the 30-day production duration)
-        await asyncio.to_thread(
+        # 2. STRICT API CALL (We capture the result to check for hidden errors)
+        api_result = await asyncio.to_thread(
             reservations.extend_nonrenewable,
             rental_id=rental_id,
             extension_duration=getattr(RentalDuration, "THIRTY_DAY") 
         )
         
-        mark_rental_renewal_complete(rental_id, 30)
+        # 3. IF THE API REJECTS IT BUT DOESN'T CRASH, WE FORCE A CRASH!
+        if not api_result or (hasattr(api_result, 'status') and api_result.status == 'error'):
+            raise Exception(f"API Rejected the renewal! Result: {api_result}")
+        
+        mark_rental_renewal_complete(rental_id)
         
         logger.info(f"✅ AUTO-EXTEND SUCCESS: {rental_id}")
         
