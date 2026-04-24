@@ -513,6 +513,55 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return
     
+    
+    # ---------------------------------------------------------
+    # 📱 eSIM ROUTING (Entry Point: esim_services)
+    # ---------------------------------------------------------
+    if data == "esim_services": # Matches the button in tools_menu.py
+        _clear_esim_state(context)
+        
+        # Open the destination selection menu
+        await safe_send(
+            q, context,
+            "🌍 <b>Select eSIM Destination</b>\n\nChoose the country for your digital SIM:",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🇺🇸 USA", callback_data="esim_country:usa")],
+                [InlineKeyboardButton("⬅ Back", callback_data="tool_back_tools")]
+            ]),
+            parse_mode="HTML"
+        )
+        return
+
+    if data.startswith("esim_country:"):
+        country = data.split(":")[1]
+        context.user_data["esim_country"] = country
+        await safe_send(
+            q, context,
+            f"📱 <b>eSIM {country.upper()}</b>\n\nSelect your plan duration:",
+            reply_markup=get_esim_duration_menu() 
+        )
+        return
+
+    if data.startswith("esim_duration:"):
+        duration = data.split(":")[1]
+        context.user_data["esim_duration"] = duration
+        
+        # Plan pricing logic
+        price_map = {"1m": "10.00", "3m": "25.00", "1y": "80.00"}
+        price = price_map.get(duration, "10.00")
+        context.user_data["custom_price_usd"] = price
+        
+        # Set the trap for the next text input (email)
+        context.user_data["esim_step"] = "email"
+        
+        await safe_send(
+            q, context,
+            f"✅ <b>Duration Selected:</b> {duration}\n\n"
+            "📧 Please enter the <b>Email Address</b> where you want the eSIM QR Code delivered:",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("❌ Cancel", callback_data="tool_back_tools")]])
+        )
+        return
+    
 async def open_tools_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     Opens the Tools menu from the ReplyKeyboard 'Tools' button.
