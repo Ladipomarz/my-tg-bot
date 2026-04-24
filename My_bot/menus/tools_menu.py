@@ -3,10 +3,10 @@ from telegram import InlineKeyboardMarkup, InlineKeyboardButton
 def get_tools_inline():
     buttons = [
         #HIDDEN FOR NOW
-        [
-            InlineKeyboardButton("MSN Services", callback_data="tool_msn_services"),
-            InlineKeyboardButton("Esim", callback_data="esim_services"),
-        ],
+        #[
+         #   InlineKeyboardButton("MSN Services", callback_data="tool_msn_services"),
+          #  InlineKeyboardButton("Esim", callback_data="esim_services"),
+        #],
 
         [  
             InlineKeyboardButton("🖥️RDP", callback_data="tool_rdp"),
