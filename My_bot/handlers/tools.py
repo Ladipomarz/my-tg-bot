@@ -13,7 +13,13 @@ from menus.tools_menu import (
 from menus.orders_menu import get_pending_order_menu
 from utils.auto_delete import safe_send,delete_tracked_message
 from handlers.orders import ask_order_confirmation
-from utils.db import get_pending_order,set_order_status
+from utils.db import (
+    get_pending_order,
+    set_order_status,
+    get_user_balance_usd,
+    get_last_wallet_transactions                    
+)  
+                    
 from handlers.otp_handler import(
     otp_verification_handler,
     otp_usa_one_time_or_rental_menu,
@@ -223,6 +229,32 @@ async def tools_callback(update: Update, context: CallbackContext):
     # My_bot/handlers/tools.py (Around Line 191)
 
     if data == "otp_usa_text_one_time":
+        # 🛑 FIRST-TIME USER GATEKEEPER 🛑
+        bal = get_user_balance_usd(user_id)
+        txs = get_last_wallet_transactions(user_id, limit=20)
+        
+        # Check if they have ANY successfully paid top-ups in their history
+        has_paid_tx = any(
+            t.get("status", t.get("pay_status", "")).lower() in ["paid", "completed", "detected", "confirmed"]
+            for t in txs
+        )
+        
+        # If balance is 0 AND they have NEVER successfully topped up
+        if bal <= 0 and not has_paid_tx:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="tool_otp_usa_text")]
+            ])
+            await safe_send(
+                update, context,
+                "⚠️ <b>Account Not Funded</b>\n\n"
+                "Welcome! To use our Premium USA Services, you need to fund your account first.\n\n"
+                "Click the button below to add credit to your wallet.",
+                reply_markup=kb, parse_mode="HTML"
+            )
+            return
+        # ------------------------------------------------
+
         # ✅ THE FIX: Set the state and ask for text instead of sending a file
         context.user_data["otp_plan"] = "one_time"
         context.user_data["otp_capability"] = "sms"
@@ -237,7 +269,6 @@ async def tools_callback(update: Update, context: CallbackContext):
         )
         return
     
-    
 
     if data == "other_countries_start":        
         # Drop the user right into our new Global Menu!
@@ -245,6 +276,32 @@ async def tools_callback(update: Update, context: CallbackContext):
         return
 
     if data == "otp_usa_text_rental":
+        # 🛑 FIRST-TIME USER GATEKEEPER 🛑
+        bal = get_user_balance_usd(user_id)
+        txs = get_last_wallet_transactions(user_id, limit=20)
+        
+        # Check if they have ANY successfully paid top-ups in their history
+        has_paid_tx = any(
+            t.get("status", t.get("pay_status", "")).lower() in ["paid", "completed", "detected", "confirmed"]
+            for t in txs
+        )
+        
+        # If balance is 0 AND they have NEVER successfully topped up
+        if bal <= 0 and not has_paid_tx:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="tool_otp_usa_text")]
+            ])
+            await safe_send(
+                update, context,
+                "⚠️ <b>Account Not Funded</b>\n\n"
+                "Welcome! To use our Premium USA Rentals, you need to fund your account first.\n\n"
+                "Click the button below to add credit to your wallet.",
+                reply_markup=kb, parse_mode="HTML"
+            )
+            return
+        # ------------------------------------------------
+
         await otp_usa_rental_type_menu(update, context, "text")
         return
     

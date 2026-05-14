@@ -21,7 +21,7 @@ from telegram.ext import CommandHandler
 from utils.helper import notify_admin
 import html
 from pricelist import get_otp_price_usd
-from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd,get_service_name_by_code
+from utils.db import get_user_balance_usd, try_debit_user_balance_usd, add_user_balance_usd, get_service_name_by_code, get_last_wallet_transactions
 import logging
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from config import SUPPORT_HANDLE
@@ -68,9 +68,39 @@ async def show_usa_verification_menu(update: Update, context: CallbackContext, m
         parse_mode="HTML"
     )
     
-# My_bot/handlers/otp_handler.py
-
 async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAULT_TYPE, message_text="🌍 <b>Global Services</b>\n\nWhat Do You Want Today?"):
+    user_id = update.effective_user.id
+    
+    # 🛑 FIRST-TIME USER GATEKEEPER 🛑
+    bal = get_user_balance_usd(user_id)
+    txs = get_last_wallet_transactions(user_id, limit=20)
+    
+    has_paid_tx = any(
+        t.get("status", t.get("pay_status", "")).lower() in ["paid", "completed", "detected", "confirmed"]
+        for t in txs
+    )
+    
+    if bal <= 0 and not has_paid_tx:
+        kb = [
+            [InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="other_countries_start")] 
+        ]
+        msg = await safe_send(
+            update_or_query=update.callback_query or update, 
+            context=context,
+            text=(
+                "⚠️ <b>Account Not Funded</b>\n\n"
+                "Welcome! To use our Premium Global Services, you need to fund your account first.\n\n"
+                "Click the button below to add credit to your wallet."
+            ),
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="HTML"
+        )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return
+    # ------------------------------------------------
+
     # 1. Flag the user as entering the global flow
     context.user_data['is_global_flow'] = True
     
@@ -95,7 +125,7 @@ async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAUL
     
     if msg:
         context.user_data["otp_instruction_msg_id"] = msg.message_id
-    
+            
     
 async def show_global_coming_soon(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = "🌍 <b>Global Services</b>\n\n🚧 Coming soon..."
