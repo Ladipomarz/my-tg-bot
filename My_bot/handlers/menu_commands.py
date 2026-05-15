@@ -31,9 +31,9 @@ async def setup_bot_profile(tg_app):
             BotCommand("help", "🛠 Support & Help")
         ]
         await tg_app.bot.set_my_commands(commands)
-        await tg_app.bot.set_my_name(name="The Undergroud Box") 
-        #await tg_app.bot.set_my_description(description="🤖 Welcome! to the underground box,🔨 We provide you with premium services,💯 Anonimity😎 Fully Crypto Based💪 \n\nClick Start below to begin. 🌍")
-        await tg_app.bot.set_my_short_description(short_description="b")
+        await tg_app.bot.set_my_name(name="Explosive Rush☠️") 
+        await tg_app.bot.set_my_description(description="🤖 Welcome! to the underground box,🔨 We provide you with premium services,💯 Anonimity😎 Fully Crypto Based💪 \n\nClick Start below to begin. 🌍")
+        await tg_app.bot.set_my_short_description(short_description="Premium Numbers & More.")
         logger.info("✅ Bot Profile and Menu Button have been updated successfully!")
     except Exception as e:
         logger.error(f"⚠️ Failed to update Bot Profile: {e}")
