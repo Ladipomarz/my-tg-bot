@@ -151,6 +151,33 @@ async def tools_callback(update: Update, context: CallbackContext):
 
     data = q.data.strip()
     user_id = update.effective_user.id
+    
+    # 🛑 THE GATEKEEPER FOR RDP & SOCIAL SERVICES 🛑
+    # ---------------------------------------------------------
+    if data in ["tool_rdp", "social_menu"]:
+        # 1. Check current status
+        bal = get_user_balance_usd(user_id)
+        txs = get_last_wallet_transactions(user_id, limit=20)
+        
+        has_paid_tx = any(
+            t.get("status", t.get("pay_status", "")).lower() in ["paid", "completed", "detected", "confirmed"]
+            for t in txs
+        )
+        
+        # 2. If balance is 0 AND they have NEVER successfully topped up -> BLOCK
+        if bal <= 0 and not has_paid_tx:
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("💳 Top up wallet", callback_data="tool_wallet")],
+                [InlineKeyboardButton("⬅️ Back", callback_data="tool_back_tools")] 
+            ])
+            await safe_send(
+                update, context,
+                "⚠️ <b>Account Not Funded</b>\n\n"
+                "Welcome! To use our Premium Services, you need to fund your account first.\n\n"
+                "Click the button below to add credit to your wallet.",
+                reply_markup=kb, parse_mode="HTML"
+            )
+            return
 
     # ---------------------------------------------------------
     # 1. "COMING SOON" ALERTS (Must be handled FIRST)
@@ -248,7 +275,7 @@ async def tools_callback(update: Update, context: CallbackContext):
             await safe_send(
                 update, context,
                 " <b>Account Not Funded</b>\n\n"
-                "Welcome! To use our Premium USA Services, you need to fund your account first.\n\n"
+                "Welcome! To use our Premium Global Services, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet.",
                 reply_markup=kb, parse_mode="HTML"
             )
@@ -295,7 +322,7 @@ async def tools_callback(update: Update, context: CallbackContext):
             await safe_send(
                 update, context,
                 " <b>Account Not Funded</b>\n\n"
-                "Welcome! To use our Premium USA Rentals, you need to fund your account first.\n\n"
+                "Welcome! To use our Premium Global Rentals, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet.",
                 reply_markup=kb, parse_mode="HTML"
             )
