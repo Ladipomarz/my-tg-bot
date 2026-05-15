@@ -314,7 +314,7 @@ async def ensure_telegram_ready():
             await tg_app.start()
             TG_READY = True
             logger.info("Telegram app is ready")
-            #await setup_bot_profile(tg_app)
+            await setup_bot_profile(tg_app)
              
             # ---------------------------------------------------------
             # 🚀 THE ENTERPRISE HYBRID STARTUP (DUAL-ALARM UPGRADE)
@@ -948,6 +948,10 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await open_wallet_menu(update, context)
         return
     
+    # Inside your callback handler in bot.py
+    elif data == "tool_wallet":
+        await open_wallet_menu(update, context)
+        return
 
     # Triggered by "🌍 More Countries" button
     if data == "other_countries_manual":

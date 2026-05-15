@@ -242,12 +242,12 @@ async def tools_callback(update: Update, context: CallbackContext):
         # If balance is 0 AND they have NEVER successfully topped up
         if bal <= 0 and not has_paid_tx:
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")],
+                [InlineKeyboardButton("💳 Top up wallet", callback_data="tool_wallet")],
                 [InlineKeyboardButton("⬅️ Back", callback_data="tool_otp_usa_text")]
             ])
             await safe_send(
                 update, context,
-                "⚠️ <b>Account Not Funded</b>\n\n"
+                " <b>Account Not Funded</b>\n\n"
                 "Welcome! To use our Premium USA Services, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet.",
                 reply_markup=kb, parse_mode="HTML"
@@ -289,12 +289,12 @@ async def tools_callback(update: Update, context: CallbackContext):
         # If balance is 0 AND they have NEVER successfully topped up
         if bal <= 0 and not has_paid_tx:
             kb = InlineKeyboardMarkup([
-                [InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")],
+                [InlineKeyboardButton("💳 Top up wallet", callback_data="tool_wallet")],
                 [InlineKeyboardButton("⬅️ Back", callback_data="tool_otp_usa_text")]
             ])
             await safe_send(
                 update, context,
-                "⚠️ <b>Account Not Funded</b>\n\n"
+                " <b>Account Not Funded</b>\n\n"
                 "Welcome! To use our Premium USA Rentals, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet.",
                 reply_markup=kb, parse_mode="HTML"

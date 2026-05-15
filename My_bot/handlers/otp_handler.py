@@ -82,14 +82,14 @@ async def show_other_countries_menu(update: Update, context: ContextTypes.DEFAUL
     
     if bal <= 0 and not has_paid_tx:
         kb = [
-            [InlineKeyboardButton("💳 Top up wallet", callback_data="wallet_topup")],
+            [InlineKeyboardButton("💳 Top up wallet", callback_data="tool_wallet")],
             [InlineKeyboardButton("⬅️ Back", callback_data="other_countries_start")] 
         ]
         msg = await safe_send(
             update_or_query=update.callback_query or update, 
             context=context,
             text=(
-                "⚠️ <b>Account Not Funded</b>\n\n"
+                " <b>Account Not Funded</b>\n\n"
                 "Welcome! To use our Premium Global Services, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet."
             ),
