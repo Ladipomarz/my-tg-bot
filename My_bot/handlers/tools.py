@@ -172,7 +172,7 @@ async def tools_callback(update: Update, context: CallbackContext):
             ])
             await safe_send(
                 update, context,
-                "⚠️ <b>Account Not Funded</b>\n\n"
+                "<b>Account Not Funded</b>\n\n"
                 "Welcome! To use our Premium Services, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet.",
                 reply_markup=kb, parse_mode="HTML"

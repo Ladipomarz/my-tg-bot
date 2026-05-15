@@ -71,7 +71,7 @@ async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYP
             update_or_query=update.callback_query or update, 
             context=context,
             text=(
-                "⚠️ <b>Account Not Funded</b>\n\n"
+                "<b>Account Not Funded</b>\n\n"
                 "Welcome! To use our Premium Global Services, you need to fund your account first.\n\n"
                 "Click the button below to add credit to your wallet."
             ),
