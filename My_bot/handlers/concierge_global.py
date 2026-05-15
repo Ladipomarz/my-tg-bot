@@ -2,7 +2,7 @@ import asyncio
 import logging
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
-from utils.db import get_user_balance_usd,try_debit_user_balance_usd
+from utils.db import get_user_balance_usd, try_debit_user_balance_usd, get_last_wallet_transactions
 from utils.validator import normalize_global_country_name,_GLOBAL_NORM_TO_CANON
 from utils.auto_delete import safe_send, safe_delete_user_message, delete_tracked_message
 from config import SUPPORT_HANDLE
@@ -50,6 +50,38 @@ async def show_global_duration_menu(update: Update, context: ContextTypes.DEFAUL
 
 # -----------------------------------------
 async def start_concierge_flow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # 🛑 FIRST-TIME USER GATEKEEPER 🛑
+    bal = get_user_balance_usd(user_id)
+    txs = get_last_wallet_transactions(user_id, limit=20)
+    
+    has_paid_tx = any(
+        t.get("status", t.get("pay_status", "")).lower() in ["paid", "completed", "detected", "confirmed"]
+        for t in txs
+    )
+    
+    if bal <= 0 and not has_paid_tx:
+        # Use your updated 'tool_wallet' callback to show the history/menu
+        kb = [
+            [InlineKeyboardButton("💳 Wallet & Top-up", callback_data="tool_wallet")],
+            [InlineKeyboardButton("⬅️ Back", callback_data="back_main")] 
+        ]
+        msg = await safe_send(
+            update_or_query=update.callback_query or update, 
+            context=context,
+            text=(
+                "⚠️ <b>Account Not Funded</b>\n\n"
+                "Welcome! To use our Premium Global Services, you need to fund your account first.\n\n"
+                "Click the button below to add credit to your wallet."
+            ),
+            reply_markup=InlineKeyboardMarkup(kb),
+            parse_mode="HTML"
+        )
+        if msg:
+            context.user_data["otp_instruction_msg_id"] = msg.message_id
+        return
+    
     # 1. Clean up previous menu
     chat_id = update.effective_chat.id
     await delete_tracked_message(context, chat_id, "otp_instruction_msg_id")
