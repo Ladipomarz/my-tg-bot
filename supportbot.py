@@ -3,6 +3,7 @@ import logging
 from telegram import Update
 import asyncio
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.request import HTTPXRequest
 
 # Pull variables directly from your Railway environment / config
 from config import ADMIN_IDS
@@ -91,7 +92,8 @@ async def run_support_bot():
         logger.warning("No SUPPORT_BOT_TOKEN found. Support Bot is disabled.")
         return
 
-    support_app = ApplicationBuilder().token(SUPPORT_BOT_TOKEN).build()
+    request_config = HTTPXRequest(connect_timeout=60.0, read_timeout=60.0, write_timeout=60.0, pool_timeout=60.0)
+    support_app = ApplicationBuilder().token(SUPPORT_BOT_TOKEN).request(request_config).build()
     
     support_app.add_handler(CommandHandler("start", start))
     support_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_messages))
