@@ -172,11 +172,17 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     and sends the raw traceback to the Admins.
     """
     logger.error("Exception while handling an update:", exc_info=context.error)
+    
+    # 🧼 Always clear state traps first so the user isn't permanently stuck
     if context.user_data:
         context.user_data.clear()
 
     # 1. Send the white-labeled error to the user WITH the support link
     if update and update.effective_chat:
+        # 🎯 SILENT INTERCEPT: If it's just a duplicate button click, don't scare the user with an error box
+        if "Message is not modified" in str(context.error):
+            return
+
         safe_message = (
             "❌ <b>System Error</b>\n"
             "An unexpected error occurred. Please try again.\n\n"
@@ -190,13 +196,16 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 chat_id=update.effective_chat.id,
                 text=safe_message,
                 parse_mode="HTML"
-                
             )
         except Exception:
             pass
 
     # 2. THE ADMIN ALERT
     if ADMIN_IDS:
+        # 🎯 GODMODE FILTER: Don't spam admin logs for harmless duplicate button clicks
+        if "Message is not modified" in str(context.error):
+            return
+
         user_id = update.effective_user.id if update and update.effective_user else "Unknown"
         
         # Create a short, single-line summary
@@ -208,7 +217,6 @@ async def global_error_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 await context.bot.send_message(chat_id=admin_id, text=admin_msg, parse_mode="HTML")
             except Exception:
                 pass
-            
             
 def _is_admin(user_id: int) -> bool:
     return user_id in ADMIN_IDS
