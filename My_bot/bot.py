@@ -442,7 +442,7 @@ async def _fetch_plisio_invoice_details(txn_id: str) -> dict | None:
     params = {"api_key": PLISIO_API_KEY}
 
     try:
-        async with httpx.AsyncClient(timeout=20) as client:
+        async with httpx.AsyncClient(timeout=60) as client:
             r = await client.get(url, params=params)
 
         if r.status_code != 200:
